@@ -1,10 +1,9 @@
 # Dependencies
 node_modules/
 
-# Env / secrets
-.env
-.env.local
-.env*.local
+# Env / secrets — ignore ALL env files; keep only the safe placeholder template
+.env*
+!.env.example
 
 # Build output
 dist/
