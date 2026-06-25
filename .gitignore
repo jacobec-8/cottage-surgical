@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# Env / secrets
+.env
+.env.local
+.env*.local
+
+# Build output
+dist/
+.vercel/
+
+# OS / editor
+.DS_Store
+*.log
+
+# Local scratch
+scratchpad/
+
+# Design source binaries (kept out of repo; Figma is source of truth)
+*.pages

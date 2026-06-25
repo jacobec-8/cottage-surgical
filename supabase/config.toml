@@ -1,0 +1,8 @@
+# Supabase project config for cottagedme (Cottage Surgical).
+# project_id is set once the Supabase project is created and linked
+# (`supabase link --project-ref <ref>`). Left blank until provisioning.
+project_id = ""
+
+# Edge functions, when added, register here with verify_jwt = false ONLY when
+# they implement their own in-function authorize() guard (service-role key OR a
+# validated session + role check), per the rank1seo convention. None yet.
