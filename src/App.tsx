@@ -10,6 +10,7 @@ import Customers from './pages/Customers'
 import NewOrder from './pages/NewOrder'
 import Billing from './pages/Billing'
 import Delivery from './pages/Delivery'
+import Requests from './pages/Requests'
 
 function Protected({ children }: { children: ReactNode }) {
   return (
@@ -27,6 +28,7 @@ export default function App() {
       <Route path="/" element={<Protected><Dashboard /></Protected>} />
       <Route path="/inventory" element={<Protected><Inventory /></Protected>} />
       <Route path="/customers" element={<Protected><Customers /></Protected>} />
+      <Route path="/requests" element={<Protected><Requests /></Protected>} />
       <Route path="/new-order" element={<Protected><NewOrder /></Protected>} />
       <Route path="/billing" element={<Protected><Billing /></Protected>} />
       <Route path="/delivery" element={<Protected><Delivery /></Protected>} />

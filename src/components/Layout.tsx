@@ -1,13 +1,16 @@
 import type { ReactNode } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import {
   LayoutDashboard, PlusCircle, Users, Package, CreditCard, Truck,
-  LogOut, Shield, ChevronRight, MapPin, Phone, Mail,
+  LogOut, Shield, ChevronRight, MapPin, Phone, Mail, Inbox,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { supabase } from '../lib/supabase'
 
 const NAV = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
+  { to: '/requests', label: 'Requests', icon: Inbox },
   { to: '/new-order', label: 'New Order', icon: PlusCircle },
   { to: '/customers', label: 'Customers', icon: Users },
   { to: '/inventory', label: 'Inventory', icon: Package },
@@ -18,6 +21,17 @@ const NAV = [
 export default function Layout({ children }: { children: ReactNode }) {
   const { profile, signOut } = useAuth()
   const navigate = useNavigate()
+  const { data: requestCount } = useQuery({
+    queryKey: ['requests_count'],
+    queryFn: async () => {
+      const { count } = await supabase
+        .from('rental_orders')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'requested')
+      return count ?? 0
+    },
+    refetchInterval: 30_000,
+  })
   const name = profile?.full_name || profile?.email || 'User'
   const initials = name.split(' ').map((s) => s[0]).slice(0, 2).join('').toUpperCase()
 
@@ -56,7 +70,13 @@ export default function Layout({ children }: { children: ReactNode }) {
                       <Icon size={18} />
                       {n.label}
                     </span>
-                    {isActive && <ChevronRight size={16} />}
+                    {n.to === '/requests' && (requestCount ?? 0) > 0 ? (
+                      <span className="text-xs bg-blue-600 text-white rounded-full px-2 py-0.5 min-w-[20px] text-center">
+                        {requestCount}
+                      </span>
+                    ) : (
+                      isActive && <ChevronRight size={16} />
+                    )}
                   </>
                 )}
               </NavLink>
