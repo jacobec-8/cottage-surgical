@@ -55,7 +55,7 @@ export default async function ProductPage({ params }: { params: { handle: string
         <RequestForm
           itemId={p.id}
           canRent={p.monthly_rental_price != null}
-          canBuy={true}
+          canBuy={p.sale_price != null}
           productName={p.name}
         />
       </div>

@@ -18,6 +18,9 @@ const DEMO_ROLES = [
 ]
 const DEMO_PASSWORD = 'cottage-demo'
 
+// Demo quick-login is OFF unless VITE_DEMO_MODE=true (never set in production).
+const SHOW_DEMO = import.meta.env.VITE_DEMO_MODE === 'true'
+
 export default function Login() {
   const { signIn } = useAuth()
   const navigate = useNavigate()
@@ -125,27 +128,31 @@ export default function Login() {
               </button>
             </form>
 
-            <div className="flex items-center gap-3 my-6">
-              <div className="h-px bg-slate-200 flex-1" />
-              <span className="text-[11px] tracking-wide text-slate-400">DEMO — CLICK TO SIGN IN INSTANTLY</span>
-              <div className="h-px bg-slate-200 flex-1" />
-            </div>
-            <div className="space-y-2">
-              {DEMO_ROLES.map((r) => (
-                <button
-                  key={r.title}
-                  type="button"
-                  onClick={() => doSignIn(r.email, DEMO_PASSWORD)}
-                  className="w-full text-left border border-slate-200 rounded-xl px-4 py-3 hover:bg-slate-50 flex items-center justify-between"
-                >
-                  <div>
-                    <div className="text-sm font-semibold">{r.title}</div>
-                    <div className="text-xs text-slate-500">{r.desc}</div>
-                  </div>
-                  <span className={`text-xs font-semibold ${r.badgeClass}`}>{r.badge}</span>
-                </button>
-              ))}
-            </div>
+            {SHOW_DEMO && (
+              <>
+                <div className="flex items-center gap-3 my-6">
+                  <div className="h-px bg-slate-200 flex-1" />
+                  <span className="text-[11px] tracking-wide text-slate-400">DEMO — CLICK TO SIGN IN INSTANTLY</span>
+                  <div className="h-px bg-slate-200 flex-1" />
+                </div>
+                <div className="space-y-2">
+                  {DEMO_ROLES.map((r) => (
+                    <button
+                      key={r.title}
+                      type="button"
+                      onClick={() => doSignIn(r.email, DEMO_PASSWORD)}
+                      className="w-full text-left border border-slate-200 rounded-xl px-4 py-3 hover:bg-slate-50 flex items-center justify-between"
+                    >
+                      <div>
+                        <div className="text-sm font-semibold">{r.title}</div>
+                        <div className="text-xs text-slate-500">{r.desc}</div>
+                      </div>
+                      <span className={`text-xs font-semibold ${r.badgeClass}`}>{r.badge}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
           <p className="text-center text-xs text-slate-400 mt-4">© 2026 Cottage Surgical · Demo system</p>
         </div>
