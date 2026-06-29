@@ -14,11 +14,13 @@ Customers can **both buy and rent online**. Shopify = buy/checkout/payments + ca
 - **Customer portal** (customer login) — track my rentals/orders.
 - **Staff app** (staff login) — ops (built). The **New Order screen is a staff back-office tool** (call-in entry, stock edits), NOT the primary rental path.
 
-## Phase 2 — Public storefront + customer accounts (next)
-- Storefront with product pages offering **Rent or Buy**.
-- **Buy** → Shopify checkout (Storefront API / cart permalink); payments handled by Shopify.
-- **Rent** → custom flow (select period + delivery) → creates a `rental_order` (status `requested`) → appears in the staff app for fulfillment.
-- **Customer accounts** → Supabase auth with a new `customer` role + RLS (customers see only their own orders). Allow guest rent initially.
+## Phase 2 — Public storefront (in progress)
+**Buy decision (resolved 2026-06-29):** the Shopify catalog is **rental-priced only** — every variant is a rental term (1 week / 1 month), no buy/sale variants. Sale prices live in our system (`equipment_items.sale_price`, staff-managed). Payments are deferred. So **v1 Buy AND Rent are both "request" flows** → create a `rental_order` (status `requested`, source `storefront`) → land in the staff app → staff fulfill + take payment offline. Real checkout (Shopify for buy / Stripe for rent) is Phase 3.
+
+- ✅ **Backend foundation (migration 015, live):** `customer` role (default for self-signup), `rental_orders.source` + `requested` status, `customers.user_id`, catalog `shopify_variant_id`/`shopify_handle` (populated), public catalog read policy, and `submit_rental_request()` (anon-callable RPC that creates the customer + requested order). Verified.
+- ⏳ **Next.js storefront** (separate app at the apex; staff Vite app stays at `app.`): catalog → product page (Rent / Buy) → request form → confirmation. Reads the live catalog (anon key) + calls `submit_rental_request`.
+- ⏳ **Staff side:** a "Requests" view so storefront orders surface for confirmation.
+- **Customer accounts** → later (guest requests for v1; `customer` role + RLS already in place).
 
 ## Phase 3 — Payments + sync
 - Online **rent payment** via Stripe (deposits + recurring monthly). Schema already models `deposits` / `recurring_charges`.
