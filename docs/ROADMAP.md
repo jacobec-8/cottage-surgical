@@ -18,8 +18,10 @@ Customers can **both buy and rent online**. Shopify = buy/checkout/payments + ca
 **Buy decision (resolved 2026-06-29):** the Shopify catalog is **rental-priced only** — every variant is a rental term (1 week / 1 month), no buy/sale variants. Sale prices live in our system (`equipment_items.sale_price`, staff-managed). Payments are deferred. So **v1 Buy AND Rent are both "request" flows** → create a `rental_order` (status `requested`, source `storefront`) → land in the staff app → staff fulfill + take payment offline. Real checkout (Shopify for buy / Stripe for rent) is Phase 3.
 
 - ✅ **Backend foundation (migration 015, live):** `customer` role (default for self-signup), `rental_orders.source` + `requested` status, `customers.user_id`, catalog `shopify_variant_id`/`shopify_handle` (populated), public catalog read policy, and `submit_rental_request()` (anon-callable RPC that creates the customer + requested order). Verified.
-- ⏳ **Next.js storefront** (separate app at the apex; staff Vite app stays at `app.`): catalog → product page (Rent / Buy) → request form → confirmation. Reads the live catalog (anon key) + calls `submit_rental_request`.
+- ✅ **Next.js storefront** scaffolded in `storefront/` (catalog → product page with Rent/Buy → guest request form → confirmation). Build-verified; anon catalog read + `submit_rental_request` verified against live DB. Deploy = a 2nd Vercel project, Root Directory `storefront`, env `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY`. Staff Vite app stays at `app.`.
+- ✅ **Grants fix (migration 016):** Supabase default grants didn't reach our migration-created tables — authenticated/anon had no SELECT/DML. Fixed (this had been silently breaking the staff app's data reads). RLS unchanged.
 - ⏳ **Staff side:** a "Requests" view so storefront orders surface for confirmation.
+- ⏳ Storefront polish: search/category filters, multi-item cart, customer accounts.
 - **Customer accounts** → later (guest requests for v1; `customer` role + RLS already in place).
 
 ## Phase 3 — Payments + sync
