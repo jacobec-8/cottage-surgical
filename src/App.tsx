@@ -11,6 +11,7 @@ import NewOrder from './pages/NewOrder'
 import Billing from './pages/Billing'
 import Delivery from './pages/Delivery'
 import Requests from './pages/Requests'
+import Drivers from './pages/Drivers'
 
 function Protected({ children }: { children: ReactNode }) {
   return (
@@ -32,6 +33,7 @@ export default function App() {
       <Route path="/new-order" element={<Protected><NewOrder /></Protected>} />
       <Route path="/billing" element={<Protected><Billing /></Protected>} />
       <Route path="/delivery" element={<Protected><Delivery /></Protected>} />
+      <Route path="/drivers" element={<Protected><Drivers /></Protected>} />
     </Routes>
   )
 }
