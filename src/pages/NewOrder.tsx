@@ -55,7 +55,7 @@ export default function NewOrder() {
     },
   })
   const drivers = useQuery({
-    queryKey: ['drivers'],
+    queryKey: ['drivers', 'active'],
     queryFn: async () => {
       const { data } = await supabase.from('drivers').select('id,first_name,last_name').eq('status', 'active').order('first_name')
       return (data ?? []) as any[]
@@ -77,7 +77,9 @@ export default function NewOrder() {
       return [...c, { item_id: it.id, name: it.name, qty: 1, rate: rateFor(it) }]
     })
   }
-  const setQty = (id: string, d: number) => setCart((c) => c.map((l) => (l.item_id === id ? { ...l, qty: Math.max(1, l.qty + d) } : l)))
+  // Clamp to 1..20 to match the server (create_staff_order caps at 20) so the
+  // cart total and the created order can't silently disagree.
+  const setQty = (id: string, d: number) => setCart((c) => c.map((l) => (l.item_id === id ? { ...l, qty: Math.min(20, Math.max(1, l.qty + d)) } : l)))
   const removeItem = (id: string) => setCart((c) => c.filter((l) => l.item_id !== id))
 
   const create = async () => {
@@ -105,7 +107,7 @@ export default function NewOrder() {
         p_order_type: mode,
         p_items: cart.map((l) => ({ item_id: l.item_id, quantity: l.qty })),
         p_delivery: { scheduled_date: deliv.date || null, window_start: deliv.ws || null, window_end: deliv.we || null, driver_id: deliv.driver || null, notes: deliv.notes || null },
-        p_deposit: deliv.deposit ? Number(deliv.deposit) : null,
+        p_deposit: mode === 'rental' && deliv.deposit ? Math.max(0, Number(deliv.deposit)) : null,
         p_new_customer: newCustomer,
       })
       if (error) throw error
@@ -154,7 +156,7 @@ export default function NewOrder() {
 
       <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1">
         {(['rental', 'purchase'] as const).map((m) => (
-          <button key={m} onClick={() => { setMode(m); setCart([]) }}
+          <button key={m} onClick={() => { setMode(m); setCart([]); setDeliv((dv) => ({ ...dv, deposit: '' })) }}
             className={`px-4 py-1.5 text-sm rounded-md capitalize ${mode === m ? 'bg-slate-900 text-white' : 'text-slate-600'}`}>{m}</button>
         ))}
       </div>

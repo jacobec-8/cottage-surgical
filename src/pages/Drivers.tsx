@@ -12,7 +12,10 @@ export default function Drivers() {
   const [err, setErr] = useState('')
 
   const { data, isLoading } = useQuery({
-    queryKey: ['drivers'],
+    // Distinct key from the dispatch pickers (['drivers','active']) so this
+    // full-roster query doesn't share their cache and leak inactive drivers /
+    // blank columns between pages. invalidate(['drivers']) still refreshes both.
+    queryKey: ['drivers', 'all'],
     queryFn: async () => {
       const { data, error } = await supabase.from('drivers').select('id,first_name,last_name,phone,status').order('first_name')
       if (error) throw error

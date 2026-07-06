@@ -18,7 +18,7 @@ type Deliv = {
 
 export default function Delivery() {
   const drivers = useQuery({
-    queryKey: ['drivers'],
+    queryKey: ['drivers', 'active'],
     queryFn: async () => {
       const { data } = await supabase.from('drivers').select('id,first_name,last_name').eq('status', 'active').order('first_name')
       return (data ?? []) as any[]
@@ -68,7 +68,11 @@ function DeliveryRow({ d, drivers }: { d: Deliv; drivers: any[] }) {
   const save = useMutation({
     mutationFn: async () => {
       const patch: any = { driver_id: driver || null, scheduled_date: date || null, window_start: ws || null, window_end: we || null }
+      // Keep status and driver in sync: assigning a driver schedules a pending
+      // stop; un-assigning a scheduled stop drops it back to pending (so it
+      // can't be Started driverless).
       if (driver && d.status === 'pending') patch.status = 'scheduled'
+      else if (!driver && d.status === 'scheduled') patch.status = 'pending'
       const { error } = await supabase.from('deliveries').update(patch).eq('id', d.id)
       if (error) throw error
     },
@@ -81,7 +85,10 @@ function DeliveryRow({ d, drivers }: { d: Deliv; drivers: any[] }) {
     mutationFn: async (fn: 'start_delivery' | 'complete_delivery') => {
       const { data, error } = await supabase.rpc(fn, { p_delivery_id: d.id })
       if (error) throw error
-      if (!data?.ok) throw new Error(data?.reason === 'bad_state' ? 'This stop is not in a state that can change.' : (data?.reason || 'failed'))
+      if (!data?.ok) throw new Error(
+        data?.reason === 'bad_state' ? 'This stop is not in a state that can change.'
+        : data?.reason === 'no_driver' ? 'Assign a driver and Save before starting this stop.'
+        : (data?.reason || 'failed'))
     },
     onMutate: () => setMsg(''),
     onSuccess: () => invalidate(),
@@ -104,8 +111,9 @@ function DeliveryRow({ d, drivers }: { d: Deliv; drivers: any[] }) {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {(d.status === 'scheduled') && (
-            <button onClick={() => transition.mutate('start_delivery')} disabled={transition.isPending}
-              className="text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-3 py-1.5 disabled:opacity-50">Start</button>
+            <button onClick={() => transition.mutate('start_delivery')} disabled={transition.isPending || !d.driver_id}
+              title={!d.driver_id ? 'Assign a driver and Save first' : undefined}
+              className="text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed">Start</button>
           )}
           {d.status === 'en_route' && (
             <button onClick={() => transition.mutate('complete_delivery')} disabled={transition.isPending}
