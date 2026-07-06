@@ -22,8 +22,13 @@ DECLARE
   v_u    UUID;
   v_drv  UUID;
 BEGIN
-  IF (SELECT count(*) FROM public.customers) > 0 THEN
-    RAISE NOTICE 'seed_demo_data: customers already present — skipping.';
+  -- Skip if ANY real data is present: customers, serialized units, OR the real
+  -- Shopify catalog (shopify_product_id). Prevents duplicating the catalog when
+  -- catalog_import.sql was already run (that inserts equipment, not customers).
+  IF (SELECT count(*) FROM public.customers) > 0
+     OR (SELECT count(*) FROM public.equipment_units) > 0
+     OR EXISTS (SELECT 1 FROM public.equipment_items WHERE shopify_product_id IS NOT NULL) THEN
+    RAISE NOTICE 'seed_demo_data: real data already present — skipping.';
     RETURN;
   END IF;
 

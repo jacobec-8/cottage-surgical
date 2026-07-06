@@ -1,9 +1,11 @@
+import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Check, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
 export default function Requests() {
   const qc = useQueryClient()
+  const [actErr, setActErr] = useState('')
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['requests'],
@@ -27,6 +29,8 @@ export default function Requests() {
       const { error } = await supabase.from('rental_orders').update({ status }).eq('id', id)
       if (error) throw error
     },
+    onMutate: () => setActErr(''),
+    onError: (e) => setActErr((e as Error).message || 'Action failed. Please try again.'),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['requests'] })
       qc.invalidateQueries({ queryKey: ['requests_count'] })
@@ -39,7 +43,8 @@ export default function Requests() {
       <h1 className="text-2xl font-semibold mb-1">Requests</h1>
       <p className="text-slate-500 text-sm mb-6">Rental &amp; purchase requests submitted from the storefront.</p>
       {isLoading && <div className="text-slate-500">Loading…</div>}
-      {error && <div className="text-red-600 text-sm">{(error as Error).message}</div>}
+      {error && <div className="text-red-600 text-sm">Couldn’t load requests. Please try again.</div>}
+      {actErr && <div className="text-red-600 text-sm mb-3 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{actErr}</div>}
       {data && data.length === 0 && <div className="text-slate-500 text-sm">No pending requests.</div>}
 
       <div className="space-y-3">
@@ -77,14 +82,14 @@ export default function Requests() {
               <div className="flex flex-col gap-2 shrink-0">
                 <button
                   onClick={() => act.mutate({ id: r.id, status: 'open' })}
-                  disabled={act.isPending}
+                  disabled={act.isPending && act.variables?.id === r.id}
                   className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg px-3 py-1.5 disabled:opacity-50"
                 >
                   <Check size={15} /> Confirm
                 </button>
                 <button
                   onClick={() => act.mutate({ id: r.id, status: 'cancelled' })}
-                  disabled={act.isPending}
+                  disabled={act.isPending && act.variables?.id === r.id}
                   className="flex items-center gap-1.5 text-slate-500 hover:text-red-600 text-sm rounded-lg px-3 py-1.5"
                 >
                   <X size={15} /> Decline

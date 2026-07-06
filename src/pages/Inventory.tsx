@@ -39,6 +39,7 @@ export default function Inventory() {
       if (error) throw error
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['equipment_items'] }),
+    onError: (e) => alert(`Couldn’t remove item: ${(e as Error).message}`),
   })
 
   const filtered = (data ?? []).filter((it) =>

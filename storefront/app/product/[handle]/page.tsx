@@ -20,7 +20,12 @@ export default async function ProductPage({ params }: { params: { handle: string
     .maybeSingle()
 
   if (!data) {
-    const r = await supabase.from('equipment_items').select(PRODUCT_FIELDS).eq('id', params.handle).maybeSingle()
+    const r = await supabase
+      .from('equipment_items')
+      .select(PRODUCT_FIELDS)
+      .eq('id', params.handle)
+      .eq('is_active', true)
+      .maybeSingle()
     data = r.data
   }
   if (!data) notFound()
@@ -54,8 +59,8 @@ export default async function ProductPage({ params }: { params: { handle: string
         </div>
         <RequestForm
           itemId={p.id}
-          canRent={p.monthly_rental_price != null}
-          canBuy={p.sale_price != null}
+          canRent={p.monthly_rental_price != null && p.is_rentable}
+          canBuy={p.sale_price != null && p.is_purchasable}
           productName={p.name}
         />
       </div>

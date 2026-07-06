@@ -54,7 +54,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setProfile((data as Profile) ?? null)
         setProfileLoaded(true)
       })
-  }, [session])
+    // Key on the user id, NOT the session object — a token refresh (hourly) or a
+    // tab-focus SIGNED_IN emits a new session for the SAME user and must not
+    // blank the profile / remount the app.
+  }, [session?.user?.id])
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password })

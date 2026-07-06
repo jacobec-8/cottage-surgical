@@ -8,14 +8,16 @@ import {
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 
+const STAFF = ['admin', 'staff']
+const ALL = ['admin', 'staff', 'driver']
 const NAV = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/requests', label: 'Requests', icon: Inbox },
-  { to: '/new-order', label: 'New Order', icon: PlusCircle },
-  { to: '/customers', label: 'Customers', icon: Users },
-  { to: '/inventory', label: 'Inventory', icon: Package },
-  { to: '/billing', label: 'Billing', icon: CreditCard },
-  { to: '/delivery', label: 'Delivery & Pickup', icon: Truck },
+  { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true, roles: ALL },
+  { to: '/requests', label: 'Requests', icon: Inbox, roles: STAFF },
+  { to: '/new-order', label: 'New Order', icon: PlusCircle, roles: STAFF },
+  { to: '/customers', label: 'Customers', icon: Users, roles: STAFF },
+  { to: '/inventory', label: 'Inventory', icon: Package, roles: STAFF },
+  { to: '/billing', label: 'Billing', icon: CreditCard, roles: STAFF },
+  { to: '/delivery', label: 'Delivery & Pickup', icon: Truck, roles: ALL },
 ]
 
 export default function Layout({ children }: { children: ReactNode }) {
@@ -51,7 +53,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           NAVIGATION
         </div>
         <nav className="flex-1 px-3 space-y-1">
-          {NAV.map((n) => {
+          {NAV.filter((n) => n.roles.includes(profile?.role || '')).map((n) => {
             const Icon = n.icon
             return (
               <NavLink

@@ -83,8 +83,10 @@ def main():
         return
 
     if "--only" in args:
-        target = args[args.index("--only") + 1]
-        files = [target]
+        idx = args.index("--only")
+        if idx + 1 >= len(args):
+            sys.exit("--only requires a filename, e.g. --only 007_rental_orders.sql")
+        files = [args[idx + 1]]
     else:
         files = discovered()
 

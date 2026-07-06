@@ -28,9 +28,25 @@ export default function RequestForm({ itemId, canRent, canBuy, productName }: Pr
       p_notes: form.notes || null,
     })
     setBusy(false)
-    if (error) { setError(error.message); return }
-    if (data?.ok) setDone(data.order_no)
-    else setError(data?.reason || 'Something went wrong')
+    if (error) {
+      // Never surface raw Postgres/PostgREST messages to a public visitor.
+      console.error('request submit failed:', error.message)
+      setError('Something went wrong submitting your request. Please try again.')
+      return
+    }
+    if (data?.ok) {
+      setDone(data.order_no)
+      return
+    }
+    const REASONS: Record<string, string> = {
+      invalid_item: 'That option isn’t available for this product right now.',
+      invalid_quantity: 'Please enter a valid quantity.',
+      rate_limited: 'You just submitted a request — please wait a moment and try again.',
+      too_many_items: 'Too many items in one request.',
+      missing_name: 'Please enter your name.',
+      no_items: 'Please choose a product.',
+    }
+    setError(REASONS[data?.reason] || 'We couldn’t submit your request. Please call us and we’ll help.')
   }
 
   if (done) {

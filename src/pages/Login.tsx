@@ -11,20 +11,10 @@ const FEATURES = [
   { icon: Package, title: 'Inventory Tracking', desc: 'Equipment stock & serial numbers' },
 ]
 
-const DEMO_ROLES = [
-  { title: 'Administrator', desc: 'Dashboards, rentals, inventory, customers', badge: 'Full Access', badgeClass: 'text-emerald-600', email: 'admin@cottagesurgical.com' },
-  { title: 'Staff Member', desc: 'New rentals, customers, scheduling', badge: 'Rentals', badgeClass: 'text-amber-600', email: 'staff@cottagesurgical.com' },
-  { title: 'Driver', desc: 'Delivery queue, proof of delivery', badge: 'Deliveries', badgeClass: 'text-blue-600', email: 'driver@cottagesurgical.com' },
-]
-const DEMO_PASSWORD = 'cottage-demo'
-
-// Demo quick-login is OFF unless VITE_DEMO_MODE=true (never set in production).
-const SHOW_DEMO = import.meta.env.VITE_DEMO_MODE === 'true'
-
 export default function Login() {
   const { signIn } = useAuth()
   const navigate = useNavigate()
-  const [username, setUsername] = useState('')
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [show, setShow] = useState(false)
   const [error, setError] = useState('')
@@ -40,7 +30,7 @@ export default function Login() {
   }
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    doSignIn(username, password)
+    doSignIn(email, password)
   }
 
   return (
@@ -93,11 +83,12 @@ export default function Login() {
             <h2 className="text-xl font-bold">Sign In</h2>
             <p className="text-sm text-slate-500 mb-6">Enter your credentials to continue</p>
             <form onSubmit={submit}>
-              <label className="block text-xs font-medium tracking-wide text-slate-500 mb-1">USERNAME</label>
+              <label className="block text-xs font-medium tracking-wide text-slate-500 mb-1">EMAIL</label>
               <input
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="Enter username"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                type="email"
+                placeholder="Enter email"
                 required
                 className="w-full border border-slate-300 rounded-lg px-3 py-2.5 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
@@ -127,34 +118,8 @@ export default function Login() {
                 <LogIn size={16} /> {busy ? 'Signing in…' : 'Sign In'}
               </button>
             </form>
-
-            {SHOW_DEMO && (
-              <>
-                <div className="flex items-center gap-3 my-6">
-                  <div className="h-px bg-slate-200 flex-1" />
-                  <span className="text-[11px] tracking-wide text-slate-400">DEMO — CLICK TO SIGN IN INSTANTLY</span>
-                  <div className="h-px bg-slate-200 flex-1" />
-                </div>
-                <div className="space-y-2">
-                  {DEMO_ROLES.map((r) => (
-                    <button
-                      key={r.title}
-                      type="button"
-                      onClick={() => doSignIn(r.email, DEMO_PASSWORD)}
-                      className="w-full text-left border border-slate-200 rounded-xl px-4 py-3 hover:bg-slate-50 flex items-center justify-between"
-                    >
-                      <div>
-                        <div className="text-sm font-semibold">{r.title}</div>
-                        <div className="text-xs text-slate-500">{r.desc}</div>
-                      </div>
-                      <span className={`text-xs font-semibold ${r.badgeClass}`}>{r.badge}</span>
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
           </div>
-          <p className="text-center text-xs text-slate-400 mt-4">© 2026 Cottage Surgical · Demo system</p>
+          <p className="text-center text-xs text-slate-400 mt-4">© 2026 Cottage Surgical · Staff sign-in</p>
         </div>
       </div>
     </div>

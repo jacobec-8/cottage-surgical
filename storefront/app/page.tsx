@@ -30,7 +30,7 @@ export default async function Home() {
       </section>
 
       <div className="max-w-6xl mx-auto px-4 py-10">
-        {error && <div className="text-red-600 text-sm mb-4">Couldn’t load products: {error.message}</div>}
+        {error && <div className="text-red-600 text-sm mb-4">Couldn’t load products right now. Please try again.</div>}
         {!error && products.length === 0 && (
           <div className="text-slate-500 text-sm">No equipment available right now.</div>
         )}
