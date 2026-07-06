@@ -7,6 +7,17 @@ import { supabase } from '../lib/supabase'
 type Item = { id: string; name: string; category: string; monthly_rental_price: number | null; sale_price: number | null; is_rentable: boolean; is_purchasable: boolean }
 type CartLine = { item_id: string; name: string; qty: number; rate: number | null }
 
+const orderErrorMessage = (reason?: string) => {
+  switch (reason) {
+    case 'missing_customer': return 'Choose or add a customer first.'
+    case 'invalid_customer': return 'That customer no longer exists — pick another.'
+    case 'invalid_item': return 'One of the items is no longer available for this order type. Remove it and try again.'
+    case 'no_items': return 'Add at least one item.'
+    case 'forbidden': return 'You don’t have permission to create orders.'
+    default: return `Couldn’t create the order (${reason || 'unknown error'}).`
+  }
+}
+
 export default function NewOrder() {
   const qc = useQueryClient()
   const [mode, setMode] = useState<'rental' | 'purchase'>('rental')
@@ -72,28 +83,33 @@ export default function NewOrder() {
   const create = async () => {
     setBusy(true); setErr(''); setResult(null)
     try {
-      let customerId = cust?.id
-      if (custMode === 'new') {
-        if (!nc.full_name.trim()) throw new Error('Enter the customer’s name.')
-        const { data, error } = await supabase.from('customers').insert({
-          full_name: nc.full_name.trim(), phone: nc.phone || null, email: nc.email || null,
-          date_of_birth: nc.dob || null, coverage_type: nc.coverage || null,
-          address_line1: nc.line1 || null, address_city: nc.city || null, address_state: nc.state || 'NY', address_zip: nc.zip || null,
-        }).select('id').single()
-        if (error) throw error
-        customerId = data.id
-      }
-      if (!customerId) throw new Error('Choose or add a customer.')
       if (cart.length === 0) throw new Error('Add at least one item.')
+      // Existing vs new customer — the new customer is created INSIDE the RPC
+      // (one transaction), so a failed order can never leave an orphan customer
+      // and a retry can't create a duplicate.
+      let customerId: string | null = null
+      let newCustomer: Record<string, string | null> | null = null
+      if (custMode === 'existing') {
+        if (!cust?.id) throw new Error('Choose a customer.')
+        customerId = cust.id
+      } else {
+        if (!nc.full_name.trim()) throw new Error('Enter the customer’s name.')
+        newCustomer = {
+          full_name: nc.full_name.trim(), phone: nc.phone || null, email: nc.email || null,
+          dob: nc.dob || null, coverage: nc.coverage || null,
+          line1: nc.line1 || null, city: nc.city || null, state: nc.state || 'NY', zip: nc.zip || null,
+        }
+      }
       const { data, error } = await supabase.rpc('create_staff_order', {
         p_customer_id: customerId,
         p_order_type: mode,
         p_items: cart.map((l) => ({ item_id: l.item_id, quantity: l.qty })),
         p_delivery: { scheduled_date: deliv.date || null, window_start: deliv.ws || null, window_end: deliv.we || null, driver_id: deliv.driver || null, notes: deliv.notes || null },
         p_deposit: deliv.deposit ? Number(deliv.deposit) : null,
+        p_new_customer: newCustomer,
       })
       if (error) throw error
-      if (!data?.ok) throw new Error(`Couldn’t create the order (${data?.reason || 'unknown'}).`)
+      if (!data?.ok) throw new Error(orderErrorMessage(data?.reason))
       setResult({ order_no: data.order_no, unallocated: data.unallocated })
       setCart([]); setCust(null); setNc({ full_name: '', phone: '', email: '', dob: '', coverage: '', line1: '', city: '', state: 'NY', zip: '' })
       setDeliv({ date: '', ws: '', we: '', driver: '', notes: '', deposit: '' })
