@@ -106,7 +106,7 @@ export default function Layout({ children }: { children: ReactNode }) {
             <button
               onClick={async () => {
                 await signOut()
-                navigate('/login')
+                navigate('/admin-login')
               }}
               className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 ml-2"
             >

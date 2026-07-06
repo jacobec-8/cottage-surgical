@@ -8,7 +8,7 @@ export default function ProtectedRoute({ children }: { children: ReactNode }) {
   const { session, profile, loading, profileLoaded, signOut } = useAuth()
 
   if (loading) return <Centered>Loading…</Centered>
-  if (!session) return <Navigate to="/login" replace />
+  if (!session) return <Navigate to="/admin-login" replace />
   if (!profileLoaded) return <Centered>Loading…</Centered>
 
   // Authenticated but the profile row is missing or failed to load.

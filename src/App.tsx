@@ -25,7 +25,7 @@ export default function App() {
   if (!hasSupabaseConfig) return <ConfigWarning />
   return (
     <Routes>
-      <Route path="/login" element={<Login />} />
+      <Route path="/admin-login" element={<Login />} />
       <Route path="/" element={<Protected><Dashboard /></Protected>} />
       <Route path="/inventory" element={<Protected><Inventory /></Protected>} />
       <Route path="/customers" element={<Protected><Customers /></Protected>} />

@@ -10,7 +10,6 @@ export default function Header() {
         </Link>
         <nav className="flex items-center gap-6 text-sm">
           <Link href="/" className="text-slate-600 hover:text-slate-900">Equipment</Link>
-          <a href="https://app.cottagesurgical.com" className="text-slate-400 hover:text-slate-900">Staff login</a>
         </nav>
       </div>
     </header>
