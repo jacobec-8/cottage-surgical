@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Camera } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../contexts/AuthContext'
 import { statusClass, statusLabel } from '../lib/status'
 
 type Photo = { storage_path: string; captured_at: string; notes: string | null }
@@ -25,9 +26,13 @@ const SELECT =
   'order:rental_orders(order_no,customer:customers(full_name)),delivery_photos(storage_path,captured_at,notes)'
 
 export default function Delivery() {
+  const { profile } = useAuth()
+  const isDriver = profile?.role === 'driver'
   const [view, setView] = useState<'active' | 'completed'>('active')
+
   const drivers = useQuery({
     queryKey: ['drivers', 'active'],
+    enabled: !isDriver,
     queryFn: async () => {
       const { data } = await supabase.from('drivers').select('id,first_name,last_name').eq('status', 'active').order('first_name')
       return (data ?? []) as any[]
@@ -35,6 +40,7 @@ export default function Delivery() {
   })
   const { data, isLoading, error } = useQuery({
     queryKey: ['deliveries', view],
+    refetchInterval: 20_000, // keep the driver/admin board live as orders get approved
     queryFn: async () => {
       let q = supabase.from('deliveries').select(SELECT)
       q = view === 'active'
@@ -48,8 +54,12 @@ export default function Delivery() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold mb-1">Delivery &amp; Pickup</h1>
-      <p className="text-slate-500 text-sm mb-4">Assign a driver and time window, run each stop, and capture a proof-of-delivery photo on completion.</p>
+      <h1 className="text-2xl font-semibold mb-1">{isDriver ? 'My Deliveries' : 'Delivery & Pickup'}</h1>
+      <p className="text-slate-500 text-sm mb-4">
+        {isDriver
+          ? 'Your assigned stops. Start a stop, then take a photo to complete it.'
+          : 'Assign drivers and windows, or step in to run a stop. Drivers complete stops with a photo; you can override.'}
+      </p>
 
       <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1 mb-5">
         {(['active', 'completed'] as const).map((v) => (
@@ -63,12 +73,12 @@ export default function Delivery() {
       {isLoading && <div className="text-slate-500">Loading…</div>}
       {error && <div className="text-red-600 text-sm">Couldn’t load deliveries. Please try again.</div>}
       {data && data.length === 0 && (
-        <div className="text-slate-500 text-sm">{view === 'active' ? 'No open deliveries or pickups.' : 'No completed deliveries yet.'}</div>
+        <div className="text-slate-500 text-sm">{view === 'active' ? 'No open stops right now.' : 'No completed deliveries yet.'}</div>
       )}
       <div className="space-y-3">
         {data?.map((d) =>
           view === 'active'
-            ? <DeliveryRow key={d.id} d={d} drivers={drivers.data ?? []} />
+            ? <DeliveryRow key={d.id} d={d} drivers={drivers.data ?? []} isDriver={isDriver} />
             : <CompletedRow key={d.id} d={d} />,
         )}
       </div>
@@ -76,7 +86,7 @@ export default function Delivery() {
   )
 }
 
-function DeliveryRow({ d, drivers }: { d: Deliv; drivers: any[] }) {
+function DeliveryRow({ d, drivers, isDriver }: { d: Deliv; drivers: any[]; isDriver: boolean }) {
   const qc = useQueryClient()
   const [driver, setDriver] = useState(d.driver_id ?? '')
   const [date, setDate] = useState(d.scheduled_date ?? '')
@@ -86,7 +96,7 @@ function DeliveryRow({ d, drivers }: { d: Deliv; drivers: any[] }) {
   const [completing, setCompleting] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const invalidate = () => ['deliveries', 'rentals', 'orders', 'dashboard'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }))
+  const invalidate = () => ['deliveries', 'rentals', 'orders', 'dashboard', 'nav_counts'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }))
 
   const save = useMutation({
     mutationFn: async () => {
@@ -112,7 +122,7 @@ function DeliveryRow({ d, drivers }: { d: Deliv; drivers: any[] }) {
     onError: (e) => setMsg((e as Error).message),
   })
 
-  // Complete = capture a proof photo, upload it, then complete (server requires it).
+  // Driver flow: capture a proof photo, upload it, then complete (server requires it).
   const completeWithPhoto = async (file: File) => {
     setCompleting(true); setMsg('')
     try {
@@ -135,11 +145,23 @@ function DeliveryRow({ d, drivers }: { d: Deliv; drivers: any[] }) {
     }
   }
 
+  // Staff/admin override: complete without a photo (recorded as no-photo).
+  const completeOverride = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.rpc('complete_delivery', { p_delivery_id: d.id, p_photo_path: null })
+      if (error) throw error
+      if (!data?.ok) throw new Error(data?.reason === 'bad_state' ? 'This stop isn’t in a state that can be completed.' : (data?.reason || 'failed'))
+    },
+    onMutate: () => setMsg(''),
+    onSuccess: invalidate,
+    onError: (e) => setMsg((e as Error).message),
+  })
+
   const inp = 'border border-slate-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-4">
-      <div className="flex items-center justify-between gap-3 mb-3">
+      <div className="flex items-center justify-between gap-3 mb-1">
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-medium">{d.order?.customer?.full_name ?? 'Customer'}</span>
@@ -152,39 +174,51 @@ function DeliveryRow({ d, drivers }: { d: Deliv; drivers: any[] }) {
         <div className="flex items-center gap-2 shrink-0">
           {d.status === 'scheduled' && (
             <button onClick={() => start.mutate()} disabled={start.isPending || !d.driver_id}
-              title={!d.driver_id ? 'Assign a driver and Save first' : undefined}
+              title={!d.driver_id ? 'Needs a driver first' : undefined}
               className="text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed">Start</button>
           )}
           {d.status === 'en_route' && (
-            <>
-              <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden"
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) completeWithPhoto(f) }} />
-              <button onClick={() => fileRef.current?.click()} disabled={completing}
-                className="flex items-center gap-1.5 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-3 py-1.5 disabled:opacity-50">
-                <Camera size={15} /> {completing ? 'Uploading…' : 'Complete + photo'}
+            isDriver ? (
+              <>
+                <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) completeWithPhoto(f) }} />
+                <button onClick={() => fileRef.current?.click()} disabled={completing}
+                  className="flex items-center gap-1.5 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-3 py-1.5 disabled:opacity-50">
+                  <Camera size={15} /> {completing ? 'Uploading…' : 'Complete + photo'}
+                </button>
+              </>
+            ) : (
+              <button onClick={() => completeOverride.mutate()} disabled={completeOverride.isPending}
+                title="Override complete (no photo)"
+                className="text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-3 py-1.5 disabled:opacity-50">
+                {completeOverride.isPending ? 'Completing…' : 'Complete (override)'}
               </button>
-            </>
+            )
           )}
         </div>
       </div>
 
-      <div className="flex flex-wrap items-end gap-2">
-        <div>
-          <div className="text-[11px] text-slate-400 mb-0.5">Driver</div>
-          <select value={driver} onChange={(e) => setDriver(e.target.value)} className={inp}>
-            <option value="">Unassigned</option>
-            {drivers.map((dr) => <option key={dr.id} value={dr.id}>{dr.first_name} {dr.last_name}</option>)}
-          </select>
+      {isDriver ? (
+        msg && <div className="text-xs text-red-600 mt-2">{msg}</div>
+      ) : (
+        <div className="flex flex-wrap items-end gap-2 mt-3">
+          <div>
+            <div className="text-[11px] text-slate-400 mb-0.5">Driver</div>
+            <select value={driver} onChange={(e) => setDriver(e.target.value)} className={inp}>
+              <option value="">Unassigned</option>
+              {drivers.map((dr) => <option key={dr.id} value={dr.id}>{dr.first_name} {dr.last_name}</option>)}
+            </select>
+          </div>
+          <div><div className="text-[11px] text-slate-400 mb-0.5">Date</div><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inp} /></div>
+          <div><div className="text-[11px] text-slate-400 mb-0.5">From</div><input type="time" value={ws} onChange={(e) => setWs(e.target.value)} className={inp} /></div>
+          <div><div className="text-[11px] text-slate-400 mb-0.5">To</div><input type="time" value={we} onChange={(e) => setWe(e.target.value)} className={inp} /></div>
+          <button onClick={() => save.mutate()} disabled={save.isPending}
+            className="text-sm border border-slate-300 hover:bg-slate-50 rounded-lg px-3 py-1.5 disabled:opacity-50">
+            {save.isPending ? 'Saving…' : 'Save'}
+          </button>
+          {msg && <span className={`text-xs ${msg === 'Saved' ? 'text-emerald-600' : 'text-red-600'}`}>{msg}</span>}
         </div>
-        <div><div className="text-[11px] text-slate-400 mb-0.5">Date</div><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inp} /></div>
-        <div><div className="text-[11px] text-slate-400 mb-0.5">From</div><input type="time" value={ws} onChange={(e) => setWs(e.target.value)} className={inp} /></div>
-        <div><div className="text-[11px] text-slate-400 mb-0.5">To</div><input type="time" value={we} onChange={(e) => setWe(e.target.value)} className={inp} /></div>
-        <button onClick={() => save.mutate()} disabled={save.isPending}
-          className="text-sm border border-slate-300 hover:bg-slate-50 rounded-lg px-3 py-1.5 disabled:opacity-50">
-          {save.isPending ? 'Saving…' : 'Save'}
-        </button>
-        {msg && <span className={`text-xs ${msg === 'Saved' ? 'text-emerald-600' : 'text-red-600'}`}>{msg}</span>}
-      </div>
+      )}
     </div>
   )
 }
@@ -201,9 +235,7 @@ function CompletedRow({ d }: { d: Deliv }) {
           <span className={`text-xs px-2 py-0.5 rounded-full capitalize ${statusClass(d.status)}`}>{statusLabel(d.status)}</span>
         </div>
         <div className="text-sm text-slate-500 mt-0.5">{[d.address_line1, d.address_city].filter(Boolean).join(', ')}</div>
-        <div className="text-xs text-slate-400 mt-1">
-          Completed {d.completed_at ? new Date(d.completed_at).toLocaleString() : ''}
-        </div>
+        <div className="text-xs text-slate-400 mt-1">Completed {d.completed_at ? new Date(d.completed_at).toLocaleString() : ''}</div>
         {photo?.notes && <div className="text-sm text-slate-500 mt-1 italic">“{photo.notes}”</div>}
       </div>
       {photo ? <ProofPhoto path={photo.storage_path} /> : <span className="text-xs text-amber-600 shrink-0">no photo</span>}

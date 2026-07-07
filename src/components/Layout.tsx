@@ -12,29 +12,32 @@ const STAFF = ['admin', 'staff']
 const ALL = ['admin', 'staff', 'driver']
 const NAV = [
   { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true, roles: ALL },
-  { to: '/requests', label: 'Requests', icon: Inbox, roles: STAFF },
-  { to: '/orders', label: 'Orders', icon: ClipboardList, roles: STAFF },
+  { to: '/requests', label: 'Requests', icon: Inbox, roles: STAFF, badge: 'requests' },
+  { to: '/orders', label: 'Orders', icon: ClipboardList, roles: STAFF, badge: 'orders' },
   { to: '/new-order', label: 'New Order', icon: PlusCircle, roles: STAFF },
   { to: '/customers', label: 'Customers', icon: Users, roles: STAFF },
   { to: '/inventory', label: 'Inventory', icon: Package, roles: STAFF },
   { to: '/billing', label: 'Billing', icon: CreditCard, roles: STAFF },
-  { to: '/delivery', label: 'Delivery & Pickup', icon: Truck, roles: ALL },
+  { to: '/delivery', label: 'Delivery & Pickup', icon: Truck, roles: ALL, badge: 'deliveries' },
   { to: '/drivers', label: 'Drivers', icon: UserCog, roles: STAFF },
 ]
 
 export default function Layout({ children }: { children: ReactNode }) {
   const { profile, signOut } = useAuth()
   const navigate = useNavigate()
-  const { data: requestCount } = useQuery({
-    queryKey: ['requests_count'],
+  // Live work-queue counts, auto-refreshed so approving a request updates the
+  // Orders + Delivery badges (and screens) without a manual refresh.
+  const { data: counts } = useQuery({
+    queryKey: ['nav_counts'],
     queryFn: async () => {
-      const { count } = await supabase
-        .from('rental_orders')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'requested')
-      return count ?? 0
+      const [req, ord, del] = await Promise.all([
+        supabase.from('rental_orders').select('*', { count: 'exact', head: true }).eq('status', 'requested'),
+        supabase.from('rental_orders').select('*', { count: 'exact', head: true }).eq('status', 'open'),
+        supabase.from('deliveries').select('*', { count: 'exact', head: true }).not('status', 'in', '(completed,cancelled)'),
+      ])
+      return { requests: req.count ?? 0, orders: ord.count ?? 0, deliveries: del.count ?? 0 } as Record<string, number>
     },
-    refetchInterval: 30_000,
+    refetchInterval: 20_000,
   })
   const name = profile?.full_name || profile?.email || 'User'
   const initials = name.split(' ').map((s) => s[0]).slice(0, 2).join('').toUpperCase()
@@ -74,13 +77,17 @@ export default function Layout({ children }: { children: ReactNode }) {
                       <Icon size={18} />
                       {n.label}
                     </span>
-                    {n.to === '/requests' && (requestCount ?? 0) > 0 ? (
-                      <span className="text-xs bg-blue-600 text-white rounded-full px-2 py-0.5 min-w-[20px] text-center">
-                        {requestCount}
-                      </span>
-                    ) : (
-                      isActive && <ChevronRight size={16} />
-                    )}
+                    {(() => {
+                      const badge = (n as { badge?: string }).badge
+                      const count = badge ? counts?.[badge] ?? 0 : 0
+                      return count > 0 ? (
+                        <span className="text-xs bg-blue-600 text-white rounded-full px-2 py-0.5 min-w-[20px] text-center">
+                          {count}
+                        </span>
+                      ) : (
+                        isActive && <ChevronRight size={16} />
+                      )
+                    })()}
                   </>
                 )}
               </NavLink>

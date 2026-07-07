@@ -18,7 +18,7 @@ type Order = {
 const TABS = ['all', 'open', 'scheduled', 'active', 'closed'] as const
 
 export default function Orders() {
-  const [tab, setTab] = useState<(typeof TABS)[number]>('all')
+  const [tab, setTab] = useState<(typeof TABS)[number]>('open')
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['orders'],
