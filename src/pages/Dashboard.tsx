@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Navigate } from 'react-router-dom'
 import {
   CheckCircle, AlertCircle, CalendarClock, DollarSign,
   Users, ClipboardList, Package, CreditCard, Truck, ChevronRight,
@@ -11,7 +11,7 @@ import { statusClass, statusLabel } from '../lib/status'
 
 const MODULES = [
   { to: '/customers', icon: Users, title: 'Customers', desc: 'Directory with rental history and payment methods on file' },
-  { to: '/', icon: ClipboardList, title: 'Rentals', desc: 'All open, pending, delivered, active, overdue, pickup, closed' },
+  { to: '/orders', icon: ClipboardList, title: 'Rentals', desc: 'All open, pending, delivered, active, overdue, pickup, closed' },
   { to: '/inventory', icon: Package, title: 'Inventory', desc: 'Wheelchairs, beds, oxygen, supplies, serial/asset tracking' },
   { to: '/billing', icon: CreditCard, title: 'Billing', desc: 'Invoices, deposits, recurring charges, failed payments, refunds' },
   { to: '/delivery', icon: Truck, title: 'Routes', desc: 'Delivery and pickup schedule by driver' },
@@ -24,6 +24,7 @@ export default function Dashboard() {
 
   const stats = useQuery({
     queryKey: ['dashboard'],
+    enabled: profile?.role !== 'driver',
     queryFn: async () => {
       const { data, error } = await supabase.from('ops_dashboard_stats').select('*').single()
       if (error) throw error
@@ -33,6 +34,7 @@ export default function Dashboard() {
 
   const rentals = useQuery({
     queryKey: ['rentals'],
+    enabled: profile?.role !== 'driver',
     queryFn: async () => {
       const { data, error } = await supabase
         .from('rental_orders')
@@ -52,6 +54,9 @@ export default function Dashboard() {
     { label: 'Scheduled', value: stats.data?.scheduled_rentals ?? 0, icon: CalendarClock, color: 'text-blue-600 bg-blue-50' },
     { label: 'Monthly Rev', value: `$${Number(stats.data?.active_monthly_rate ?? 0).toLocaleString()}`, icon: DollarSign, color: 'text-violet-600 bg-violet-50' },
   ]
+
+  // Drivers don't get the admin dashboard — their home is My Deliveries.
+  if (profile?.role === 'driver') return <Navigate to="/delivery" replace />
 
   return (
     <div>

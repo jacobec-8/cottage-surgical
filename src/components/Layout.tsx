@@ -11,7 +11,7 @@ import { supabase } from '../lib/supabase'
 const STAFF = ['admin', 'staff']
 const ALL = ['admin', 'staff', 'driver']
 const NAV = [
-  { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true, roles: ALL },
+  { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true, roles: STAFF },
   { to: '/requests', label: 'Requests', icon: Inbox, roles: STAFF, badge: 'requests' },
   { to: '/orders', label: 'Orders', icon: ClipboardList, roles: STAFF, badge: 'orders' },
   { to: '/new-order', label: 'New Order', icon: PlusCircle, roles: STAFF },
