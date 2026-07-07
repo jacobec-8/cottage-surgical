@@ -172,10 +172,13 @@ function DeliveryRow({ d, drivers, isDriver }: { d: Deliv; drivers: any[]; isDri
           <div className="text-sm text-slate-500 mt-0.5">{[d.address_line1, d.address_city].filter(Boolean).join(', ')}</div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {d.status === 'scheduled' && (
+          {d.status === 'scheduled' && isDriver && (
             <button onClick={() => start.mutate()} disabled={start.isPending || !d.driver_id}
               title={!d.driver_id ? 'Needs a driver first' : undefined}
               className="text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed">Start</button>
+          )}
+          {d.status === 'scheduled' && !isDriver && (
+            <span className="text-xs text-slate-400">waiting for driver to start</span>
           )}
           {d.status === 'en_route' && (
             isDriver ? (
