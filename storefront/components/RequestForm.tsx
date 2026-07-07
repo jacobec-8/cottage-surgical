@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { getSupabase } from '@/lib/supabase'
+import { getSupabase, hasSupabase } from '@/lib/supabase'
 
 type Props = { itemId: string; canRent: boolean; canBuy: boolean; productName: string }
 
@@ -19,6 +19,12 @@ export default function RequestForm({ itemId, canRent, canBuy, productName }: Pr
     e.preventDefault()
     setBusy(true)
     setError('')
+    // Preview mode (no Supabase key): simulate a successful request so the
+    // whole flow can be reviewed without a backend.
+    if (!hasSupabase) {
+      setTimeout(() => { setBusy(false); setDone(1000 + Math.floor(Math.random() * 9000)) }, 400)
+      return
+    }
     const supabase = getSupabase()
     const { data, error } = await supabase.rpc('submit_rental_request', {
       p_order_type: mode,

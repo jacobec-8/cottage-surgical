@@ -1,9 +1,13 @@
 # Dependencies
 node_modules/
+__pycache__/
 
 # Env / secrets — ignore ALL env files; keep only the safe placeholder template
 .env*
 !.env.example
+
+# Local credentials doc — never commit
+LOGINS.local.md
 
 # Build output
 dist/

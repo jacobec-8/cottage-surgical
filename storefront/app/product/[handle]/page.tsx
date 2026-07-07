@@ -1,37 +1,43 @@
 import { notFound } from 'next/navigation'
 import { getSupabase, hasSupabase } from '@/lib/supabase'
 import { PRODUCT_FIELDS, type Product } from '@/lib/types'
+import { findDemoProduct } from '@/lib/demo'
 import RequestForm from '@/components/RequestForm'
+import PreviewBanner from '@/components/PreviewBanner'
 
 export const dynamic = 'force-dynamic'
 
 export default async function ProductPage({ params }: { params: { handle: string } }) {
+  let p: Product | null = null
+
   if (!hasSupabase) {
-    return <div className="p-12 text-center text-slate-600">Storefront not configured.</div>
-  }
-
-  const supabase = getSupabase()
-  // Match by Shopify handle; fall back to id.
-  let { data } = await supabase
-    .from('equipment_items')
-    .select(PRODUCT_FIELDS)
-    .eq('shopify_handle', params.handle)
-    .eq('is_active', true)
-    .maybeSingle()
-
-  if (!data) {
-    const r = await supabase
+    p = findDemoProduct(params.handle)
+  } else {
+    const supabase = getSupabase()
+    // Match by Shopify handle; fall back to id.
+    let { data } = await supabase
       .from('equipment_items')
       .select(PRODUCT_FIELDS)
-      .eq('id', params.handle)
+      .eq('shopify_handle', params.handle)
       .eq('is_active', true)
       .maybeSingle()
-    data = r.data
+    if (!data) {
+      const r = await supabase
+        .from('equipment_items')
+        .select(PRODUCT_FIELDS)
+        .eq('id', params.handle)
+        .eq('is_active', true)
+        .maybeSingle()
+      data = r.data
+    }
+    p = (data as Product) ?? null
   }
-  if (!data) notFound()
-  const p = data as Product
+
+  if (!p) notFound()
 
   return (
+    <>
+    {!hasSupabase && <PreviewBanner />}
     <div className="max-w-5xl mx-auto px-4 py-10 grid md:grid-cols-2 gap-10">
       <div className="aspect-square bg-white border border-slate-200 rounded-2xl overflow-hidden grid place-items-center">
         {p.image_url ? (
@@ -65,5 +71,6 @@ export default async function ProductPage({ params }: { params: { handle: string
         />
       </div>
     </div>
+    </>
   )
 }

@@ -33,7 +33,7 @@ except ImportError:
 HERE = os.path.dirname(os.path.abspath(__file__))
 MIGRATION_DIR = os.path.join(HERE, "..", "supabase", "migrations")
 ENV_LOCAL = os.path.join(HERE, "..", ".env.local")
-SKIP_FROM_SWEEP = {"seed_demo_data.sql", "catalog_import.sql"}
+SKIP_FROM_SWEEP = {"seed_demo_data.sql", "catalog_import.sql", "seed_accounts.sql"}
 
 
 def resolve_db_connection():

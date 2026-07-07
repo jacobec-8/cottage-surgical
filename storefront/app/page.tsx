@@ -1,23 +1,31 @@
 import { getSupabase, hasSupabase } from '@/lib/supabase'
 import { PRODUCT_FIELDS, type Product } from '@/lib/types'
+import { DEMO_PRODUCTS } from '@/lib/demo'
 import ProductCard from '@/components/ProductCard'
+import PreviewBanner from '@/components/PreviewBanner'
 
 export const dynamic = 'force-dynamic'
 
 export default async function Home() {
-  if (!hasSupabase) return <Configure />
-
-  const supabase = getSupabase()
-  const { data, error } = await supabase
-    .from('equipment_items')
-    .select(PRODUCT_FIELDS)
-    .eq('is_active', true)
-    .order('category')
-    .order('name')
-  const products = (data ?? []) as Product[]
+  let products: Product[] = []
+  let error = false
+  if (hasSupabase) {
+    const supabase = getSupabase()
+    const res = await supabase
+      .from('equipment_items')
+      .select(PRODUCT_FIELDS)
+      .eq('is_active', true)
+      .order('category')
+      .order('name')
+    products = (res.data ?? []) as Product[]
+    error = Boolean(res.error)
+  } else {
+    products = DEMO_PRODUCTS
+  }
 
   return (
     <div>
+      {!hasSupabase && <PreviewBanner />}
       <section className="bg-gradient-to-br from-[#0a1f44] via-[#102a5c] to-[#1d4ed8] text-white">
         <div className="max-w-6xl mx-auto px-4 py-16">
           <h1 className="text-3xl sm:text-4xl font-bold max-w-2xl leading-tight">
@@ -40,18 +48,6 @@ export default async function Home() {
           ))}
         </div>
       </div>
-    </div>
-  )
-}
-
-function Configure() {
-  return (
-    <div className="max-w-2xl mx-auto p-12 text-center">
-      <h1 className="text-xl font-semibold mb-2">Storefront not configured</h1>
-      <p className="text-slate-600 text-sm">
-        Set <code className="bg-slate-100 px-1 rounded">NEXT_PUBLIC_SUPABASE_URL</code> and{' '}
-        <code className="bg-slate-100 px-1 rounded">NEXT_PUBLIC_SUPABASE_ANON_KEY</code> in Vercel, then redeploy.
-      </p>
     </div>
   )
 }
