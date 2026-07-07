@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase'
 export default function Requests() {
   const qc = useQueryClient()
   const [actErr, setActErr] = useState('')
+  const [note, setNote] = useState('')
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['requests'],
@@ -24,27 +25,47 @@ export default function Requests() {
     },
   })
 
+  // Confirm now RUNS the workflow (confirm_rental_request): reserves stock,
+  // creates a pending delivery + billing, and moves the order to 'open' — where
+  // it shows in Orders and on the Delivery board. Decline just cancels.
   const act = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const { error } = await supabase.from('rental_orders').update({ status }).eq('id', id)
+    mutationFn: async ({ id, action }: { id: string; action: 'confirm' | 'decline' }) => {
+      if (action === 'confirm') {
+        const { data, error } = await supabase.rpc('confirm_rental_request', { p_order_id: id })
+        if (error) throw error
+        if (!data?.ok) throw new Error(data?.reason === 'bad_state' ? 'This request was already handled.' : (data?.reason || 'Couldn’t confirm.'))
+        return data as { unallocated: number }
+      }
+      const { error } = await supabase.from('rental_orders').update({ status: 'cancelled' }).eq('id', id)
       if (error) throw error
+      return null
     },
-    onMutate: () => setActErr(''),
+    onMutate: () => { setActErr(''); setNote('') },
     onError: (e) => setActErr((e as Error).message || 'Action failed. Please try again.'),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['requests'] })
-      qc.invalidateQueries({ queryKey: ['requests_count'] })
-      qc.invalidateQueries({ queryKey: ['rentals'] })
+    onSuccess: (res) => {
+      ;['requests', 'requests_count', 'orders', 'deliveries', 'dashboard', 'rentals'].forEach((k) =>
+        qc.invalidateQueries({ queryKey: [k] }),
+      )
+      if (res) {
+        setNote(
+          res.unallocated > 0
+            ? `Confirmed — moved to Orders. ${res.unallocated} item(s) had no unit in stock; allocate them once stock is available.`
+            : 'Confirmed — equipment reserved and a delivery queued. Find it under Orders and assign a driver on the Delivery board.',
+        )
+      }
     },
   })
 
   return (
     <div>
       <h1 className="text-2xl font-semibold mb-1">Requests</h1>
-      <p className="text-slate-500 text-sm mb-6">Rental &amp; purchase requests submitted from the storefront.</p>
+      <p className="text-slate-500 text-sm mb-6">
+        Rental &amp; purchase requests from the storefront. <strong>Confirm</strong> reserves the equipment and queues a delivery (then assign a driver on the Delivery board); <strong>Decline</strong> cancels it.
+      </p>
       {isLoading && <div className="text-slate-500">Loading…</div>}
       {error && <div className="text-red-600 text-sm">Couldn’t load requests. Please try again.</div>}
       {actErr && <div className="text-red-600 text-sm mb-3 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{actErr}</div>}
+      {note && <div className="text-emerald-700 text-sm mb-3 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">{note}</div>}
       {data && data.length === 0 && <div className="text-slate-500 text-sm">No pending requests.</div>}
 
       <div className="space-y-3">
@@ -81,14 +102,14 @@ export default function Requests() {
               </div>
               <div className="flex flex-col gap-2 shrink-0">
                 <button
-                  onClick={() => act.mutate({ id: r.id, status: 'open' })}
+                  onClick={() => act.mutate({ id: r.id, action: 'confirm' })}
                   disabled={act.isPending && act.variables?.id === r.id}
                   className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg px-3 py-1.5 disabled:opacity-50"
                 >
                   <Check size={15} /> Confirm
                 </button>
                 <button
-                  onClick={() => act.mutate({ id: r.id, status: 'cancelled' })}
+                  onClick={() => act.mutate({ id: r.id, action: 'decline' })}
                   disabled={act.isPending && act.variables?.id === r.id}
                   className="flex items-center gap-1.5 text-slate-500 hover:text-red-600 text-sm rounded-lg px-3 py-1.5"
                 >

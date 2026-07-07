@@ -11,6 +11,7 @@ import NewOrder from './pages/NewOrder'
 import Billing from './pages/Billing'
 import Delivery from './pages/Delivery'
 import Requests from './pages/Requests'
+import Orders from './pages/Orders'
 import Drivers from './pages/Drivers'
 import Shop from './pages/shop/Shop'
 import ProductPage from './pages/shop/ProductPage'
@@ -37,6 +38,7 @@ export default function App() {
       <Route path="/inventory" element={<Protected><Inventory /></Protected>} />
       <Route path="/customers" element={<Protected><Customers /></Protected>} />
       <Route path="/requests" element={<Protected><Requests /></Protected>} />
+      <Route path="/orders" element={<Protected><Orders /></Protected>} />
       <Route path="/new-order" element={<Protected><NewOrder /></Protected>} />
       <Route path="/billing" element={<Protected><Billing /></Protected>} />
       <Route path="/delivery" element={<Protected><Delivery /></Protected>} />

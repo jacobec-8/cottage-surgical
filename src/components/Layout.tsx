@@ -3,7 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   LayoutDashboard, PlusCircle, Users, Package, CreditCard, Truck,
-  LogOut, Shield, ChevronRight, MapPin, Phone, Mail, Inbox, UserCog,
+  LogOut, Shield, ChevronRight, MapPin, Phone, Mail, Inbox, UserCog, ClipboardList,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
@@ -13,6 +13,7 @@ const ALL = ['admin', 'staff', 'driver']
 const NAV = [
   { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true, roles: ALL },
   { to: '/requests', label: 'Requests', icon: Inbox, roles: STAFF },
+  { to: '/orders', label: 'Orders', icon: ClipboardList, roles: STAFF },
   { to: '/new-order', label: 'New Order', icon: PlusCircle, roles: STAFF },
   { to: '/customers', label: 'Customers', icon: Users, roles: STAFF },
   { to: '/inventory', label: 'Inventory', icon: Package, roles: STAFF },
