@@ -12,6 +12,8 @@ import Billing from './pages/Billing'
 import Delivery from './pages/Delivery'
 import Requests from './pages/Requests'
 import Drivers from './pages/Drivers'
+import Shop from './pages/shop/Shop'
+import ProductPage from './pages/shop/ProductPage'
 
 function Protected({ children }: { children: ReactNode }) {
   return (
@@ -25,8 +27,13 @@ export default function App() {
   if (!hasSupabaseConfig) return <ConfigWarning />
   return (
     <Routes>
+      {/* Public storefront */}
+      <Route path="/" element={<Shop />} />
+      <Route path="/product/:handle" element={<ProductPage />} />
+
+      {/* Staff — reached via /admin-login, not linked from the shop */}
       <Route path="/admin-login" element={<Login />} />
-      <Route path="/" element={<Protected><Dashboard /></Protected>} />
+      <Route path="/admin" element={<Protected><Dashboard /></Protected>} />
       <Route path="/inventory" element={<Protected><Inventory /></Protected>} />
       <Route path="/customers" element={<Protected><Customers /></Protected>} />
       <Route path="/requests" element={<Protected><Requests /></Protected>} />

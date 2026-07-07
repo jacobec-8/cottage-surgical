@@ -26,7 +26,7 @@ export default function Login() {
     const { error } = await signIn(email, pw)
     setBusy(false)
     if (error) setError(error)
-    else navigate('/')
+    else navigate('/admin')
   }
   const submit = (e: FormEvent) => {
     e.preventDefault()
