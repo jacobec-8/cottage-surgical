@@ -10,6 +10,7 @@ export default function Requests() {
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['requests'],
+    refetchInterval: 15_000, // keep the inbox live so new storefront requests appear on their own
     queryFn: async () => {
       const { data, error } = await supabase
         .from('rental_orders')

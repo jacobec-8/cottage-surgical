@@ -22,6 +22,7 @@ export default function Orders() {
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['orders'],
+    refetchInterval: 15_000, // keep the list live as requests get confirmed
     queryFn: async () => {
       const { data, error } = await supabase
         .from('rental_orders')
