@@ -5,6 +5,7 @@ import { Check, Truck, Plus, Minus, ArrowLeft } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { PRODUCT_FIELDS, type Product } from '../../lib/shop'
 import ShopHeader from '../../components/shop/ShopHeader'
+import ShopFooter from '../../components/shop/ShopFooter'
 import { useCart } from '../../components/shop/CartContext'
 
 export default function ProductPage() {
@@ -86,6 +87,7 @@ export default function ProductPage() {
           </div>
         </div>
       )}
+      <ShopFooter />
     </div>
   )
 }

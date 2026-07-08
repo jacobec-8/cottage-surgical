@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ChevronDown, MessageCircle } from 'lucide-react'
 import ShopHeader from '../../components/shop/ShopHeader'
+import ShopFooter from '../../components/shop/ShopFooter'
 
 // NOTE: answer copy below is a sensible first draft — please review/edit to
 // match Cottage Surgical's actual policies before real customers see it.
@@ -44,6 +45,7 @@ export default function FAQ() {
           </button>
         </div>
       </section>
+      <ShopFooter />
     </div>
   )
 }

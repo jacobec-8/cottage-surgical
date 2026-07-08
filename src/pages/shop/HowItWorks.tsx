@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { Zap, Search, FileText, Truck, Phone } from 'lucide-react'
 import ShopHeader from '../../components/shop/ShopHeader'
+import ShopFooter from '../../components/shop/ShopFooter'
 
 const STEPS = [
   { n: '01', icon: Search, title: 'Choose & Order', desc: 'Browse, select, and place your request in minutes. Our team confirms availability immediately. Most items are in stock and ready for same-day dispatch.' },
@@ -53,6 +54,7 @@ export default function HowItWorks() {
           </div>
         </div>
       </section>
+      <ShopFooter />
     </div>
   )
 }

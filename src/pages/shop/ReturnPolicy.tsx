@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { RotateCcw, ChevronDown } from 'lucide-react'
 import ShopHeader from '../../components/shop/ShopHeader'
+import ShopFooter from '../../components/shop/ShopFooter'
 
 // NOTE: policy copy below is a first draft — please review/edit to match
 // Cottage Surgical's actual return & refund terms before going live.
@@ -36,6 +37,7 @@ export default function ReturnPolicy() {
           ))}
         </div>
       </section>
+      <ShopFooter />
     </div>
   )
 }

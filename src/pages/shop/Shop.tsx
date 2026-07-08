@@ -1,9 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Search, Check, Zap, Package, ShieldCheck, Heart } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { PRODUCT_FIELDS, type Product } from '../../lib/shop'
 import ShopHeader from '../../components/shop/ShopHeader'
+import ShopFooter from '../../components/shop/ShopFooter'
 import ProductCard from '../../components/shop/ProductCard'
 
 const QUICK = ['Wheelchair', 'Oxygen Concentrator', 'Hospital Bed', 'Patient Lift', 'Knee Scooter']
@@ -15,9 +17,16 @@ const FEATURES = [
 ]
 
 export default function Shop() {
-  const [query, setQuery] = useState('')
+  const [sp] = useSearchParams()
+  const [query, setQuery] = useState(sp.get('q') ?? '')
   const [mode, setMode] = useState<'all' | 'rent' | 'purchase'>('all')
   const [cat, setCat] = useState('all')
+
+  // Footer / deep links like /?q=wheelchair pre-filter the catalog + jump to it.
+  useEffect(() => {
+    const q = sp.get('q')
+    if (q) { setQuery(q); document.getElementById('catalog')?.scrollIntoView({ behavior: 'smooth' }) }
+  }, [sp])
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['shop_catalog'],
@@ -148,6 +157,8 @@ export default function Shop() {
           {filtered.map((p) => <ProductCard key={p.id} p={p} />)}
         </div>
       </section>
+
+      <ShopFooter />
     </div>
   )
 }
