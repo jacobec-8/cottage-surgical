@@ -1,11 +1,14 @@
 import { Link } from 'react-router-dom'
 import { Check, Truck, Zap } from 'lucide-react'
 import type { Product } from '../../lib/shop'
+import { useCart } from './CartContext'
 
 export default function ProductCard({ p }: { p: Product }) {
+  const { add } = useCart()
   const to = `/product/${p.shopify_handle ?? p.id}`
   const rentable = p.is_rentable && p.monthly_rental_price != null
   const purchasable = p.is_purchasable && p.sale_price != null
+  const base = { id: p.id, name: p.name, image_url: p.image_url, category: p.category }
 
   return (
     <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden flex flex-col hover:shadow-lg hover:border-slate-300 transition">
@@ -45,8 +48,14 @@ export default function ProductCard({ p }: { p: Product }) {
         </div>
 
         <div className="flex gap-2 mt-auto">
-          {rentable && <Link to={to} className="flex-1 text-center text-sm font-semibold bg-navy text-white rounded-lg px-3 py-2.5 hover:bg-navy-800">Rent Now</Link>}
-          {purchasable && <Link to={to} className="flex-1 text-center text-sm font-semibold text-terracotta border border-terracotta rounded-lg px-3 py-2.5 hover:bg-terracotta hover:text-white transition">Purchase</Link>}
+          {rentable && (
+            <button onClick={() => add({ ...base, mode: 'rent', price: Number(p.monthly_rental_price) })}
+              className="flex-1 text-center text-sm font-semibold bg-navy text-white rounded-lg px-3 py-2.5 hover:bg-navy-800">Rent Now</button>
+          )}
+          {purchasable && (
+            <button onClick={() => add({ ...base, mode: 'purchase', price: Number(p.sale_price) })}
+              className="flex-1 text-center text-sm font-semibold text-terracotta border border-terracotta rounded-lg px-3 py-2.5 hover:bg-terracotta hover:text-white transition">Purchase</button>
+          )}
           {!rentable && !purchasable && <Link to={to} className="flex-1 text-center text-sm font-semibold bg-navy text-white rounded-lg px-3 py-2.5">View details</Link>}
         </div>
       </div>
