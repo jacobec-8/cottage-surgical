@@ -15,6 +15,9 @@ import Orders from './pages/Orders'
 import Drivers from './pages/Drivers'
 import Shop from './pages/shop/Shop'
 import ProductPage from './pages/shop/ProductPage'
+import HowItWorks from './pages/shop/HowItWorks'
+import FAQ from './pages/shop/FAQ'
+import ReturnPolicy from './pages/shop/ReturnPolicy'
 
 function Protected({ children }: { children: ReactNode }) {
   return (
@@ -31,6 +34,9 @@ export default function App() {
       {/* Public storefront */}
       <Route path="/" element={<Shop />} />
       <Route path="/product/:handle" element={<ProductPage />} />
+      <Route path="/how-it-works" element={<HowItWorks />} />
+      <Route path="/faq" element={<FAQ />} />
+      <Route path="/return-policy" element={<ReturnPolicy />} />
 
       {/* Staff — reached via /admin-login, not linked from the shop */}
       <Route path="/admin-login" element={<Login />} />
