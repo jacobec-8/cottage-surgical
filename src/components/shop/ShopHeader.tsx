@@ -9,9 +9,6 @@ export default function ShopHeader() {
           <span className="w-8 h-8 rounded-lg bg-blue-600 text-white grid place-items-center text-sm">CS</span>
           Cottage Surgical
         </Link>
-        <nav className="flex items-center gap-6 text-sm">
-          <Link to="/" className="text-slate-600 hover:text-slate-900">Equipment</Link>
-        </nav>
       </div>
     </header>
   )
