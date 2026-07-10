@@ -18,6 +18,7 @@ import ProductPage from './pages/shop/ProductPage'
 import HowItWorks from './pages/shop/HowItWorks'
 import FAQ from './pages/shop/FAQ'
 import ReturnPolicy from './pages/shop/ReturnPolicy'
+import CheckoutSuccess from './pages/shop/CheckoutSuccess'
 
 function Protected({ children }: { children: ReactNode }) {
   return (
@@ -37,6 +38,7 @@ export default function App() {
       <Route path="/how-it-works" element={<HowItWorks />} />
       <Route path="/faq" element={<FAQ />} />
       <Route path="/return-policy" element={<ReturnPolicy />} />
+      <Route path="/checkout/success" element={<CheckoutSuccess />} />
 
       {/* Staff — reached via /admin-login, not linked from the shop */}
       <Route path="/admin-login" element={<Login />} />

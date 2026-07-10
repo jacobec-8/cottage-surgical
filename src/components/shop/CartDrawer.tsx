@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { X, ShoppingCart, Trash2, Plus, Minus, CheckCircle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { useCart, type CartMode } from './CartContext'
+import { useCart } from './CartContext'
 
 const REASONS: Record<string, string> = {
   rate_limited: 'You just submitted a request — please wait a moment before sending the rest.',
@@ -19,30 +19,44 @@ export default function CartDrawer() {
   const [error, setError] = useState('')
   const [done, setDone] = useState<number[] | null>(null)
 
-  const rentTotal = items.filter((i) => i.mode === 'rent').reduce((s, i) => s + i.price * i.qty, 0)
-  const buyTotal = items.filter((i) => i.mode === 'purchase').reduce((s, i) => s + i.price * i.qty, 0)
+  const rentItems = items.filter((i) => i.mode === 'rent')
+  const buyItems = items.filter((i) => i.mode === 'purchase')
+  const rentTotal = rentItems.reduce((s, i) => s + i.price * i.qty, 0)
+  const buyTotal = buyItems.reduce((s, i) => s + i.price * i.qty, 0)
   const set = (k: keyof typeof form) => (e: any) => setForm({ ...form, [k]: e.target.value })
 
   const submit = async (e: any) => {
     e.preventDefault(); setBusy(true); setError('')
     try {
-      const groups = (['rent', 'purchase'] as CartMode[])
-        .map((m) => [m, items.filter((i) => i.mode === m)] as const)
-        .filter(([, g]) => g.length > 0)
-      const orderNos: number[] = []
-      for (const [mode, group] of groups) {
+      const customer = { full_name: form.full_name, phone: form.phone, email: form.email }
+      const address = { line1: form.line1, city: form.city, state: form.state, zip: form.zip }
+
+      // Rentals → request flow (no payment).
+      let rentNo: number | null = null
+      if (rentItems.length) {
         const { data, error } = await supabase.rpc('submit_rental_request', {
-          p_order_type: mode === 'rent' ? 'rental' : 'purchase',
-          p_items: group.map((i) => ({ item_id: i.id, quantity: i.qty })),
-          p_customer: { full_name: form.full_name, phone: form.phone, email: form.email },
-          p_address: { line1: form.line1, city: form.city, state: form.state, zip: form.zip },
-          p_notes: form.notes || null,
+          p_order_type: 'rental', p_items: rentItems.map((i) => ({ item_id: i.id, quantity: i.qty })),
+          p_customer: customer, p_address: address, p_notes: form.notes || null,
         })
-        if (error) { console.error(error.message); throw new Error('Something went wrong. Please try again or call us.') }
-        if (!data?.ok) throw new Error(REASONS[data?.reason] || 'We couldn’t submit your request. Please call us.')
-        orderNos.push(data.order_no)
+        if (error) throw new Error('Something went wrong. Please try again or call us.')
+        if (!data?.ok) throw new Error(REASONS[data?.reason] || 'We couldn’t submit your rental request. Please call us.')
+        rentNo = data.order_no
       }
-      clear(); setDone(orderNos)
+
+      // Purchases → Square hosted checkout (hand off + redirect).
+      if (buyItems.length) {
+        const { data, error } = await supabase.rpc('create_square_checkout', {
+          p_items: buyItems.map((i) => ({ item_id: i.id, quantity: i.qty })),
+          p_customer: customer, p_address: address, p_redirect_base: window.location.origin,
+        })
+        if (error) throw new Error('Couldn’t start checkout. Please try again or call us.')
+        if (!data?.ok) throw new Error(REASONS[data?.reason] || 'We couldn’t start your payment. Please call us.')
+        clear()
+        window.location.href = data.checkout_url // → Square, then back to /checkout/success
+        return
+      }
+
+      clear(); setDone(rentNo ? [rentNo] : [])
     } catch (e) { setError((e as Error).message) } finally { setBusy(false) }
   }
 
@@ -90,9 +104,13 @@ export default function CartDrawer() {
             </div>
             {error && <div className="text-sm text-red-600">{error}</div>}
             <button disabled={busy} className="w-full bg-terracotta hover:opacity-90 text-white rounded-lg py-3 font-semibold disabled:opacity-50">
-              {busy ? 'Submitting…' : 'Submit Request'}
+              {busy ? (buyItems.length ? 'Redirecting…' : 'Submitting…') : buyItems.length ? 'Continue to Payment' : 'Submit Request'}
             </button>
-            <p className="text-xs text-slate-400 text-center">No payment now — we’ll confirm details and pricing with you.</p>
+            <p className="text-xs text-slate-400 text-center">
+              {buyItems.length
+                ? 'Purchases are paid securely via Square on the next step. Rentals are confirmed by our team — no rental payment now.'
+                : 'No payment now — we’ll confirm details and pricing with you.'}
+            </p>
           </form>
         ) : (
           <>
@@ -121,8 +139,10 @@ export default function CartDrawer() {
             <div className="border-t border-slate-200 p-5 shrink-0">
               {rentTotal > 0 && <div className="flex justify-between text-sm mb-1"><span className="text-slate-500">Rental / month</span><span className="font-semibold text-navy">${rentTotal.toFixed(0)}/mo</span></div>}
               {buyTotal > 0 && <div className="flex justify-between text-sm mb-1"><span className="text-slate-500">Purchase</span><span className="font-semibold text-navy">${buyTotal.toFixed(0)}</span></div>}
-              <button onClick={() => setCheckout(true)} className="w-full mt-2 bg-navy hover:bg-navy-800 text-white rounded-lg py-3 font-semibold">Request Delivery ({count})</button>
-              <p className="text-xs text-slate-400 text-center pt-2">You’ll confirm contact + address next. No payment now.</p>
+              <button onClick={() => setCheckout(true)} className="w-full mt-2 bg-navy hover:bg-navy-800 text-white rounded-lg py-3 font-semibold">
+                {buyItems.length ? 'Checkout' : 'Request Delivery'} ({count})
+              </button>
+              <p className="text-xs text-slate-400 text-center pt-2">You’ll confirm contact + address next.</p>
             </div>
           </>
         )}
