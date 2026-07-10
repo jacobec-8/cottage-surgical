@@ -16,14 +16,21 @@ type Deliv = {
   completed_at: string | null
   address_line1: string | null
   address_city: string | null
+  address_state: string | null
+  address_zip: string | null
   driver_id: string | null
-  order: { order_no: number; customer: { full_name: string } | null } | null
+  order: {
+    order_no: number
+    customer: { full_name: string } | null
+    rental_line_items: { quantity: number; equipment: { name: string } | null }[]
+  } | null
   delivery_photos: Photo[]
 }
 
 const SELECT =
-  'id,leg_type,status,scheduled_date,window_start,window_end,completed_at,address_line1,address_city,driver_id,' +
-  'order:rental_orders(order_no,customer:customers(full_name)),delivery_photos(storage_path,captured_at,notes)'
+  'id,leg_type,status,scheduled_date,window_start,window_end,completed_at,address_line1,address_city,address_state,address_zip,driver_id,' +
+  'order:rental_orders(order_no,customer:customers(full_name),rental_line_items(quantity,equipment:equipment_items(name))),' +
+  'delivery_photos(storage_path,captured_at,notes)'
 
 export default function Delivery() {
   const { profile } = useAuth()
@@ -169,7 +176,20 @@ function DeliveryRow({ d, drivers, isDriver }: { d: Deliv; drivers: any[]; isDri
             <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 capitalize">{d.leg_type}</span>
             <span className={`text-xs px-2 py-0.5 rounded-full capitalize ${statusClass(d.status)}`}>{statusLabel(d.status)}</span>
           </div>
-          <div className="text-sm text-slate-500 mt-0.5">{[d.address_line1, d.address_city].filter(Boolean).join(', ')}</div>
+          <div className="text-sm text-slate-500 mt-0.5">{[d.address_line1, d.address_city, d.address_state, d.address_zip].filter(Boolean).join(', ')}</div>
+          {(d.order?.rental_line_items?.length ?? 0) > 0 && (
+            <div className="text-sm text-slate-700 mt-1">
+              {d.order!.rental_line_items.map((li) => `${li.quantity > 1 ? li.quantity + '× ' : ''}${li.equipment?.name ?? 'Item'}`).join(', ')}
+            </div>
+          )}
+          {isDriver && (
+            <div className="text-xs text-slate-500 mt-1">
+              {[
+                d.scheduled_date ? new Date(d.scheduled_date + 'T00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : 'Date TBD',
+                d.window_start ? `${d.window_start.slice(0, 5)}–${(d.window_end ?? '').slice(0, 5)}` : null,
+              ].filter(Boolean).join(' · ')}
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {d.status === 'scheduled' && isDriver && (

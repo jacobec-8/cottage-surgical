@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
+import NotificationsBell from './NotificationsBell'
 
 const STAFF = ['admin', 'staff']
 const ALL = ['admin', 'staff', 'driver']
@@ -103,6 +104,7 @@ export default function Layout({ children }: { children: ReactNode }) {
             <span className="flex items-center gap-1.5"><Phone size={13} /> 516-367-9030 ext 4</span>
             <span className="flex items-center gap-1.5"><Mail size={13} /> info@cottagepharmacy.com</span>
           </div>
+          <NotificationsBell />
           <div className="flex items-center gap-3">
             <div className="text-right">
               <div className="text-sm font-medium text-slate-800 leading-tight">{name}</div>
