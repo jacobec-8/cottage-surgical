@@ -22,7 +22,7 @@ export default function CheckoutSuccess() {
     ;(async () => {
       // Square can take a moment to settle the order after redirect — retry a few times.
       for (let attempt = 0; attempt < 4; attempt++) {
-        const { data, error } = await supabase.rpc('verify_square_payment', { p_order_id: ref })
+        const { data, error } = await supabase.rpc('verify_stripe_payment', { p_order_id: ref })
         if (!error && data?.ok && data.paid) { clear(); setState('paid'); return }
         if (error || !data?.ok) { setState('error'); return }
         await new Promise((r) => setTimeout(r, 2000))

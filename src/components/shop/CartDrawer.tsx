@@ -45,7 +45,7 @@ export default function CartDrawer() {
 
       // Purchases → Square hosted checkout (hand off + redirect).
       if (buyItems.length) {
-        const { data, error } = await supabase.rpc('create_square_checkout', {
+        const { data, error } = await supabase.rpc('create_stripe_checkout', {
           p_items: buyItems.map((i) => ({ item_id: i.id, quantity: i.qty })),
           p_customer: customer, p_address: address, p_redirect_base: window.location.origin,
         })
