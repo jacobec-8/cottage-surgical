@@ -39,6 +39,7 @@ export default function Shop() {
     },
   })
   const products = data ?? []
+  const anyPurchasable = products.some((p) => p.is_purchasable && p.sale_price != null)
   const categories = useMemo(
     () => Array.from(new Set(products.map((p) => p.category).filter(Boolean))),
     [products],
@@ -70,7 +71,7 @@ export default function Shop() {
             <span className="text-peach">At Your Door Today</span>
           </h1>
           <p className="text-blue-100/80 mt-6 max-w-2xl mx-auto text-lg">
-            Rent or buy quality DME — ready to use, no assembly required. Order before 2 PM for same-day delivery on most items.
+            Rent quality DME — ready to use, no assembly required. Order before 2 PM for same-day delivery on most items.
           </p>
           <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 mt-6 text-sm font-medium text-emerald-300">
             <span className="inline-flex items-center gap-1.5"><Check size={16} /> No assembly required</span>
@@ -129,14 +130,16 @@ export default function Shop() {
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter equipment…"
               className="w-full bg-white border border-slate-200 rounded-full pl-11 pr-4 py-3 outline-none focus:ring-2 focus:ring-navy/20" />
           </div>
-          <div className="flex bg-white border border-slate-200 rounded-full p-1 self-start">
-            {(['all', 'rent', 'purchase'] as const).map((m) => (
-              <button key={m} onClick={() => setMode(m)}
-                className={`px-5 py-2 text-sm font-medium rounded-full capitalize ${mode === m ? 'bg-navy text-white' : 'text-slate-600'}`}>
-                {m}
-              </button>
-            ))}
-          </div>
+          {anyPurchasable && (
+            <div className="flex bg-white border border-slate-200 rounded-full p-1 self-start">
+              {(['all', 'rent', 'purchase'] as const).map((m) => (
+                <button key={m} onClick={() => setMode(m)}
+                  className={`px-5 py-2 text-sm font-medium rounded-full capitalize ${mode === m ? 'bg-navy text-white' : 'text-slate-600'}`}>
+                  {m}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {categories.length > 0 && (
