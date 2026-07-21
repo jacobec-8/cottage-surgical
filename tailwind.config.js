@@ -4,8 +4,14 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        serif: ['"Playfair Display"', 'Georgia', 'serif'],
-        poppins: ['Poppins', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        // Match the real Cottage Pharmacy Rx site: Montserrat headings + Source
+        // Sans body. Clean/corporate — deliberately not the "feely round" look.
+        sans: ['"Source Sans 3"', '"Source Sans Pro"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        heading: ['Montserrat', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        // Back-compat aliases so existing font-serif / font-poppins classes across
+        // the storefront now render the brand fonts (no per-file sweep needed).
+        serif: ['Montserrat', 'ui-sans-serif', 'sans-serif'],
+        poppins: ['"Source Sans 3"', '"Source Sans Pro"', 'ui-sans-serif', 'sans-serif'],
       },
       colors: {
         navy: { DEFAULT: '#16294d', 800: '#1b3157', 700: '#254070' },

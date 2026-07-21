@@ -1,5 +1,5 @@
 import { Link, NavLink } from 'react-router-dom'
-import { ShoppingCart, Phone, Search } from 'lucide-react'
+import { ShoppingCart, Phone, Search, MapPin, Clock } from 'lucide-react'
 import { useCart } from './CartContext'
 import CartDrawer from './CartDrawer'
 
@@ -19,29 +19,27 @@ export default function ShopHeader() {
   const { count, setOpen } = useCart()
   return (
     <>
-      {/* Announcement bar — JustWalkers "Free Shipping" analogue */}
-      <div className="bg-brand-600 text-white text-xs sm:text-sm">
-        <div className="max-w-7xl mx-auto px-4 h-9 flex items-center justify-center sm:justify-between gap-3">
-          <span className="font-medium text-center">
-            Same-Day Delivery across Nassau &amp; Suffolk County — no shipping fees, ever.
-          </span>
-          <a href="tel:+15163679030" className="hidden sm:inline-flex items-center gap-1.5 font-semibold whitespace-nowrap">
-            <Phone size={13} /> (516) 367-9030
-          </a>
+      {/* Info bar — real store details (matches the Cottage Pharmacy Rx site) */}
+      <div className="bg-brand-600 text-white text-xs">
+        <div className="max-w-7xl mx-auto px-4 min-h-9 py-1.5 flex flex-wrap items-center justify-center gap-x-5 gap-y-1 text-center">
+          <span className="inline-flex items-center gap-1.5"><MapPin size={13} /> 8285 Jericho Turnpike, Woodbury, NY 11797</span>
+          <span className="hidden md:inline text-white/40">|</span>
+          <span className="inline-flex items-center gap-1.5"><Clock size={13} /> Mon–Fri 9–6 · Sat 10–5 · Sun 9–12</span>
+          <span className="hidden md:inline text-white/40">|</span>
+          <a href="tel:+15163679030" className="inline-flex items-center gap-1.5 font-semibold whitespace-nowrap"><Phone size={13} /> (516) 367-9030</a>
         </div>
       </div>
 
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-30 font-poppins">
-        <div className="max-w-7xl mx-auto px-4 h-[68px] flex items-center justify-between gap-3">
-          <Link to="/" className="flex items-center gap-2.5 shrink-0">
-            <span className="w-10 h-10 rounded-xl bg-brand-600 text-white grid place-items-center font-bold tracking-tight">CS</span>
-            <span className="leading-tight hidden sm:block">
-              <span className="block font-bold text-slate-900">Cottage Surgical</span>
-              <span className="block text-[11px] font-semibold text-brand-600">Home Medical Equipment</span>
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-30 font-sans">
+        <div className="max-w-7xl mx-auto px-4 h-[72px] flex items-center justify-between gap-3">
+          <Link to="/" className="flex items-center gap-3 shrink-0" aria-label="Cottage Pharmacy & Surgical — home">
+            <img src="/cottage-logo.png" alt="Cottage Pharmacy & Surgical" className="h-12 w-auto" />
+            <span className="hidden xl:block border-l border-slate-200 pl-3 text-[13px] font-heading font-semibold text-slate-500 leading-tight">
+              Home Medical<br />Equipment Rentals
             </span>
           </Link>
 
-          <nav className="hidden lg:flex items-center gap-0.5 text-sm font-medium">
+          <nav className="hidden lg:flex items-center gap-0.5 text-sm font-heading font-medium">
             {NAV.map((n) => (
               <NavLink key={n.to} to={n.to}
                 className={({ isActive }) =>

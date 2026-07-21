@@ -64,7 +64,7 @@ export default function Shop() {
   const goShop = () => document.getElementById('favorites')?.scrollIntoView({ behavior: 'smooth' })
 
   return (
-    <div className="font-poppins bg-white min-h-screen text-slate-800">
+    <div className="font-sans bg-white min-h-screen text-slate-800">
       <ShopHeader />
 
       {/* Hero */}
@@ -73,7 +73,7 @@ export default function Shop() {
           <span className="inline-flex items-center gap-2 text-xs font-semibold tracking-wide uppercase text-brand-700 bg-brand-100 rounded-full px-3.5 py-1.5">
             <Truck size={14} /> Serving Nassau &amp; Suffolk County, NY
           </span>
-          <h1 className="font-extrabold tracking-tight text-slate-900 leading-[1.08] text-4xl sm:text-5xl mt-5">
+          <h1 className="font-heading font-extrabold tracking-tight text-slate-900 leading-[1.08] text-4xl sm:text-5xl mt-5">
             Home medical equipment,<br className="hidden sm:block" /> delivered the same day.
           </h1>
           <p className="text-slate-600 mt-4 max-w-2xl mx-auto text-lg">
@@ -100,7 +100,7 @@ export default function Shop() {
       <section className="max-w-6xl mx-auto px-4 py-14">
         <div className="flex items-end justify-between flex-wrap gap-2 mb-7">
           <div>
-            <h2 className="font-extrabold tracking-tight text-slate-900 text-2xl sm:text-3xl">Shop by category</h2>
+            <h2 className="font-heading font-extrabold tracking-tight text-slate-900 text-2xl sm:text-3xl">Shop by category</h2>
             <p className="text-slate-500 mt-1">Our most-requested home medical equipment.</p>
           </div>
           <button onClick={goShop} className="text-brand-600 font-semibold text-sm inline-flex items-center gap-1 hover:gap-2 transition-all">
@@ -148,7 +148,7 @@ export default function Shop() {
       <section id="favorites" className="bg-slate-50">
         <div className="max-w-6xl mx-auto px-4 py-14">
           <div className="text-center mb-8">
-            <h2 className="font-extrabold tracking-tight text-slate-900 text-2xl sm:text-3xl">Available for Rent</h2>
+            <h2 className="font-heading font-extrabold tracking-tight text-slate-900 text-2xl sm:text-3xl">Available for Rent</h2>
             <p className="text-slate-500 mt-1">Order before 2 PM — delivered and set up the same day. No assembly.</p>
           </div>
 
@@ -192,7 +192,7 @@ export default function Shop() {
       <section className="bg-white border-t border-slate-100">
         <div className="max-w-3xl mx-auto px-4 py-14 text-center">
           <span className="w-14 h-14 rounded-full bg-brand-50 text-brand-600 grid place-items-center mx-auto mb-4"><Phone size={26} /></span>
-          <h2 className="font-extrabold tracking-tight text-slate-900 text-2xl sm:text-3xl">Not sure what you need?</h2>
+          <h2 className="font-heading font-extrabold tracking-tight text-slate-900 text-2xl sm:text-3xl">Not sure what you need?</h2>
           <p className="text-slate-600 mt-2 max-w-xl mx-auto">
             Talk to a real person about availability, pricing, and same-day delivery across Nassau &amp; Suffolk County.
           </p>
