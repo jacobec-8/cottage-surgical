@@ -44,7 +44,7 @@ function Notice({ title, children }: { title: string; children: ReactNode }) {
     <div className="min-h-screen grid place-items-center p-6 text-center">
       <div className="max-w-sm">
         <h1 className="text-lg font-semibold mb-2">{title}</h1>
-        <p className="text-sm text-slate-600">{children}</p>
+        <div className="text-sm text-slate-600">{children}</div>
       </div>
     </div>
   )

@@ -4,6 +4,7 @@ import { Camera } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { statusClass, statusLabel } from '../lib/status'
+import { useRealtimeInvalidate } from '../lib/useRealtimeInvalidate'
 
 type Photo = { storage_path: string; captured_at: string; notes: string | null }
 type Deliv = {
@@ -37,6 +38,11 @@ export default function Delivery() {
   const isDriver = profile?.role === 'driver'
   const [view, setView] = useState<'active' | 'completed'>('active')
 
+  // Live board: refetch the moment a delivery is created/updated (e.g. a request
+  // is confirmed, or a driver starts/completes a stop) instead of waiting on the
+  // focus-paused 20s poll. Also keeps the sidebar delivery badge in sync.
+  useRealtimeInvalidate('deliveries', ['deliveries', 'nav_counts'])
+
   const drivers = useQuery({
     queryKey: ['drivers', 'active'],
     enabled: !isDriver,
@@ -47,7 +53,10 @@ export default function Delivery() {
   })
   const { data, isLoading, error } = useQuery({
     queryKey: ['deliveries', view],
-    refetchInterval: 20_000, // keep the driver/admin board live as orders get approved
+    refetchOnMount: 'always',        // never open the board on a stale cached list
+    staleTime: 0,                    // this board must reflect reality, not the 30s default
+    refetchInterval: 20_000,         // fallback poll behind the realtime subscription…
+    refetchIntervalInBackground: true, // …that keeps ticking even in a background tab
     queryFn: async () => {
       let q = supabase.from('deliveries').select(SELECT)
       q = view === 'active'
