@@ -22,3 +22,4 @@ scratchpad/
 
 # Design source binaries (kept out of repo; Figma is source of truth)
 *.pages
+.gstack/
