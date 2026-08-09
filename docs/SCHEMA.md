@@ -2,7 +2,9 @@
 
 Internal DME (durable medical equipment) **rental + delivery** management system
 for Cottage Pharmacy. Three roles: **Admin**, **Staff**, **Driver**. No public
-customers, no payment processing in v1.
+customers. Payments: a Square integration was added (migration 027, now dormant),
+then replaced by Stripe Checkout executed from Postgres via the `http` extension
+with a Vault-stored secret (migration 029, live).
 
 Stack target: React + Vite + Supabase (Postgres + Auth + RLS + Realtime) on
 Vercel — same lineage as the WheelsforWellness and rank1seo projects this schema
