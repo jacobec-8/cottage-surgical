@@ -29,7 +29,8 @@
   "roles": [
     "admin",
     "staff",
-    "driver"
+    "driver",
+    "customer"
   ],
   "jobs": [],
   "db": {
