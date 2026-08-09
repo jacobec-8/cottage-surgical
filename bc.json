@@ -1,0 +1,43 @@
+{
+  "venture": "cottage-surgical",
+  "template": {
+    "family": "role-kernel-spa",
+    "version": "0-pre",
+    "tier": "A",
+    "upstream": "w4w"
+  },
+  "waivers": [],
+  "identityKernel": "profiles-role-check",
+  "paths": {
+    "app": "src/pages",
+    "api": null,
+    "components": "src/components",
+    "migrations": "supabase/migrations",
+    "edgeFunctions": null,
+    "jobs": null,
+    "schemaAuthority": "docs/SCHEMA.md",
+    "content": null,
+    "storefront": "storefront"
+  },
+  "commands": {
+    "dev": "npm run dev",
+    "build": "npm run build",
+    "typecheck": null,
+    "test": null,
+    "migrate": "python3 scripts/run_migrations.py"
+  },
+  "roles": [
+    "admin",
+    "staff",
+    "driver"
+  ],
+  "jobs": [],
+  "db": {
+    "provider": "supabase",
+    "projectRefEnv": "VITE_SUPABASE_URL",
+    "schemas": [
+      "public"
+    ]
+  },
+  "payments": "stripe-checkout"
+}
