@@ -1,7 +1,8 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase, hasSupabaseConfig } from '../lib/supabase'
+import { queryClient } from '../lib/queryClient'
 
 type Profile = { id: string; email: string; full_name: string | null; role: string; is_active: boolean }
 
@@ -22,6 +23,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
   const [profileLoaded, setProfileLoaded] = useState(false)
+  // Tracks last auth user so multi-tab SIGNED_OUT / remote revoke / account
+  // switch all purge the shared query cache (not only the Logout button path).
+  const prevAuthUserId = useRef<string | null | undefined>(undefined)
 
   useEffect(() => {
     if (!hasSupabaseConfig) {
@@ -36,6 +40,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => setSession(s))
     return () => sub.subscription.unsubscribe()
   }, [])
+
+  useEffect(() => {
+    const id = session?.user?.id ?? null
+    // Skip the first observation (undefined → initial id) so we don't clear a
+    // cold cache; clear on every subsequent identity change including → null.
+    if (prevAuthUserId.current !== undefined && prevAuthUserId.current !== id) {
+      void queryClient.cancelQueries()
+      queryClient.clear()
+    }
+    prevAuthUserId.current = id
+  }, [session?.user?.id])
 
   useEffect(() => {
     if (!session?.user) {
@@ -67,6 +82,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     await supabase.auth.signOut()
     setProfile(null)
+    // Belt-and-suspenders with the identity-change effect above.
+    void queryClient.cancelQueries()
+    queryClient.clear()
   }
 
   return (

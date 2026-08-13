@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { SHOP_PURCHASES_ENABLED } from '../../lib/shopFlags'
 
 export type CartMode = 'rent' | 'purchase'
 export type CartItem = {
@@ -25,23 +26,46 @@ type Ctx = {
 const CartContext = createContext<Ctx | null>(null)
 const KEY = 'cs_cart_v1'
 
+function sanitizeCart(raw: CartItem[]): CartItem[] {
+  return raw
+    .filter((c) => c.mode === 'rent' || SHOP_PURCHASES_ENABLED)
+    .map((c) => ({ ...c, qty: Math.min(Math.max(1, c.qty || 1), 20) }))
+}
+
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>(() => {
-    try { return JSON.parse(localStorage.getItem(KEY) || '[]') } catch { return [] }
+    try {
+      return sanitizeCart(JSON.parse(localStorage.getItem(KEY) || '[]') as CartItem[])
+    } catch {
+      return []
+    }
   })
   const [open, setOpen] = useState(false)
-  useEffect(() => { try { localStorage.setItem(KEY, JSON.stringify(items)) } catch { /* ignore */ } }, [items])
+  useEffect(() => {
+    try {
+      localStorage.setItem(KEY, JSON.stringify(items))
+    } catch {
+      /* ignore */
+    }
+  }, [items])
 
   const add: Ctx['add'] = (i) => {
+    if (i.mode === 'purchase' && !SHOP_PURCHASES_ENABLED) return
     setItems((cur) => {
       const ex = cur.find((c) => c.id === i.id && c.mode === i.mode)
-      if (ex) return cur.map((c) => (c.id === i.id && c.mode === i.mode ? { ...c, qty: c.qty + 1 } : c))
+      if (ex) {
+        return cur.map((c) =>
+          c.id === i.id && c.mode === i.mode ? { ...c, qty: Math.min(c.qty + 1, 20) } : c,
+        )
+      }
       return [...cur, { ...i, qty: 1 }]
     })
     setOpen(true)
   }
   const setQty: Ctx['setQty'] = (id, mode, qty) =>
-    setItems((cur) => cur.map((c) => (c.id === id && c.mode === mode ? { ...c, qty: Math.max(1, qty) } : c)))
+    setItems((cur) =>
+      cur.map((c) => (c.id === id && c.mode === mode ? { ...c, qty: Math.min(Math.max(1, qty), 20) } : c)),
+    )
   const remove: Ctx['remove'] = (id, mode) => setItems((cur) => cur.filter((c) => !(c.id === id && c.mode === mode)))
   const clear = () => setItems([])
   const count = items.reduce((n, c) => n + c.qty, 0)

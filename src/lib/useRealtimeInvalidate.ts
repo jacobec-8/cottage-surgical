@@ -6,7 +6,7 @@ import { supabase } from './supabase'
  * Subscribe to Postgres changes on a table and invalidate the given react-query
  * keys on every insert/update/delete, so a board reflects reality within ~1s
  * without relying on focus-based polling (which pauses in background tabs and,
- * with refetchOnWindowFocus:false, never fires on tab re-focus).
+ * may lag until focus refetch or the next poll).
  *
  * The table MUST be in the `supabase_realtime` publication (see migration 013 —
  * deliveries + rental_orders are published there). Realtime honors RLS, so a

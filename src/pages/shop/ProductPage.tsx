@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Check, Truck, Plus, Minus, ArrowLeft } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { PRODUCT_FIELDS, type Product } from '../../lib/shop'
+import { SHOP_PURCHASES_ENABLED } from '../../lib/shopFlags'
 import ShopHeader from '../../components/shop/ShopHeader'
 import ShopFooter from '../../components/shop/ShopFooter'
 import { useCart } from '../../components/shop/CartContext'
@@ -28,11 +29,13 @@ export default function ProductPage() {
   })
 
   const rentable = !!(p && p.is_rentable && p.monthly_rental_price != null)
-  const purchasable = !!(p && p.is_purchasable && p.sale_price != null)
+  const purchasable = !!(SHOP_PURCHASES_ENABLED && p && p.is_purchasable && p.sale_price != null)
   const addToCart = (mode: 'rent' | 'purchase') => {
     if (!p) return
+    if (mode === 'purchase' && !SHOP_PURCHASES_ENABLED) return
     const price = mode === 'rent' ? Number(p.monthly_rental_price) : Number(p.sale_price)
-    for (let i = 0; i < qty; i++) add({ id: p.id, name: p.name, image_url: p.image_url, category: p.category, mode, price })
+    const n = Math.min(Math.max(1, qty), 20)
+    for (let i = 0; i < n; i++) add({ id: p.id, name: p.name, image_url: p.image_url, category: p.category, mode, price })
   }
 
   return (
@@ -82,7 +85,11 @@ export default function ProductPage() {
                 {purchasable && <button onClick={() => addToCart('purchase')} className="flex-1 border border-terracotta text-terracotta hover:bg-terracotta hover:text-white rounded-lg py-3 font-semibold transition">Purchase</button>}
                 {!rentable && !purchasable && <a href="tel:+15163679030" className="flex-1 text-center bg-navy text-white rounded-lg py-3 font-semibold">Call to order</a>}
               </div>
-              <p className="text-xs text-slate-400 mt-3">No payment now — we’ll confirm details and pricing with you.</p>
+              <p className="text-xs text-slate-400 mt-3">
+                {purchasable
+                  ? 'Purchases are paid securely with Stripe at checkout. Rentals are confirmed by our team — no rental payment online yet.'
+                  : 'No payment online for rentals — we’ll confirm details, availability, and pricing when we call.'}
+              </p>
             </div>
           </div>
         </div>

@@ -6,8 +6,7 @@ import ShopFooter from '../../components/shop/ShopFooter'
 // NOTE: policy copy below is a first draft — please review/edit to match
 // Cottage Surgical's actual return & refund terms before going live.
 const SECTIONS = [
-  { t: 'Rental Returns', b: 'When your rental ends, just call us and we’ll schedule a pickup — often same or next day. Nothing to pack or ship; our technician collects and inspects the equipment at your door.' },
-  { t: 'Purchase Returns', b: 'Unopened, unused purchases may be returned within 14 days for a refund, less any delivery fee. Items must be in original, resalable condition.' },
+  { t: 'Rental Returns', b: 'When your rental ends, just call us and we’ll schedule a pickup — often same or next day across Nassau & Suffolk. Nothing to pack or ship; our technician collects and inspects the equipment at your door.' },
   { t: 'Refundable Security Deposit', b: 'Rentals include a refundable security deposit, returned in full after pickup once the equipment is inspected for normal condition. Refunds go back to your original payment method.' },
   { t: 'Damaged Equipment', b: 'Normal wear is on us. Damage beyond normal use (neglect or misuse) may be deducted from the deposit — we’ll always review it with you first.' },
   { t: 'Hygiene Items', b: 'For health and safety, certain personal-care and hygiene items are non-returnable once opened. These are clearly marked at checkout.' },

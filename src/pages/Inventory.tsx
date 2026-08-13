@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Search, Pencil, Trash2, X } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, X, ChevronDown, ChevronRight } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
 type Item = {
@@ -23,6 +23,7 @@ export default function Inventory() {
   const qc = useQueryClient()
   const [q, setQ] = useState('')
   const [editing, setEditing] = useState<Partial<Item> | null>(null) // null=closed, {} = new
+  const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['equipment_items'],
@@ -58,7 +59,9 @@ export default function Inventory() {
         </button>
       </div>
       <h2 className="text-lg font-semibold mt-2">Equipment &amp; Supplies</h2>
-      <p className="text-slate-500 text-sm mb-5">Manage rental inventory, pricing, and stock levels.</p>
+      <p className="text-slate-500 text-sm mb-5">
+        Manage rental inventory, pricing, and stock. Expand an item to return units from maintenance to available stock.
+      </p>
 
       <div className="relative mb-4">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -74,52 +77,137 @@ export default function Inventory() {
       {error && <div className="text-red-600 text-sm">{(error as Error).message}</div>}
 
       <div className="space-y-3">
-        {filtered.map((it) => (
-          <div
-            key={it.id}
-            className={`bg-white border border-slate-200 rounded-xl p-4 flex items-center gap-4 ${it.is_active ? '' : 'opacity-50'}`}
-          >
-            {it.image_url ? (
-              <img src={it.image_url} alt="" className="w-16 h-16 rounded-lg object-cover bg-slate-100 shrink-0" />
-            ) : (
-              <div className="w-16 h-16 rounded-lg bg-slate-100 shrink-0" />
-            )}
-            <div className="flex-1 min-w-0">
-              <div className="font-semibold truncate">
-                {it.name}
-                {!it.is_active && <span className="ml-2 text-xs text-slate-400">(inactive)</span>}
+        {filtered.map((it) => {
+          const open = expandedId === it.id
+          return (
+            <div
+              key={it.id}
+              className={`bg-white border border-slate-200 rounded-xl ${it.is_active ? '' : 'opacity-50'}`}
+            >
+              <div className="p-4 flex items-center gap-4">
+                <button
+                  type="button"
+                  onClick={() => setExpandedId(open ? null : it.id)}
+                  className="text-slate-400 hover:text-slate-700 p-1 shrink-0"
+                  aria-label={open ? 'Collapse units' : 'Expand units'}
+                >
+                  {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                </button>
+                {it.image_url ? (
+                  <img src={it.image_url} alt="" className="w-16 h-16 rounded-lg object-cover bg-slate-100 shrink-0" />
+                ) : (
+                  <div className="w-16 h-16 rounded-lg bg-slate-100 shrink-0" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold truncate">
+                    {it.name}
+                    {!it.is_active && <span className="ml-2 text-xs text-slate-400">(inactive)</span>}
+                  </div>
+                  <div className="text-sm text-slate-500 truncate">{it.description}</div>
+                  <div className="flex items-center gap-3 mt-2">
+                    <span className="text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-600 capitalize">{it.category}</span>
+                    <span className="text-xs text-slate-500">Qty on Hand: {it.quantity_on_hand}</span>
+                  </div>
+                  {it.sku && <div className="text-xs text-slate-400 mt-1">SN: {it.sku}</div>}
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="text-sm font-semibold">${Number(it.monthly_rental_price ?? 0).toFixed(0)}/mo rental</div>
+                  <div className="text-xs text-slate-500">
+                    {it.sale_price != null ? `$${Number(it.sale_price).toFixed(0)} sale` : 'no sale price'}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button onClick={() => setEditing(it)} className="text-slate-400 hover:text-blue-600 p-1">
+                    <Pencil size={16} />
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (confirm(`Remove "${it.name}" from the catalog?`)) deactivate.mutate(it.id)
+                    }}
+                    className="text-slate-400 hover:text-red-600 p-1"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
               </div>
-              <div className="text-sm text-slate-500 truncate">{it.description}</div>
-              <div className="flex items-center gap-3 mt-2">
-                <span className="text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-600 capitalize">{it.category}</span>
-                <span className="text-xs text-slate-500">Qty on Hand: {it.quantity_on_hand}</span>
-              </div>
-              {it.sku && <div className="text-xs text-slate-400 mt-1">SN: {it.sku}</div>}
+              {open && <UnitsPanel itemId={it.id} />}
             </div>
-            <div className="text-right shrink-0">
-              <div className="text-sm font-semibold">${Number(it.monthly_rental_price ?? 0).toFixed(0)}/mo rental</div>
-              <div className="text-xs text-slate-500">
-                {it.sale_price != null ? `$${Number(it.sale_price).toFixed(0)} sale` : 'no sale price'}
-              </div>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <button onClick={() => setEditing(it)} className="text-slate-400 hover:text-blue-600 p-1">
-                <Pencil size={16} />
-              </button>
-              <button
-                onClick={() => {
-                  if (confirm(`Remove "${it.name}" from the catalog?`)) deactivate.mutate(it.id)
-                }}
-                className="text-slate-400 hover:text-red-600 p-1"
-              >
-                <Trash2 size={16} />
-              </button>
-            </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       {editing && <ItemModal item={editing} onClose={() => setEditing(null)} />}
+    </div>
+  )
+}
+
+type Unit = { id: string; serial_number: string | null; asset_tag: string | null; status: string }
+
+function UnitsPanel({ itemId }: { itemId: string }) {
+  const qc = useQueryClient()
+  const units = useQuery({
+    queryKey: ['equipment_units', itemId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('equipment_units')
+        .select('id,serial_number,asset_tag,status')
+        .eq('item_id', itemId)
+        .order('status')
+      if (error) throw error
+      return data as Unit[]
+    },
+  })
+
+  const returnUnit = useMutation({
+    mutationFn: async (unitId: string) => {
+      const { data, error } = await supabase.rpc('return_unit_to_available', { p_unit_id: unitId })
+      if (error) throw error
+      if (!data?.ok) throw new Error(data?.reason || 'Could not return unit')
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['equipment_units', itemId] })
+      qc.invalidateQueries({ queryKey: ['equipment_items'] })
+      qc.invalidateQueries({ queryKey: ['neworder_items'] })
+    },
+    onError: (e) => alert((e as Error).message),
+  })
+
+  if (units.isLoading) return <div className="px-4 pb-4 text-sm text-slate-500">Loading units…</div>
+  if (units.error) return <div className="px-4 pb-4 text-sm text-red-600">Couldn’t load units.</div>
+  if (!units.data?.length) {
+    return (
+      <div className="px-4 pb-4 text-sm text-slate-500 border-t border-slate-100 pt-3">
+        No serialized units for this item. Qty on hand is managed at the catalog level for bulk stock.
+      </div>
+    )
+  }
+
+  return (
+    <div className="border-t border-slate-100 px-4 pb-4 pt-3 space-y-2">
+      <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Units</div>
+      {units.data.map((u) => (
+        <div key={u.id} className="flex items-center justify-between gap-3 text-sm bg-slate-50 rounded-lg px-3 py-2">
+          <div className="min-w-0">
+            <span className="font-medium">{u.asset_tag || u.serial_number || u.id.slice(0, 8)}</span>
+            <span className={`ml-2 text-xs px-2 py-0.5 rounded-full capitalize ${
+              u.status === 'available' ? 'bg-emerald-100 text-emerald-700'
+                : u.status === 'maintenance' ? 'bg-amber-100 text-amber-800'
+                  : u.status === 'rented' || u.status === 'reserved' ? 'bg-blue-100 text-blue-700'
+                    : 'bg-slate-200 text-slate-600'
+            }`}>{u.status}</span>
+          </div>
+          {u.status === 'maintenance' && (
+            <button
+              type="button"
+              onClick={() => returnUnit.mutate(u.id)}
+              disabled={returnUnit.isPending}
+              className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-2.5 py-1 disabled:opacity-50 shrink-0"
+            >
+              Return to stock
+            </button>
+          )}
+        </div>
+      ))}
     </div>
   )
 }

@@ -30,6 +30,9 @@ export default function Layout({ children }: { children: ReactNode }) {
   // Orders + Delivery badges (and screens) without a manual refresh.
   const { data: counts } = useQuery({
     queryKey: ['nav_counts'],
+    staleTime: 0, // badge catch-up on tab return after short background
+    refetchInterval: 20_000,
+    refetchIntervalInBackground: true,
     queryFn: async () => {
       const [req, ord, del] = await Promise.all([
         supabase.from('rental_orders').select('*', { count: 'exact', head: true }).eq('status', 'requested'),
@@ -38,7 +41,6 @@ export default function Layout({ children }: { children: ReactNode }) {
       ])
       return { requests: req.count ?? 0, orders: ord.count ?? 0, deliveries: del.count ?? 0 } as Record<string, number>
     },
-    refetchInterval: 20_000,
   })
   const name = profile?.full_name || profile?.email || 'User'
   const initials = name.split(' ').map((s) => s[0]).slice(0, 2).join('').toUpperCase()

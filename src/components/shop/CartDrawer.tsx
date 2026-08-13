@@ -43,21 +43,33 @@ export default function CartDrawer() {
         rentNo = data.order_no
       }
 
-      // Purchases → Square hosted checkout (hand off + redirect).
+      // Purchases → Stripe Checkout (kept for when SHOP_PURCHASES_ENABLED is true).
       if (buyItems.length) {
         const { data, error } = await supabase.rpc('create_stripe_checkout', {
           p_items: buyItems.map((i) => ({ item_id: i.id, quantity: i.qty })),
-          p_customer: customer, p_address: address, p_redirect_base: window.location.origin,
+          p_customer: customer,
+          p_address: address,
+          p_redirect_base: window.location.origin,
         })
         if (error) throw new Error('Couldn’t start checkout. Please try again or call us.')
-        if (!data?.ok) throw new Error(REASONS[data?.reason] || 'We couldn’t start your payment. Please call us.')
+        if (!data?.ok) {
+          if (data?.reason === 'invalid_redirect') {
+            throw new Error('Checkout is misconfigured for this site. Please call us.')
+          }
+          throw new Error(REASONS[data?.reason] || 'We couldn’t start your payment. Please call us.')
+        }
         clear()
-        window.location.href = data.checkout_url // → Square, then back to /checkout/success
+        window.location.href = data.checkout_url // → Stripe, then back to /checkout/success
         return
       }
 
-      clear(); setDone(rentNo ? [rentNo] : [])
-    } catch (e) { setError((e as Error).message) } finally { setBusy(false) }
+      clear()
+      setDone(rentNo ? [rentNo] : [])
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setBusy(false)
+    }
   }
 
   const close = () => { setOpen(false); setError('') }
@@ -86,7 +98,7 @@ export default function CartDrawer() {
             <div>
               <ShoppingCart className="mx-auto text-slate-300 mb-3" size={42} />
               <div className="font-semibold text-navy">Your cart is empty</div>
-              <p className="text-slate-500 text-sm mt-1">Browse our equipment and click <b>Rent Now</b> or <b>Purchase</b>.</p>
+              <p className="text-slate-500 text-sm mt-1">Browse our equipment and click <b>Rent Now</b> to request delivery across Long Island.</p>
               <Link to="/" onClick={close} className="inline-block mt-4 text-terracotta font-semibold text-sm">Browse Equipment →</Link>
             </div>
           </div>
@@ -108,8 +120,8 @@ export default function CartDrawer() {
             </button>
             <p className="text-xs text-slate-400 text-center">
               {buyItems.length
-                ? 'Purchases are paid securely via Square on the next step. Rentals are confirmed by our team — no rental payment now.'
-                : 'No payment now — we’ll confirm details and pricing with you.'}
+                ? 'Purchases are paid securely with Stripe on the next step. Rentals are confirmed by our team — no rental payment online.'
+                : 'No payment online — we’ll confirm details, availability, and pricing when we call (Nassau & Suffolk).'}
             </p>
           </form>
         ) : (

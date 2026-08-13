@@ -19,6 +19,7 @@ import HowItWorks from './pages/shop/HowItWorks'
 import FAQ from './pages/shop/FAQ'
 import ReturnPolicy from './pages/shop/ReturnPolicy'
 import CheckoutSuccess from './pages/shop/CheckoutSuccess'
+import RealtimeSync from './components/RealtimeSync'
 
 function Protected({ children }: { children: ReactNode }) {
   return (
@@ -31,27 +32,31 @@ function Protected({ children }: { children: ReactNode }) {
 export default function App() {
   if (!hasSupabaseConfig) return <ConfigWarning />
   return (
-    <Routes>
-      {/* Public storefront */}
-      <Route path="/" element={<Shop />} />
-      <Route path="/product/:handle" element={<ProductPage />} />
-      <Route path="/how-it-works" element={<HowItWorks />} />
-      <Route path="/faq" element={<FAQ />} />
-      <Route path="/return-policy" element={<ReturnPolicy />} />
-      <Route path="/checkout/success" element={<CheckoutSuccess />} />
+    <>
+      {/* Persistent realtime → query-cache bridge; outlives per-route Layout mounts. */}
+      <RealtimeSync />
+      <Routes>
+        {/* Public storefront */}
+        <Route path="/" element={<Shop />} />
+        <Route path="/product/:handle" element={<ProductPage />} />
+        <Route path="/how-it-works" element={<HowItWorks />} />
+        <Route path="/faq" element={<FAQ />} />
+        <Route path="/return-policy" element={<ReturnPolicy />} />
+        <Route path="/checkout/success" element={<CheckoutSuccess />} />
 
-      {/* Staff — reached via /admin-login, not linked from the shop */}
-      <Route path="/admin-login" element={<Login />} />
-      <Route path="/admin" element={<Protected><Dashboard /></Protected>} />
-      <Route path="/inventory" element={<Protected><Inventory /></Protected>} />
-      <Route path="/customers" element={<Protected><Customers /></Protected>} />
-      <Route path="/requests" element={<Protected><Requests /></Protected>} />
-      <Route path="/orders" element={<Protected><Orders /></Protected>} />
-      <Route path="/new-order" element={<Protected><NewOrder /></Protected>} />
-      <Route path="/billing" element={<Protected><Billing /></Protected>} />
-      <Route path="/delivery" element={<Protected><Delivery /></Protected>} />
-      <Route path="/drivers" element={<Protected><Drivers /></Protected>} />
-    </Routes>
+        {/* Staff — reached via /admin-login, not linked from the shop */}
+        <Route path="/admin-login" element={<Login />} />
+        <Route path="/admin" element={<Protected><Dashboard /></Protected>} />
+        <Route path="/inventory" element={<Protected><Inventory /></Protected>} />
+        <Route path="/customers" element={<Protected><Customers /></Protected>} />
+        <Route path="/requests" element={<Protected><Requests /></Protected>} />
+        <Route path="/orders" element={<Protected><Orders /></Protected>} />
+        <Route path="/new-order" element={<Protected><NewOrder /></Protected>} />
+        <Route path="/billing" element={<Protected><Billing /></Protected>} />
+        <Route path="/delivery" element={<Protected><Delivery /></Protected>} />
+        <Route path="/drivers" element={<Protected><Drivers /></Protected>} />
+      </Routes>
+    </>
   )
 }
 

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, Navigate } from 'react-router-dom'
 import {
   CheckCircle, AlertCircle, CalendarClock, DollarSign,
@@ -19,11 +19,32 @@ const MODULES = [
 
 export default function Dashboard() {
   const { profile } = useAuth()
+  const qc = useQueryClient()
   const navigate = useNavigate()
   const [tab, setTab] = useState<'overview' | 'rentals'>('overview')
+  const isStaff = profile?.role === 'admin' || profile?.role === 'staff'
+
+  // Opportunistic overdue sweep (records-only billing; no-op until due dates are set).
+  useQuery({
+    queryKey: ['overdue_sweep'],
+    staleTime: 600_000,
+    enabled: isStaff,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('mark_overdue')
+      if (error) throw error
+      if (data && ((data.orders_marked ?? 0) > 0 || (data.charges_marked ?? 0) > 0)) {
+        qc.invalidateQueries({ queryKey: ['dashboard'] })
+        qc.invalidateQueries({ queryKey: ['recurring_charges'] })
+        qc.invalidateQueries({ queryKey: ['rentals'] })
+        qc.invalidateQueries({ queryKey: ['orders'] })
+      }
+      return data as { ok: boolean; charges_marked?: number; orders_marked?: number }
+    },
+  })
 
   const stats = useQuery({
     queryKey: ['dashboard'],
+    refetchInterval: 30_000, // fallback behind app realtime (rental_orders / deliveries / charges)
     enabled: profile?.role !== 'driver',
     queryFn: async () => {
       const { data, error } = await supabase.from('ops_dashboard_stats').select('*').single()
@@ -34,11 +55,15 @@ export default function Dashboard() {
 
   const rentals = useQuery({
     queryKey: ['rentals'],
+    refetchInterval: 30_000, // fallback behind app realtime
     enabled: profile?.role !== 'driver',
     queryFn: async () => {
       const { data, error } = await supabase
         .from('rental_orders')
         .select('id,status,monthly_rate,start_date,address_line1,address_city,address_state,address_zip,customer:customers(full_name),rental_line_items(count)')
+        // Hide unpaid checkouts and cancelled/inbox rows from rentals overview
+        // (NULL start_date was sorting abandoned pending_payment to the top).
+        .not('status', 'in', '(requested,cancelled,pending_payment)')
         .order('start_date', { ascending: false })
       if (error) throw error
       return data as any[]

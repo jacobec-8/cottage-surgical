@@ -1,9 +1,17 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 
+const CHARGE_BADGE: Record<string, string> = {
+  current: 'bg-emerald-100 text-emerald-700',
+  overdue: 'bg-red-100 text-red-700',
+  paused: 'bg-amber-100 text-amber-700',
+  ended: 'bg-slate-200 text-slate-600',
+}
+
 export default function Billing() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['recurring_charges'],
+    refetchInterval: 30_000, // fallback behind recurring_charges realtime
     queryFn: async () => {
       const { data, error } = await supabase
         .from('recurring_charges')
@@ -30,11 +38,7 @@ export default function Billing() {
               </div>
             </div>
             <div className="flex items-center gap-4">
-              <span
-                className={`text-xs px-2 py-1 rounded-full capitalize ${
-                  c.status === 'overdue' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'
-                }`}
-              >
+              <span className={`text-xs px-2 py-1 rounded-full capitalize ${CHARGE_BADGE[c.status] ?? 'bg-slate-200 text-slate-600'}`}>
                 {c.status}
               </span>
               <div className="text-sm font-medium w-24 text-right">

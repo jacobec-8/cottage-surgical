@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useQueryClient } from '@tanstack/react-query'
 import { Search, Plus, Minus, Trash2, CheckCircle } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { invalidateOrderWorkflow } from '../lib/workflowKeys'
 
 type Item = { id: string; name: string; category: string; monthly_rental_price: number | null; sale_price: number | null; is_rentable: boolean; is_purchasable: boolean }
 type CartLine = { item_id: string; name: string; qty: number; rate: number | null }
@@ -115,8 +116,9 @@ export default function NewOrder() {
       setResult({ order_no: data.order_no, unallocated: data.unallocated })
       setCart([]); setCust(null); setNc({ full_name: '', phone: '', email: '', dob: '', coverage: '', line1: '', city: '', state: 'NY', zip: '' })
       setDeliv({ date: '', ws: '', we: '', driver: '', notes: '', deposit: '' })
-      qc.invalidateQueries({ queryKey: ['rentals'] })
-      qc.invalidateQueries({ queryKey: ['deliveries'] })
+      // create_staff_order may create a customer, reserve stock, and queue a
+      // delivery — refresh every board so the actor's screens match the toast.
+      invalidateOrderWorkflow(qc)
     } catch (e) {
       setErr((e as Error).message)
     } finally {

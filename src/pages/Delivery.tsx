@@ -4,7 +4,8 @@ import { Camera } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { statusClass, statusLabel } from '../lib/status'
-import { useRealtimeInvalidate } from '../lib/useRealtimeInvalidate'
+import { invalidateDispatch, invalidateOrderWorkflow } from '../lib/workflowKeys'
+import { useDriverStopContacts, type StopContact } from '../lib/useDriverStopContacts'
 
 type Photo = { storage_path: string; captured_at: string; notes: string | null }
 type Deliv = {
@@ -38,17 +39,21 @@ export default function Delivery() {
   const isDriver = profile?.role === 'driver'
   const [view, setView] = useState<'active' | 'completed'>('active')
 
-  // Live board: refetch the moment a delivery is created/updated (e.g. a request
-  // is confirmed, or a driver starts/completes a stop) instead of waiting on the
-  // focus-paused 20s poll. Also keeps the sidebar delivery badge in sync.
-  useRealtimeInvalidate('deliveries', ['deliveries', 'nav_counts'])
+  // Live updates arrive via app-level RealtimeSync. Drivers also get
+  // notifications invalidations (reassignment stand-down path). Poll remains fallback.
+
+  const contacts = useDriverStopContacts(isDriver)
 
   const drivers = useQuery({
     queryKey: ['drivers', 'active'],
     enabled: !isDriver,
     queryFn: async () => {
-      const { data } = await supabase.from('drivers').select('id,first_name,last_name').eq('status', 'active').order('first_name')
-      return (data ?? []) as any[]
+      const { data } = await supabase
+        .from('drivers')
+        .select('id,first_name,last_name,user_id')
+        .eq('status', 'active')
+        .order('first_name')
+      return (data ?? []) as { id: string; first_name: string; last_name: string; user_id: string | null }[]
     },
   })
   const { data, isLoading, error } = useQuery({
@@ -88,21 +93,35 @@ export default function Delivery() {
 
       {isLoading && <div className="text-slate-500">Loading…</div>}
       {error && <div className="text-red-600 text-sm">Couldn’t load deliveries. Please try again.</div>}
+      {isDriver && contacts.error && (
+        <div className="text-amber-700 text-sm mb-3">Customer names may be incomplete — contact lookup failed.</div>
+      )}
       {data && data.length === 0 && (
         <div className="text-slate-500 text-sm">{view === 'active' ? 'No open stops right now.' : 'No completed deliveries yet.'}</div>
       )}
       <div className="space-y-3">
         {data?.map((d) =>
           view === 'active'
-            ? <DeliveryRow key={d.id} d={d} drivers={drivers.data ?? []} isDriver={isDriver} />
-            : <CompletedRow key={d.id} d={d} />,
+            ? <DeliveryRow key={d.id} d={d} drivers={drivers.data ?? []} isDriver={isDriver} contact={contacts.byDeliveryId.get(d.id)} />
+            : <CompletedRow key={d.id} d={d} contact={isDriver ? contacts.byDeliveryId.get(d.id) : undefined} />,
         )}
       </div>
     </div>
   )
 }
 
-function DeliveryRow({ d, drivers, isDriver }: { d: Deliv; drivers: any[]; isDriver: boolean }) {
+function customerLabel(d: Deliv, contact?: StopContact): string {
+  return contact?.full_name || d.order?.customer?.full_name || 'Customer'
+}
+
+function DeliveryRow({
+  d, drivers, isDriver, contact,
+}: {
+  d: Deliv
+  drivers: { id: string; first_name: string; last_name: string; user_id: string | null }[]
+  isDriver: boolean
+  contact?: StopContact
+}) {
   const qc = useQueryClient()
   const [driver, setDriver] = useState(d.driver_id ?? '')
   const [date, setDate] = useState(d.scheduled_date ?? '')
@@ -112,18 +131,24 @@ function DeliveryRow({ d, drivers, isDriver }: { d: Deliv; drivers: any[]; isDri
   const [completing, setCompleting] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const invalidate = () => ['deliveries', 'rentals', 'orders', 'dashboard', 'nav_counts'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }))
+  // Assign/save only touches the dispatch board; start/complete flip billing + stock.
+  const invalidateSave = () => invalidateDispatch(qc)
+  const invalidateLifecycle = () => invalidateOrderWorkflow(qc)
 
   const save = useMutation({
     mutationFn: async () => {
-      const patch: any = { driver_id: driver || null, scheduled_date: date || null, window_start: ws || null, window_end: we || null }
-      if (driver && d.status === 'pending') patch.status = 'scheduled'
-      else if (!driver && d.status === 'scheduled') patch.status = 'pending'
+      // Status is normalized server-side (driver_id set → scheduled; cleared → pending).
+      const patch = {
+        driver_id: driver || null,
+        scheduled_date: date || null,
+        window_start: ws || null,
+        window_end: we || null,
+      }
       const { error } = await supabase.from('deliveries').update(patch).eq('id', d.id)
       if (error) throw error
     },
     onMutate: () => setMsg(''),
-    onSuccess: () => { invalidate(); setMsg('Saved') },
+    onSuccess: () => { invalidateSave(); setMsg('Saved') },
     onError: (e) => setMsg((e as Error).message),
   })
 
@@ -134,7 +159,7 @@ function DeliveryRow({ d, drivers, isDriver }: { d: Deliv; drivers: any[]; isDri
       if (!data?.ok) throw new Error(data?.reason === 'no_driver' ? 'Assign a driver and Save before starting.' : (data?.reason || 'failed'))
     },
     onMutate: () => setMsg(''),
-    onSuccess: invalidate,
+    onSuccess: invalidateLifecycle,
     onError: (e) => setMsg((e as Error).message),
   })
 
@@ -152,7 +177,7 @@ function DeliveryRow({ d, drivers, isDriver }: { d: Deliv; drivers: any[]; isDri
         data?.reason === 'photo_required' ? 'A photo is required to complete.'
         : data?.reason === 'bad_state' ? 'This stop isn’t in a state that can be completed.'
         : (data?.reason || 'failed'))
-      invalidate()
+      invalidateLifecycle()
     } catch (e) {
       setMsg((e as Error).message || 'Couldn’t complete. Please try again.')
     } finally {
@@ -169,7 +194,7 @@ function DeliveryRow({ d, drivers, isDriver }: { d: Deliv; drivers: any[]; isDri
       if (!data?.ok) throw new Error(data?.reason === 'bad_state' ? 'This stop isn’t in a state that can be completed.' : (data?.reason || 'failed'))
     },
     onMutate: () => setMsg(''),
-    onSuccess: invalidate,
+    onSuccess: invalidateLifecycle,
     onError: (e) => setMsg((e as Error).message),
   })
 
@@ -180,9 +205,16 @@ function DeliveryRow({ d, drivers, isDriver }: { d: Deliv; drivers: any[]; isDri
       <div className="flex items-center justify-between gap-3 mb-1">
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-medium">{d.order?.customer?.full_name ?? 'Customer'}</span>
+            <span className="font-medium">{customerLabel(d, contact)}</span>
+            {isDriver && contact?.phone && (
+              <a href={`tel:${contact.phone}`} className="text-xs text-blue-600 hover:underline">{contact.phone}</a>
+            )}
             <span className="text-xs text-slate-400">#{d.order?.order_no}</span>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 capitalize">{d.leg_type}</span>
+            {d.leg_type === 'pickup' ? (
+              <span className="text-xs font-semibold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded">PICKUP</span>
+            ) : (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 capitalize">{d.leg_type}</span>
+            )}
             <span className={`text-xs px-2 py-0.5 rounded-full capitalize ${statusClass(d.status)}`}>{statusLabel(d.status)}</span>
           </div>
           <div className="text-sm text-slate-500 mt-0.5">{[d.address_line1, d.address_city, d.address_state, d.address_zip].filter(Boolean).join(', ')}</div>
@@ -238,7 +270,11 @@ function DeliveryRow({ d, drivers, isDriver }: { d: Deliv; drivers: any[]; isDri
             <div className="text-[11px] text-slate-400 mb-0.5">Driver</div>
             <select value={driver} onChange={(e) => setDriver(e.target.value)} className={inp}>
               <option value="">Unassigned</option>
-              {drivers.map((dr) => <option key={dr.id} value={dr.id}>{dr.first_name} {dr.last_name}</option>)}
+              {drivers.map((dr) => (
+                <option key={dr.id} value={dr.id}>
+                  {dr.first_name} {dr.last_name}{dr.user_id ? '' : ' — no login'}
+                </option>
+              ))}
             </select>
           </div>
           <div><div className="text-[11px] text-slate-400 mb-0.5">Date</div><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inp} /></div>
@@ -255,18 +291,23 @@ function DeliveryRow({ d, drivers, isDriver }: { d: Deliv; drivers: any[]; isDri
   )
 }
 
-function CompletedRow({ d }: { d: Deliv }) {
+function CompletedRow({ d, contact }: { d: Deliv; contact?: StopContact }) {
   const photo = d.delivery_photos?.[0]
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-4 flex items-start justify-between gap-4">
       <div className="min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-medium">{d.order?.customer?.full_name ?? 'Customer'}</span>
+          <span className="font-medium">{customerLabel(d, contact)}</span>
           <span className="text-xs text-slate-400">#{d.order?.order_no}</span>
           <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 capitalize">{d.leg_type}</span>
           <span className={`text-xs px-2 py-0.5 rounded-full capitalize ${statusClass(d.status)}`}>{statusLabel(d.status)}</span>
         </div>
         <div className="text-sm text-slate-500 mt-0.5">{[d.address_line1, d.address_city].filter(Boolean).join(', ')}</div>
+        {(d.order?.rental_line_items?.length ?? 0) > 0 && (
+          <div className="text-sm text-slate-700 mt-1">
+            {d.order!.rental_line_items.map((li) => `${li.quantity > 1 ? li.quantity + '× ' : ''}${li.equipment?.name ?? 'Item'}`).join(', ')}
+          </div>
+        )}
         <div className="text-xs text-slate-400 mt-1">Completed {d.completed_at ? new Date(d.completed_at).toLocaleString() : ''}</div>
         {photo?.notes && <div className="text-sm text-slate-500 mt-1 italic">“{photo.notes}”</div>}
       </div>

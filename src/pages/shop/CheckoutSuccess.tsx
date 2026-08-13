@@ -20,11 +20,24 @@ export default function CheckoutSuccess() {
     ran.current = true
     if (!ref) { setState('error'); return }
     ;(async () => {
-      // Square can take a moment to settle the order after redirect — retry a few times.
+      // Stripe can lag briefly after redirect — retry a few times before giving up.
       for (let attempt = 0; attempt < 4; attempt++) {
         const { data, error } = await supabase.rpc('verify_stripe_payment', { p_order_id: ref })
-        if (!error && data?.ok && data.paid) { clear(); setState('paid'); return }
-        if (error || !data?.ok) { setState('error'); return }
+        if (!error && data?.ok && data.paid) {
+          clear()
+          setState('paid')
+          return
+        }
+        // Transient API errors: keep retrying; only hard-fail on permanent !ok with no retry left.
+        if (error) {
+          if (attempt === 3) {
+            setState('error')
+            return
+          }
+        } else if (data && !data.ok) {
+          setState('error')
+          return
+        }
         await new Promise((r) => setTimeout(r, 2000))
       }
       setState('unpaid')
@@ -39,14 +52,16 @@ export default function CheckoutSuccess() {
           <>
             <Loader2 className="mx-auto text-navy animate-spin mb-4" size={44} />
             <h1 className="font-serif font-bold text-navy text-3xl">Confirming your payment…</h1>
-            <p className="text-slate-500 mt-2">One moment while we check with Square.</p>
+            <p className="text-slate-500 mt-2">One moment while we check with Stripe.</p>
           </>
         )}
         {state === 'paid' && (
           <>
             <CheckCircle className="mx-auto text-emerald-600 mb-4" size={48} />
             <h1 className="font-serif font-bold text-navy text-3xl">Payment received — thank you!</h1>
-            <p className="text-slate-600 mt-3">Your purchase is confirmed. Our team will reach out to schedule your same-day delivery and setup.</p>
+            <p className="text-slate-600 mt-3">
+              Your order is confirmed. Our Long Island team will reach out to schedule same-day delivery and setup where available.
+            </p>
             <Link to="/" className="inline-block mt-6 bg-navy text-white rounded-lg px-6 py-3 font-semibold">Back to shop</Link>
           </>
         )}

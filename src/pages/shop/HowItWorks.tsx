@@ -4,9 +4,9 @@ import ShopHeader from '../../components/shop/ShopHeader'
 import ShopFooter from '../../components/shop/ShopFooter'
 
 const STEPS = [
-  { n: '01', icon: Search, title: 'Choose & Order', desc: 'Browse, select, and place your request in minutes. Our team confirms availability immediately. Most items are in stock and ready for same-day dispatch.' },
-  { n: '02', icon: FileText, title: 'Quick Intake', desc: 'Provide your delivery address and contact details. Payment is collected at checkout — card or ACH. We handle everything else.' },
-  { n: '03', icon: Truck, title: 'Delivered & Ready to Use', desc: 'A licensed technician arrives, sets everything up, and walks you through operation. No tools, no assembly — equipment is functional before we leave.' },
+  { n: '01', icon: Search, title: 'Choose & Request', desc: 'Browse equipment and place a rental request in minutes. Our pharmacy team confirms availability for Nassau & Suffolk deliveries.' },
+  { n: '02', icon: FileText, title: 'We Confirm With You', desc: 'Share your Long Island delivery address and contact details. No rental payment online — we confirm pricing and take payment when we schedule delivery.' },
+  { n: '03', icon: Truck, title: 'Delivered & Ready to Use', desc: 'A tech delivers, sets everything up, and walks you through operation. No tools, no assembly — equipment is ready before we leave.' },
 ]
 
 export default function HowItWorks() {

@@ -2,15 +2,21 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Check, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { invalidateOrderWorkflow } from '../lib/workflowKeys'
+import { useStripeReconcile } from '../lib/useStripeReconcile'
 
 export default function Requests() {
   const qc = useQueryClient()
   const [actErr, setActErr] = useState('')
   const [note, setNote] = useState('')
+  // Promote paid-but-unverified Stripe purchases into this inbox (C1 backstop).
+  useStripeReconcile()
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['requests'],
+    staleTime: 0, // focus refetch after short background (adversarial M1)
     refetchInterval: 15_000, // keep the inbox live so new storefront requests appear on their own
+    refetchIntervalInBackground: true,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('rental_orders')
@@ -44,9 +50,9 @@ export default function Requests() {
     onMutate: () => { setActErr(''); setNote('') },
     onError: (e) => setActErr((e as Error).message || 'Action failed. Please try again.'),
     onSuccess: (res) => {
-      ;['requests', 'requests_count', 'orders', 'deliveries', 'dashboard', 'rentals'].forEach((k) =>
-        qc.invalidateQueries({ queryKey: [k] }),
-      )
+      // Confirm touches orders, deliveries, billing, stock, and badges.
+      // (Previously invalidated orphan 'requests_count' instead of 'nav_counts'.)
+      invalidateOrderWorkflow(qc)
       if (res) {
         setNote(
           res.unallocated > 0

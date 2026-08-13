@@ -1,13 +1,15 @@
 import { Link } from 'react-router-dom'
 import { Check, Truck, Zap } from 'lucide-react'
 import type { Product } from '../../lib/shop'
+import { SHOP_PURCHASES_ENABLED } from '../../lib/shopFlags'
 import { useCart } from './CartContext'
 
 export default function ProductCard({ p }: { p: Product }) {
   const { add } = useCart()
   const to = `/product/${p.shopify_handle ?? p.id}`
   const rentable = p.is_rentable && p.monthly_rental_price != null
-  const purchasable = p.is_purchasable && p.sale_price != null
+  // Purchase stays implemented; hidden until sales launch (shopFlags).
+  const purchasable = SHOP_PURCHASES_ENABLED && p.is_purchasable && p.sale_price != null
   const base = { id: p.id, name: p.name, image_url: p.image_url, category: p.category }
 
   return (
