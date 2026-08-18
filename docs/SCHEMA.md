@@ -1,14 +1,15 @@
 # Cottage Surgical (cottagedme) — Database Schema
 
 Internal DME (durable medical equipment) **rental + delivery** management system
-for Cottage Pharmacy. Three roles: **Admin**, **Staff**, **Driver**. No public
-customers. Payments: a Square integration was added (migration 027, now dormant),
-then replaced by Stripe Checkout executed from Postgres via the `http` extension
-with a Vault-stored secret (migration 029, live).
+and guest rental storefront for Cottage Pharmacy. Account roles are **Admin**,
+**Staff**, **Driver**, and **Customer**; the current storefront also supports
+anonymous requests. Payments: a Square integration was added (migration 027,
+now dormant), then replaced by Stripe Checkout executed from Postgres via the
+`http` extension with a Vault-stored secret (migration 029, live).
 
-Stack target: React + Vite + Supabase (Postgres + Auth + RLS + Realtime) on
-Vercel — same lineage as the WheelsforWellness and rank1seo projects this schema
-borrows patterns from.
+Local frontend stack: Next.js App Router + React + Supabase (Postgres +
+cookie-backed Auth + RLS + Realtime). The migration is ready for Vercel preview
+and production acceptance.
 
 ## Migrations
 
@@ -44,7 +45,7 @@ runner re-applies every file each time, so idempotency is mandatory.
 
 ## Core model
 
-- **profiles** ← `auth.users`; `role ∈ {admin, staff, driver}`. Authoritative
+- **profiles** ← `auth.users`; `role ∈ {admin, staff, driver, customer}`. Authoritative
   role lives here (not in JWT metadata), read via SECURITY DEFINER helpers
   `is_admin()` / `is_staff_or_admin()` / `is_driver()`. A guard trigger blocks
   self-promotion.
@@ -98,10 +99,10 @@ should be confirmed:
    "serial/asset tracking" note) and allocates a specific physical unit per
    rental. Confirm every item is individually tracked, or flag which categories
    are bulk/consumable (those can skip units and use `quantity_on_hand` only).
-2. **Billing depth.** "No payments" is taken as *no payment processor* — billing
-   tables track what's owed/held/refunded as records. Confirm we are NOT
-   integrating Stripe/ACH now, and whether monthly charges need an invoice-level
-   ledger (per-month rows) vs. the current subscription-level state.
+2. **Billing depth.** Stripe Checkout exists for purchase flows, while recurring
+   rental billing is still deferred. Confirm whether monthly rental charges need
+   an invoice-level ledger (per-month rows) or the current subscription-level
+   state.
 3. **Time windows.** Stored as explicit `window_start`/`window_end` times. The
    New Order screen showed a "Select window…" dropdown — confirm whether windows
    are a fixed predefined set (e.g. 10–12, 1–3, 3–5) we should enumerate.

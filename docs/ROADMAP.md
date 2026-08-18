@@ -2,11 +2,11 @@
 
 Internal DME rental + delivery ops, plus a customer-facing shop/rental storefront.
 
-## Status (2026-06-29)
+## Status (2026-08-18)
 - ✅ **Backend** — 15-table Supabase schema (profiles/roles, customers, equipment + serialized units, drivers, rental orders, deliveries/dispatch, GPS, billing, notifications, ops views). RLS on all tables, anti-double-booking (partial-unique + atomic reserve RPC), validated delivery lifecycle RPCs. Live on Supabase.
 - ✅ **Catalog** — 14 products imported read-only from Shopify (`cottage-pharmacy-surgical`).
-- ✅ **Internal app** (Vite/React on Vercel) — login + Admin/Staff/Driver shell, Dashboard, Inventory (live), Customers/Billing/Delivery (live, empty until data entered), New Order intake.
-- ✅ **Auth** — admin/staff/driver accounts for Jacob + 3 demo accounts.
+- ✅ **Unified Next.js app (local migration complete; deployment pending)** — the migration branch contains the public storefront plus login and the Admin/Staff/Driver operations shell in one root App Router project. Production remains on the pre-migration deployment until this branch is reviewed and released.
+- ✅ **Auth** — cookie-backed Supabase SSR, server-side staff/profile checks, RLS, and admin/staff/driver accounts.
 
 ## Architecture (agreed)
 Customers can **both buy and rent online**. Shopify = buy/checkout/payments + catalog source of truth. Supabase = rentals, ops, customer + staff auth. One site, three zones:
@@ -18,13 +18,13 @@ Customers can **both buy and rent online**. Shopify = buy/checkout/payments + ca
 **Buy decision (resolved 2026-06-29):** the Shopify catalog is **rental-priced only** — every variant is a rental term (1 week / 1 month), no buy/sale variants. Sale prices live in our system (`equipment_items.sale_price`, staff-managed). Payments are deferred. So **v1 Buy AND Rent are both "request" flows** → create a `rental_order` (status `requested`, source `storefront`) → land in the staff app → staff fulfill + take payment offline. Real checkout (Shopify for buy / Stripe for rent) is Phase 3.
 
 - ✅ **Backend foundation (migration 015, live):** `customer` role (default for self-signup), `rental_orders.source` + `requested` status, `customers.user_id`, catalog `shopify_variant_id`/`shopify_handle` (populated), public catalog read policy, and `submit_rental_request()` (anon-callable RPC that creates the customer + requested order). Verified.
-- ✅ **Next.js storefront** scaffolded in `storefront/` (catalog → product page with Rent/Buy → guest request form → confirmation). Build-verified; anon catalog read + `submit_rental_request` verified against live DB. Deploy = a 2nd Vercel project, Root Directory `storefront`, env `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY`. Staff Vite app stays at `app.`.
+- ✅ **Unified Next.js storefront implemented locally** in the root App Router (catalog, search/category filters, product pages, persistent multi-item cart, rental requests, Stripe return verification). Public and staff routes are ready to share one deployment; the obsolete second `storefront/` project was removed from the migration branch.
 - ✅ **Grants fix (migration 016):** Supabase default grants didn't reach our migration-created tables — authenticated/anon had no SELECT/DML. Fixed (this had been silently breaking the staff app's data reads). RLS unchanged.
 - ✅ **Staff side:** Requests view (storefront orders confirm/decline); **Order processing** — New Order builder (customer → equipment cart → schedule) via `create_staff_order` RPC (020) which reserves units + creates the delivery atomically; **Dispatch** — Delivery board assigns driver + date/window and runs each stop Start→Complete via the lifecycle RPCs; **Drivers** page to add/list drivers. All verified end-to-end.
-- ⏳ Storefront polish: search/category filters, multi-item cart, customer accounts.
+- ⏳ Storefront polish: customer accounts. Search/category filters and the multi-item cart are complete.
 
 ## Launch blockers still open (see the launch-readiness board)
-Payments (Stripe rent + buy checkout); order-confirmation emails (Resend/SendGrid + the notifications table); deploy the storefront (2nd Vercel project) + connect cottagesurgical.com; enter sale prices; edge captcha/rate-limit on the public request form.
+Recurring rental payments; order-confirmation emails (Resend/SendGrid + the notifications table); enter sale prices; edge captcha/rate-limit on the public request form.
 - **Customer accounts** → later (guest requests for v1; `customer` role + RLS already in place).
 
 ## Phase 3 — Payments + sync
@@ -32,13 +32,13 @@ Payments (Stripe rent + buy checkout); order-confirmation emails (Resend/SendGri
 - Scheduled **Shopify → Supabase** catalog/inventory sync (edge function; client_credentials token refresh).
 
 ## Backlog / TODO
-- [ ] **Driver proof-of-delivery photo — BOSS REQUEST.** Amazon-style: when a driver completes a delivery (and a pickup), they take a photo to confirm hand-off.
+- [x] **Driver proof-of-delivery photo — BOSS REQUEST.** Amazon-style: when a driver completes a delivery (and a pickup), they take a photo to confirm hand-off.
   - Storage: Supabase Storage bucket `delivery-photos`.
   - Data: `delivery_photos` table — `delivery_id`, `type` (`proof_of_delivery` | `proof_of_pickup`), `photo_url`, `captured_at`, `captured_by` (driver), optional `latitude`/`longitude`, `notes`.
   - Driver UX: prompt/require a photo in the "Complete" step (web: camera capture via `<input capture>`; native Expo camera if we go native). Extend `complete_delivery()` to record the photo reference.
   - Staff/customer: surface the photo on the order/delivery detail.
   - Depends on the Driver route screen (below).
-- [ ] **Driver route screen** (not yet built) — today's stops, Maps/Waze deep-links, start/complete per stop, live GPS, + the proof-of-delivery capture above.
-- [ ] Faithful build of remaining staff screens — Customers, New Order wizard, Billing (Recurring/Refunds tabs), Delivery & Pickup board.
-- [ ] Connect `cottagesurgical.com` (registrar: Network Solutions) to Vercel — deploy first, then DNS.
+- [x] **Driver route screen** — today's stops, Maps/Waze deep-links, start/complete per stop, live GPS, + the proof-of-delivery capture above.
+- [x] Faithful build of remaining staff screens — Customers, New Order wizard, Billing (Recurring/Refunds tabs), Delivery & Pickup board.
+- [x] Connect `cottagesurgical.com` (registrar: Network Solutions) to Vercel.
 - [ ] Optional: seed sample business data (customers + rentals using the real catalog) so the app looks populated for demos.

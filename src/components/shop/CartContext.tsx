@@ -1,3 +1,5 @@
+'use client'
+
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { SHOP_PURCHASES_ENABLED } from '../../lib/shopFlags'
 
@@ -26,28 +28,54 @@ type Ctx = {
 const CartContext = createContext<Ctx | null>(null)
 const KEY = 'cs_cart_v1'
 
-function sanitizeCart(raw: CartItem[]): CartItem[] {
+function sanitizeCart(raw: unknown): CartItem[] {
+  if (!Array.isArray(raw)) return []
+
   return raw
-    .filter((c) => c.mode === 'rent' || SHOP_PURCHASES_ENABLED)
-    .map((c) => ({ ...c, qty: Math.min(Math.max(1, c.qty || 1), 20) }))
+    .filter((item): item is CartItem => {
+      if (!item || typeof item !== 'object') return false
+      const cartItem = item as Partial<CartItem>
+      return (
+        typeof cartItem.id === 'string' &&
+        typeof cartItem.name === 'string' &&
+        typeof cartItem.category === 'string' &&
+        typeof cartItem.price === 'number' &&
+        Number.isFinite(cartItem.price) &&
+        (cartItem.mode === 'rent' || (SHOP_PURCHASES_ENABLED && cartItem.mode === 'purchase'))
+      )
+    })
+    .map((item) => ({
+      ...item,
+      image_url: typeof item.image_url === 'string' ? item.image_url : null,
+      qty: Math.min(Math.max(1, Number(item.qty) || 1), 20),
+    }))
 }
 
 export function CartProvider({ children }: { children: ReactNode }) {
-  const [items, setItems] = useState<CartItem[]>(() => {
-    try {
-      return sanitizeCart(JSON.parse(localStorage.getItem(KEY) || '[]') as CartItem[])
-    } catch {
-      return []
-    }
-  })
+  // Always render the same initial cart on the server and the browser. Reading
+  // localStorage in a state initializer creates a hydration mismatch and can
+  // let the first persistence effect erase a visitor's saved cart.
+  const [items, setItems] = useState<CartItem[]>([])
+  const [hydrated, setHydrated] = useState(false)
   const [open, setOpen] = useState(false)
+
   useEffect(() => {
     try {
-      localStorage.setItem(KEY, JSON.stringify(items))
+      setItems(sanitizeCart(JSON.parse(window.localStorage.getItem(KEY) || '[]')))
+    } catch {
+      setItems([])
+    }
+    setHydrated(true)
+  }, [])
+
+  useEffect(() => {
+    if (!hydrated) return
+    try {
+      window.localStorage.setItem(KEY, JSON.stringify(items))
     } catch {
       /* ignore */
     }
-  }, [items])
+  }, [hydrated, items])
 
   const add: Ctx['add'] = (i) => {
     if (i.mode === 'purchase' && !SHOP_PURCHASES_ENABLED) return

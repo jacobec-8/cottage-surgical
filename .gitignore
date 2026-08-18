@@ -11,6 +11,11 @@ LOGINS.local.md
 
 # Build output
 dist/
+.next/
+playwright-report/
+test-results/
+coverage/
+*.tsbuildinfo
 .vercel/
 
 # OS / editor
@@ -23,3 +28,4 @@ scratchpad/
 # Design source binaries (kept out of repo; Figma is source of truth)
 *.pages
 .gstack/
+.vercel

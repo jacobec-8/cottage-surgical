@@ -1,4 +1,7 @@
-import { Link, NavLink } from 'react-router-dom'
+'use client'
+
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { ShoppingCart, Phone, Search, MapPin, Clock } from 'lucide-react'
 import { useCart } from './CartContext'
 import CartDrawer from './CartDrawer'
@@ -17,6 +20,7 @@ const NAV = [
 // admin app — no other public pointer to it.
 export default function ShopHeader() {
   const { count, setOpen } = useCart()
+  const pathname = usePathname()
   return (
     <>
       {/* Info bar — real store details (matches the Cottage Pharmacy Rx site) */}
@@ -32,7 +36,7 @@ export default function ShopHeader() {
 
       <header className="bg-white border-b border-slate-200 sticky top-0 z-30 font-sans">
         <div className="max-w-7xl mx-auto px-4 h-[72px] flex items-center justify-between gap-3">
-          <Link to="/" className="flex items-center gap-3 shrink-0" aria-label="Cottage Pharmacy & Surgical — home">
+          <Link href="/" className="flex items-center gap-3 shrink-0" aria-label="Cottage Pharmacy & Surgical — home">
             <img src="/cottage-logo.png" alt="Cottage Pharmacy & Surgical" className="h-12 w-auto" />
             <span className="hidden xl:block border-l border-slate-200 pl-3 text-[13px] font-heading font-semibold text-slate-500 leading-tight">
               Home Medical<br />Equipment Rentals
@@ -41,16 +45,15 @@ export default function ShopHeader() {
 
           <nav className="hidden lg:flex items-center gap-0.5 text-sm font-heading font-medium">
             {NAV.map((n) => (
-              <NavLink key={n.to} to={n.to}
-                className={({ isActive }) =>
-                  `px-3.5 py-2 rounded-md transition ${isActive ? 'text-brand-700' : 'text-slate-600 hover:text-brand-600 hover:bg-slate-50'}`}>
+              <Link key={n.to} href={n.to}
+                className={`px-3.5 py-2 rounded-md transition ${pathname === n.to.split('?')[0] ? 'text-brand-700' : 'text-slate-600 hover:text-brand-600 hover:bg-slate-50'}`}>
                 {n.label}
-              </NavLink>
+              </Link>
             ))}
           </nav>
 
           <div className="flex items-center gap-2 shrink-0">
-            <Link to="/?focus=search" aria-label="Search equipment" title="Search"
+            <Link href="/?focus=search" aria-label="Search equipment" title="Search"
               className="hidden sm:inline-flex text-slate-500 p-2 rounded-full hover:bg-slate-100">
               <Search size={20} />
             </Link>
@@ -64,7 +67,7 @@ export default function ShopHeader() {
               className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 rounded-lg px-4 py-2">
               <Phone size={15} /> <span className="hidden sm:inline">Call Us</span>
             </a>
-            <Link to="/admin-login" className="text-xs text-slate-400 hover:text-slate-700 ml-1">Staff</Link>
+            <Link href="/admin-login" className="text-xs text-slate-400 hover:text-slate-700 ml-1">Staff</Link>
           </div>
         </div>
       </header>

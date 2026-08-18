@@ -1,17 +1,17 @@
 /** @type {import('tailwindcss').Config} */
-export default {
-  content: ['./index.html', './src/**/*.{ts,tsx}'],
+const tailwindConfig = {
+  content: ['./src/**/*.{ts,tsx}'],
   theme: {
     extend: {
       fontFamily: {
         // Match the real Cottage Pharmacy Rx site: Montserrat headings + Source
         // Sans body. Clean/corporate — deliberately not the "feely round" look.
-        sans: ['"Source Sans 3"', '"Source Sans Pro"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-        heading: ['Montserrat', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        sans: ['var(--font-source-sans)', '"Source Sans 3"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        heading: ['var(--font-montserrat)', 'Montserrat', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         // Back-compat aliases so existing font-serif / font-poppins classes across
         // the storefront now render the brand fonts (no per-file sweep needed).
-        serif: ['Montserrat', 'ui-sans-serif', 'sans-serif'],
-        poppins: ['"Source Sans 3"', '"Source Sans Pro"', 'ui-sans-serif', 'sans-serif'],
+        serif: ['var(--font-montserrat)', 'Montserrat', 'ui-sans-serif', 'sans-serif'],
+        poppins: ['var(--font-source-sans)', '"Source Sans 3"', 'ui-sans-serif', 'sans-serif'],
       },
       colors: {
         navy: { DEFAULT: '#16294d', 800: '#1b3157', 700: '#254070' },
@@ -32,3 +32,5 @@ export default {
   },
   plugins: [],
 }
+
+export default tailwindConfig

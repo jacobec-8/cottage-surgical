@@ -1,5 +1,8 @@
+'use client'
+
 import type { ReactNode } from 'react'
-import { NavLink, useNavigate } from 'react-router-dom'
+import Link from 'next/link'
+import { usePathname, useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import {
   LayoutDashboard, PlusCircle, Users, Package, CreditCard, Truck,
@@ -25,7 +28,8 @@ const NAV = [
 
 export default function Layout({ children }: { children: ReactNode }) {
   const { profile, signOut } = useAuth()
-  const navigate = useNavigate()
+  const pathname = usePathname()
+  const router = useRouter()
   // Live work-queue counts, auto-refreshed so approving a request updates the
   // Orders + Delivery badges (and screens) without a manual refresh.
   const { data: counts } = useQuery({
@@ -63,37 +67,32 @@ export default function Layout({ children }: { children: ReactNode }) {
         <nav className="flex-1 px-3 space-y-1">
           {NAV.filter((n) => n.roles.includes(profile?.role || '')).map((n) => {
             const Icon = n.icon
+            const isActive = n.end
+              ? pathname === n.to
+              : pathname === n.to || pathname.startsWith(`${n.to}/`)
+            const badge = (n as { badge?: string }).badge
+            const count = badge ? counts?.[badge] ?? 0 : 0
             return (
-              <NavLink
+              <Link
                 key={n.to}
-                to={n.to}
-                end={n.end}
-                className={({ isActive }) =>
-                  `flex items-center justify-between px-3 py-2 rounded-lg text-sm ${
-                    isActive ? 'bg-blue-50 text-blue-700 font-medium' : 'text-slate-600 hover:bg-slate-50'
-                  }`
-                }
+                href={n.to}
+                aria-current={isActive ? 'page' : undefined}
+                className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm ${
+                  isActive ? 'bg-blue-50 text-blue-700 font-medium' : 'text-slate-600 hover:bg-slate-50'
+                }`}
               >
-                {({ isActive }) => (
-                  <>
-                    <span className="flex items-center gap-3">
-                      <Icon size={18} />
-                      {n.label}
-                    </span>
-                    {(() => {
-                      const badge = (n as { badge?: string }).badge
-                      const count = badge ? counts?.[badge] ?? 0 : 0
-                      return count > 0 ? (
-                        <span className="text-xs bg-blue-600 text-white rounded-full px-2 py-0.5 min-w-[20px] text-center">
-                          {count}
-                        </span>
-                      ) : (
-                        isActive && <ChevronRight size={16} />
-                      )
-                    })()}
-                  </>
+                <span className="flex items-center gap-3">
+                  <Icon size={18} />
+                  {n.label}
+                </span>
+                {count > 0 ? (
+                  <span className="text-xs bg-blue-600 text-white rounded-full px-2 py-0.5 min-w-[20px] text-center">
+                    {count}
+                  </span>
+                ) : (
+                  isActive && <ChevronRight size={16} />
                 )}
-              </NavLink>
+              </Link>
             )
           })}
         </nav>
@@ -118,7 +117,8 @@ export default function Layout({ children }: { children: ReactNode }) {
             <button
               onClick={async () => {
                 await signOut()
-                navigate('/admin-login')
+                router.replace('/admin-login')
+                router.refresh()
               }}
               className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 ml-2"
             >

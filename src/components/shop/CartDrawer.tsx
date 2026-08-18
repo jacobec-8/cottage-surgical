@@ -1,5 +1,7 @@
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
+'use client'
+
+import { useState, type ChangeEvent, type FormEvent } from 'react'
+import Link from 'next/link'
 import { X, ShoppingCart, Trash2, Plus, Minus, CheckCircle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useCart } from './CartContext'
@@ -23,9 +25,10 @@ export default function CartDrawer() {
   const buyItems = items.filter((i) => i.mode === 'purchase')
   const rentTotal = rentItems.reduce((s, i) => s + i.price * i.qty, 0)
   const buyTotal = buyItems.reduce((s, i) => s + i.price * i.qty, 0)
-  const set = (k: keyof typeof form) => (e: any) => setForm({ ...form, [k]: e.target.value })
+  const set = (k: keyof typeof form) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    setForm({ ...form, [k]: e.target.value })
 
-  const submit = async (e: any) => {
+  const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault(); setBusy(true); setError('')
     try {
       const customer = { full_name: form.full_name, phone: form.phone, email: form.email }
@@ -59,7 +62,7 @@ export default function CartDrawer() {
           throw new Error(REASONS[data?.reason] || 'We couldn’t start your payment. Please call us.')
         }
         clear()
-        window.location.href = data.checkout_url // → Stripe, then back to /checkout/success
+        window.location.assign(data.checkout_url) // → Stripe, then back to /checkout/success
         return
       }
 
@@ -99,7 +102,7 @@ export default function CartDrawer() {
               <ShoppingCart className="mx-auto text-slate-300 mb-3" size={42} />
               <div className="font-semibold text-navy">Your cart is empty</div>
               <p className="text-slate-500 text-sm mt-1">Browse our equipment and click <b>Rent Now</b> to request delivery across Long Island.</p>
-              <Link to="/" onClick={close} className="inline-block mt-4 text-terracotta font-semibold text-sm">Browse Equipment →</Link>
+              <Link href="/" onClick={close} className="inline-block mt-4 text-terracotta font-semibold text-sm">Browse Equipment →</Link>
             </div>
           </div>
         ) : checkout ? (
