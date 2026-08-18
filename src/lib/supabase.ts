@@ -1,15 +1,11 @@
-import { createClient } from '@supabase/supabase-js'
+import 'client-only'
 
-const url = import.meta.env.VITE_SUPABASE_URL as string | undefined
-const anon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
+import { createClient } from './supabase/client'
 
-/** True only when both client-safe Supabase vars are present. */
-export const hasSupabaseConfig = Boolean(url && anon)
-
-// Fall back to harmless placeholders so the bundle builds even before the env
-// vars are set; real calls are gated on hasSupabaseConfig.
-export const supabase = createClient(
-  url || 'http://localhost:54321',
-  anon || 'public-anon-placeholder',
-  { auth: { persistSession: true, autoRefreshToken: true } },
+export const hasSupabaseConfig = Boolean(
+  process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
 )
+
+// Client Components share one browser client. It persists auth in cookies so
+// App Router server layouts receive the same user session.
+export const supabase = createClient()

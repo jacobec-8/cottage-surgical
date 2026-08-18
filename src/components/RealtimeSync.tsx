@@ -1,11 +1,12 @@
+'use client'
+
 import { useAuth } from '../contexts/AuthContext'
 import { useRealtimeInvalidateMany } from '../lib/useRealtimeInvalidateMany'
 import type { RealtimeInvalidateMap } from '../lib/useRealtimeInvalidateMany'
 
 /**
- * App-level realtime → react-query bridge. Mounted ONCE above the router in
- * App.tsx so it survives navigation (each Protected route mounts its own
- * Layout, so Layout cannot host a persistent subscription). Subscribes only
+ * App-level realtime → react-query bridge. Mounted once by the persistent
+ * `(staff)` App Router layout so it survives staff navigation. Subscribes only
  * while a profile is loaded; anonymous storefront visitors get no socket.
  *
  * Table → query-key map. Keys are prefix-matched by react-query, so

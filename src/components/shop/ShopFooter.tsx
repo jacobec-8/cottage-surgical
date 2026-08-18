@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import Link from 'next/link'
 import { MapPin, Phone, Mail } from 'lucide-react'
 
 // Labels match the boss's design; the query maps to a root term that actually
@@ -46,7 +46,7 @@ export default function ShopFooter() {
             <div className="font-semibold mb-4">Equipment</div>
             <ul className="space-y-2.5 text-sm text-blue-100/70">
               {EQUIPMENT.map((e) => (
-                <li key={e.label}><Link to={`/?q=${encodeURIComponent(e.q)}`} className="hover:text-white">{e.label}</Link></li>
+                <li key={e.label}><Link href={`/?q=${encodeURIComponent(e.q)}`} className="hover:text-white">{e.label}</Link></li>
               ))}
             </ul>
           </div>
@@ -55,7 +55,7 @@ export default function ShopFooter() {
             <div className="font-semibold mb-4">Information</div>
             <ul className="space-y-2.5 text-sm text-blue-100/70">
               {INFO.map((i) => (
-                <li key={i.label}><Link to={i.to} className="hover:text-white">{i.label}</Link></li>
+                <li key={i.label}><Link href={i.to} className="hover:text-white">{i.label}</Link></li>
               ))}
             </ul>
           </div>
