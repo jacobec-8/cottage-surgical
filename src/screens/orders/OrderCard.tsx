@@ -21,7 +21,8 @@ function activeLeg(o: Order, leg: 'delivery' | 'pickup') {
 
 /** Rich, clickable summary card. Inner buttons stop propagation so they don't open the panel. */
 export default function OrderCard({ o, selected, onOpen, onSchedulePickup, pickupPending }: Props) {
-  const unalloc = unallocatedCount(o)
+  const cancelled = o.status === 'cancelled'
+  const unalloc = cancelled ? 0 : unallocatedCount(o)
   const address = addressOf(o)
   const delivery = activeLeg(o, 'delivery')
   const pickup = activeLeg(o, 'pickup')
@@ -75,14 +76,20 @@ export default function OrderCard({ o, selected, onOpen, onSchedulePickup, picku
               <span
                 key={li.id ?? i}
                 className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs ${
-                  st === 'unallocated' ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-slate-100 text-slate-700'
+                  st === 'unallocated' && !cancelled ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-slate-100 text-slate-700'
                 }`}
               >
                 {li.equipment?.name ?? 'Item'}
                 {li.quantity > 1 && <span className="text-slate-500">×{li.quantity}</span>}
                 {tag && <span className="font-mono text-[11px] text-slate-500">{tag}</span>}
-                {st === 'unallocated' && <span className="text-[11px]">· no unit</span>}
-                {st === 'returned' && <span className="text-[11px] text-slate-400">· returned</span>}
+                {cancelled && st !== 'allocated' ? (
+                  <span className="text-[11px] text-slate-400">· released</span>
+                ) : (
+                  <>
+                    {st === 'unallocated' && <span className="text-[11px]">· no unit</span>}
+                    {st === 'returned' && <span className="text-[11px] text-slate-400">· returned</span>}
+                  </>
+                )}
               </span>
             )
           })}

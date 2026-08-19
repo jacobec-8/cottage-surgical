@@ -42,6 +42,7 @@ runner re-applies every file each time, so idempotency is mandatory.
 | `012_operational_rpcs.sql` | atomic reserve + delivery lifecycle + availability functions |
 | `013_ops_views_and_realtime.sql` | dashboard KPI view + realtime on live boards |
 | `014`–`035` | storefront + requests inbox, staff orders, Square/Stripe checkout, return lifecycle, driver RLS, notifications fan-out, photo storage (see each file's header) |
+| `038_cancel_and_close_out.sql` | `cancel_order(order, reason)` (not yet delivered: reserved units → available, open legs cancelled, billing ended, status cancelled) and `close_out_order(order, reason)` (equipment out / returned untracked: units → maintenance, open pickup cancelled, billing ended, status closed + end_date). Deposits untouched. Adds `rental_orders.closed_reason/closed_at/closed_by` |
 | `037_record_rental_payment.sql` | `record_rental_payment(charge, paid_on)` — staff records a payment: sets `last_billed_on`, advances `next_due_date` one month (from the due date, or the paid date if none), clears `overdue` on the charge and order |
 | `036_confirm_requires_stock.sql` | `confirm_rental_request` refuses (`reason: out_of_stock`, with `shortages[]`) unless every serialized item has enough available units — no more "unallocated" lines from the Requests inbox |
 | `seed_demo_data.sql` | demo data matching the Figma screenshots (dev only, guarded) |
@@ -91,6 +92,10 @@ before re-rental) rather than straight to `available`.
   `next_due_date`. The Billing screen derives Overdue / Due soon / Due date not
   set / Starts on delivery / Ended from those fields and "due back" from the
   pickup leg's `scheduled_date`.
+- **Exits** (038): `cancel_order` for anything not delivered (incl. Decline on a
+  request), `close_out_order` once equipment is out. Both require a reason and
+  stamp `closed_*`; neither changes deposits (staff refund/forfeit explicitly).
+  Cancelled orders show under Orders → Cancelled; closed-out under Closed.
 - **Requests → Orders gate** (036): a `requested` order can only be confirmed
   when `count(available units) ≥ requested qty` for every serialized item
   (checked under the per-item advisory lock, so competing confirms can't both

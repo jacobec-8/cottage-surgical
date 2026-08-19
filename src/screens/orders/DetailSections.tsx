@@ -58,10 +58,16 @@ const LINE_STATUS_CLS: Record<string, string> = {
   unallocated: 'bg-amber-100 text-amber-800',
   returned: 'bg-slate-100 text-slate-500',
   'pending confirm': 'bg-sky-100 text-sky-700',
+  released: 'bg-slate-100 text-slate-500',
 }
 
-/** `pendingConfirm`: request not yet confirmed — units are reserved on Confirm, so no line is "unallocated" yet. */
-export function LinesSection({ o, pendingConfirm = false }: { o: OrderDetail; pendingConfirm?: boolean }) {
+type LinesProps = { o: OrderDetail; pendingConfirm?: boolean; released?: boolean }
+
+/**
+ * `pendingConfirm`: request not yet confirmed — units are reserved on Confirm, so no line is "unallocated" yet.
+ * `released`: order was cancelled — its units went back to stock rather than being returned.
+ */
+export function LinesSection({ o, pendingConfirm = false, released = false }: LinesProps) {
   const lines: OrderLine[] = o.rental_line_items
   const isRental = o.order_type === 'rental'
   return (
@@ -81,7 +87,8 @@ export function LinesSection({ o, pendingConfirm = false }: { o: OrderDetail; pe
               <tr><td colSpan={4} className="px-3 py-3 text-slate-400">No line items.</td></tr>
             )}
             {lines.map((li, i) => {
-              const st = pendingConfirm && !li.equipment_unit_id ? 'pending confirm' : lineStatus(li)
+              const base = lineStatus(li)
+              const st = pendingConfirm && !li.equipment_unit_id ? 'pending confirm' : released && base !== 'allocated' ? 'released' : base
               const tag = unitLabel(li)
               const price = isRental ? li.monthly_rate : li.sale_price
               return (

@@ -56,8 +56,10 @@ export default function Requests() {
         }
         return data as { unallocated: number }
       }
-      const { error } = await supabase.from('rental_orders').update({ status: 'cancelled' }).eq('id', id)
+      // Decline = cancel_order (038): same audit stamp as a staff cancel; nothing is reserved yet.
+      const { data, error } = await supabase.rpc('cancel_order', { p_order_id: id, p_reason: 'Declined from the Requests inbox' })
       if (error) throw error
+      if (!data?.ok) throw new Error(data?.reason === 'bad_state' ? 'This request was already handled.' : (data?.reason || 'Couldn’t decline.'))
       return null
     },
     onMutate: () => { setActErr(''); setNote('') },

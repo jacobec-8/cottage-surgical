@@ -10,6 +10,8 @@ import { BillingSection, CustomerSection, DeliveriesSection, Field, LinesSection
 import { useOrderDetail } from './useOrderDetail'
 import { useSchedulePickup } from './useSchedulePickup'
 import { useVerifyPayment } from './useVerifyPayment'
+import { useCloseOrder } from './useCloseOrder'
+import CloseOutControls from './CloseOutControls'
 
 type Props = {
   orderId: string
@@ -104,6 +106,8 @@ function PanelBody({ o, onClose, actions, focusDeliveryId }: BodyProps) {
   const [msg, setMsg] = useState('')
   const schedulePickup = useSchedulePickup(setMsg)
   const verify = useVerifyPayment(o.id, setMsg)
+  const closeOrder = useCloseOrder(setMsg)
+  const isClosed = o.status === 'cancelled' || o.status === 'closed'
   const hasOpenPickup = o.deliveries.some((d) => d.leg_type === 'pickup' && d.status !== 'cancelled')
   const canPickup = o.order_type === 'rental' && PICKUP_ELIGIBLE.has(o.status) && !hasOpenPickup
   const canVerify = o.status === 'pending_payment'
@@ -136,7 +140,7 @@ function PanelBody({ o, onClose, actions, focusDeliveryId }: BodyProps) {
           </div>
         </div>
 
-        {(actions || canPickup || canVerify) && (
+        {(actions || canPickup || canVerify || !isClosed) && (
           <div className="mt-3 flex items-center gap-2 flex-wrap">
             {actions}
             {canPickup && (
@@ -160,9 +164,22 @@ function PanelBody({ o, onClose, actions, focusDeliveryId }: BodyProps) {
                 {verify.isPending ? 'Checking…' : 'Verify payment'}
               </button>
             )}
+            <CloseOutControls
+              o={o}
+              busy={closeOrder.isPending}
+              onConfirm={(kind, reason) => closeOrder.mutate({ kind, orderId: o.id, reason })}
+            />
           </div>
         )}
         {msg && <p className="mt-2 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">{msg}</p>}
+        {isClosed && (o.closed_reason || o.closed_at) && (
+          <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+            <span className="font-medium capitalize">{o.status === 'cancelled' ? 'Cancelled' : 'Closed out'}</span>
+            {o.closed_at ? ` ${fmtDateTime(o.closed_at)}` : ''}
+            {o.closed_by_profile ? ` by ${o.closed_by_profile.full_name || o.closed_by_profile.email}` : ''}
+            {o.closed_reason ? <> — <span className="italic">“{o.closed_reason}”</span></> : null}
+          </div>
+        )}
       </header>
 
       <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
@@ -180,7 +197,7 @@ function PanelBody({ o, onClose, actions, focusDeliveryId }: BodyProps) {
         </Section>
 
         <CustomerSection o={o} />
-        <LinesSection o={o} pendingConfirm={isRequest} />
+        <LinesSection o={o} pendingConfirm={isRequest} released={o.status === 'cancelled'} />
         <DeliveriesSection o={o} focusDeliveryId={focusDeliveryId} showBoardLink={backofficeLinks} />
         <BillingSection o={o} showBillingLink={backofficeLinks} />
 

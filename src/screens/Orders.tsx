@@ -12,8 +12,8 @@ import OrderDetailPanel from './orders/OrderDetailPanel'
 import { useSchedulePickup } from './orders/useSchedulePickup'
 import { useSelectedOrder } from './orders/useSelectedOrder'
 
-/** Confirmed / in-progress work — excludes inbox, cancelled, and unpaid checkouts. */
-const WORK_TABS = ['all', 'open', 'scheduled', 'active', 'pickup_scheduled', 'closed'] as const
+/** Confirmed / in-progress work — excludes inbox and unpaid checkouts; cancelled has its own tab. */
+const WORK_TABS = ['all', 'open', 'scheduled', 'active', 'pickup_scheduled', 'closed', 'cancelled'] as const
 type Tab = (typeof WORK_TABS)[number] | 'unpaid'
 
 export default function Orders() {
@@ -34,7 +34,7 @@ export default function Orders() {
       const { data, error } = await supabase
         .from('rental_orders')
         .select(ORDER_LIST_SELECT)
-        .not('status', 'in', '(requested,cancelled,pending_payment)')
+        .not('status', 'in', '(requested,pending_payment)')
         .order('created_at', { ascending: false })
         .overrideTypes<Order[], { merge: false }>()
       if (error) throw error
@@ -60,14 +60,16 @@ export default function Orders() {
   })
 
   const counts = useMemo(() => {
-    const c: Record<string, number> = { all: work.data?.length ?? 0, unpaid: unpaid.data?.length ?? 0 }
+    // "All" = live work; cancelled orders only count under their own tab.
+    const live = (work.data ?? []).filter((o) => o.status !== 'cancelled')
+    const c: Record<string, number> = { all: live.length, unpaid: unpaid.data?.length ?? 0 }
     for (const o of work.data ?? []) c[o.status] = (c[o.status] ?? 0) + 1
     return c
   }, [work.data, unpaid.data])
 
   const shown = tab === 'unpaid'
     ? (unpaid.data ?? [])
-    : (work.data ?? []).filter((o) => tab === 'all' || o.status === tab)
+    : (work.data ?? []).filter((o) => (tab === 'all' ? o.status !== 'cancelled' : o.status === tab))
 
   const isLoading = tab === 'unpaid' ? unpaid.isLoading : work.isLoading
   const error = tab === 'unpaid' ? unpaid.error : work.error

@@ -89,6 +89,9 @@ export type Deposit = {
 /** Full shape for the detail panel. */
 export type OrderDetail = Order & {
   square_order_id: string | null
+  closed_reason: string | null
+  closed_at: string | null
+  closed_by_profile: { full_name: string | null; email: string | null } | null
   recurring_charges: RecurringCharge[]
   deposits: Deposit[]
 }
@@ -115,10 +118,17 @@ export const ORDER_LIST_SELECT =
   `${ORDER_BASE},customer:customers(full_name,phone,email),${LINE_SELECT},${DELIVERY_LIST_SELECT}`
 
 export const ORDER_DETAIL_SELECT =
-  `${ORDER_BASE},square_order_id,customer:customers(id,full_name,phone,email,coverage_type),` +
+  `${ORDER_BASE},square_order_id,closed_reason,closed_at,` +
+  'closed_by_profile:profiles!rental_orders_closed_by_fkey(full_name,email),' +
+  'customer:customers(id,full_name,phone,email,coverage_type),' +
   `${LINE_SELECT},${DELIVERY_DETAIL_SELECT},` +
   'recurring_charges(id,amount,status,billing_start,billing_end,next_due_date,last_billed_on),' +
   'deposits(id,amount,status,held_at)'
 
 /** Order statuses that may have a pickup queued from the Orders screen. */
 export const PICKUP_ELIGIBLE: ReadonlySet<string> = new Set(['active', 'overdue', 'delivered'])
+
+/** Equipment not yet delivered → "Cancel order" (releases stock, cancels legs). */
+export const CANCELLABLE: ReadonlySet<string> = new Set(['requested', 'open', 'pending', 'scheduled', 'pending_payment'])
+/** Equipment is out (or came back untracked) → "Close out" (units to maintenance, order closed). */
+export const CLOSEABLE: ReadonlySet<string> = new Set(['delivered', 'active', 'overdue', 'pickup_scheduled'])
