@@ -186,7 +186,8 @@ export function BillingSection({ o, showBillingLink = true }: { o: OrderDetail; 
             <div className="min-w-0">
               <div>Monthly charge · {fmtMoney(c.amount)}/mo</div>
               <div className="text-xs text-slate-500">
-                {c.next_due_date ? `Next due ${fmtDate(c.next_due_date)}` : 'No due date'}
+                {c.next_due_date ? `Next due ${fmtDate(c.next_due_date)}` : 'No due date set'}
+                {c.last_billed_on ? ` · last paid ${fmtDate(c.last_billed_on)}` : ' · no payment recorded'}
                 {c.billing_start ? ` · started ${fmtDate(c.billing_start)}` : ''}
                 {c.billing_end ? ` · ended ${fmtDate(c.billing_end)}` : ''}
               </div>

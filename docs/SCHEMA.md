@@ -42,6 +42,7 @@ runner re-applies every file each time, so idempotency is mandatory.
 | `012_operational_rpcs.sql` | atomic reserve + delivery lifecycle + availability functions |
 | `013_ops_views_and_realtime.sql` | dashboard KPI view + realtime on live boards |
 | `014`–`035` | storefront + requests inbox, staff orders, Square/Stripe checkout, return lifecycle, driver RLS, notifications fan-out, photo storage (see each file's header) |
+| `037_record_rental_payment.sql` | `record_rental_payment(charge, paid_on)` — staff records a payment: sets `last_billed_on`, advances `next_due_date` one month (from the due date, or the paid date if none), clears `overdue` on the charge and order |
 | `036_confirm_requires_stock.sql` | `confirm_rental_request` refuses (`reason: out_of_stock`, with `shortages[]`) unless every serialized item has enough available units — no more "unallocated" lines from the Requests inbox |
 | `seed_demo_data.sql` | demo data matching the Figma screenshots (dev only, guarded) |
 
@@ -83,6 +84,13 @@ before re-rental) rather than straight to `available`.
   (overdue) → pickup_scheduled → closed` (or `cancelled`).
 - **deliveries.status**: `pending → scheduled → en_route → completed` (or `cancelled`).
 - **equipment_units.status**: `available → reserved → rented → maintenance → retired`.
+- **Billing is records-only** (no processor). `billing_start` is set when the
+  delivery completes, `billing_end` when the pickup completes. `next_due_date` /
+  `last_billed_on` move only via `record_rental_payment` (037) or staff setting a
+  due date on the Billing screen; `mark_overdue()` flags `current` charges past
+  `next_due_date`. The Billing screen derives Overdue / Due soon / Due date not
+  set / Starts on delivery / Ended from those fields and "due back" from the
+  pickup leg's `scheduled_date`.
 - **Requests → Orders gate** (036): a `requested` order can only be confirmed
   when `count(available units) ≥ requested qty` for every serialized item
   (checked under the per-item advisory lock, so competing confirms can't both
