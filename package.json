@@ -12,7 +12,8 @@
     "start": "next start --port 5173",
     "lint": "eslint .",
     "typecheck": "next typegen && tsc --noEmit",
-    "test": "npm run test:e2e",
+    "test": "npm run test:unit && npm run test:e2e",
+    "test:unit": "node --test 'tests/unit/*.test.ts'",
     "test:e2e": "playwright test"
   },
   "dependencies": {

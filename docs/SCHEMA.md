@@ -41,6 +41,8 @@ runner re-applies every file each time, so idempotency is mandatory.
 | `011_notifications.sql` | notification inbox + delivery status fan-out + realtime |
 | `012_operational_rpcs.sql` | atomic reserve + delivery lifecycle + availability functions |
 | `013_ops_views_and_realtime.sql` | dashboard KPI view + realtime on live boards |
+| `014`–`035` | storefront + requests inbox, staff orders, Square/Stripe checkout, return lifecycle, driver RLS, notifications fan-out, photo storage (see each file's header) |
+| `036_confirm_requires_stock.sql` | `confirm_rental_request` refuses (`reason: out_of_stock`, with `shortages[]`) unless every serialized item has enough available units — no more "unallocated" lines from the Requests inbox |
 | `seed_demo_data.sql` | demo data matching the Figma screenshots (dev only, guarded) |
 
 ## Core model
@@ -81,6 +83,11 @@ before re-rental) rather than straight to `available`.
   (overdue) → pickup_scheduled → closed` (or `cancelled`).
 - **deliveries.status**: `pending → scheduled → en_route → completed` (or `cancelled`).
 - **equipment_units.status**: `available → reserved → rented → maintenance → retired`.
+- **Requests → Orders gate** (036): a `requested` order can only be confirmed
+  when `count(available units) ≥ requested qty` for every serialized item
+  (checked under the per-item advisory lock, so competing confirms can't both
+  pass). The Requests screen mirrors this from `equipment_items.quantity_on_hand`
+  and disables Confirm with the shortage listed; add units in Inventory first.
 
 ### RLS summary
 

@@ -26,8 +26,9 @@ const STAFF_SYNC: RealtimeInvalidateMap = {
   // Storefront/Stripe/Square checkouts and New Order create customers.
   customers: ['customers', 'cust_search', 'dashboard'],
   // refresh_quantity_on_hand rewrites quantity_on_hand on unit reservations
-  // and returns; pricing/active edits must reach other staff too.
-  equipment_items: ['equipment_items', 'neworder_items'],
+  // and returns; pricing/active edits must reach other staff too. Requests
+  // embeds quantity_on_hand for its stock gate, so it must follow as well.
+  equipment_items: ['equipment_items', 'neworder_items', 'requests'],
   // New drivers must appear in other users' dispatch dropdowns.
   drivers: ['drivers'],
   // Bell list + exact unread count (prefix-matches per-user keys).
