@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Loader2, X } from 'lucide-react'
+import { useAuth } from '../../contexts/AuthContext'
 import { PICKUP_ELIGIBLE, type OrderDetail } from './types'
 import { ageLabel, amountOf, fmtDate, fmtDateTime, fmtMoney, sourceLabel, unallocatedCount } from './format'
 import { PaymentBadge, SourceBadge, StatusBadge, TypeBadge, UnallocatedBadge } from './badges'
@@ -10,12 +11,19 @@ import { useOrderDetail } from './useOrderDetail'
 import { useSchedulePickup } from './useSchedulePickup'
 import { useVerifyPayment } from './useVerifyPayment'
 
-type Props = { orderId: string; onClose: () => void }
+type Props = {
+  orderId: string
+  onClose: () => void
+  /** Extra header actions supplied by the host screen (e.g. Confirm/Decline on Requests). */
+  actions?: ReactNode
+  /** Delivery leg to highlight (when opened from the Delivery board). */
+  focusDeliveryId?: string | null
+}
 
 /** Right-hand slide-over with the full order. Closes on backdrop click, X, or Esc. */
 const FOCUSABLE = 'a[href],button:not([disabled]),input,select,textarea,[tabindex]:not([tabindex="-1"])'
 
-export default function OrderDetailPanel({ orderId, onClose }: Props) {
+export default function OrderDetailPanel({ orderId, onClose, actions, focusDeliveryId }: Props) {
   const { data, isLoading, error } = useOrderDetail(orderId)
   const asideRef = useRef<HTMLElement>(null)
 
@@ -76,7 +84,7 @@ export default function OrderDetailPanel({ orderId, onClose }: Props) {
         {!isLoading && !error && !data && (
           <div className="p-6 text-sm text-slate-500">This order no longer exists or you don’t have access to it.</div>
         )}
-        {data && <PanelBody o={data} onClose={onClose} />}
+        {data && <PanelBody o={data} onClose={onClose} actions={actions} focusDeliveryId={focusDeliveryId ?? null} />}
         {(isLoading || error || !data) && (
           <button type="button" onClick={onClose} aria-label="Close" className="absolute top-3 right-3 p-2 rounded-lg text-slate-500 hover:bg-slate-200">
             <X size={18} />
@@ -87,7 +95,12 @@ export default function OrderDetailPanel({ orderId, onClose }: Props) {
   )
 }
 
-function PanelBody({ o, onClose }: { o: OrderDetail; onClose: () => void }) {
+type BodyProps = { o: OrderDetail; onClose: () => void; actions?: ReactNode; focusDeliveryId: string | null }
+
+function PanelBody({ o, onClose, actions, focusDeliveryId }: BodyProps) {
+  const { profile } = useAuth()
+  // Drivers can't reach the back-office routes, so don't offer those links.
+  const backofficeLinks = profile?.role !== 'driver'
   const [msg, setMsg] = useState('')
   const schedulePickup = useSchedulePickup(setMsg)
   const verify = useVerifyPayment(o.id, setMsg)
@@ -95,6 +108,7 @@ function PanelBody({ o, onClose }: { o: OrderDetail; onClose: () => void }) {
   const canPickup = o.order_type === 'rental' && PICKUP_ELIGIBLE.has(o.status) && !hasOpenPickup
   const canVerify = o.status === 'pending_payment'
   const isRental = o.order_type === 'rental'
+  const isRequest = o.status === 'requested' // nothing is allocated until Confirm
 
   return (
     <>
@@ -107,7 +121,7 @@ function PanelBody({ o, onClose }: { o: OrderDetail; onClose: () => void }) {
               <TypeBadge type={o.order_type} />
               <StatusBadge status={o.status} />
               <PaymentBadge orderType={o.order_type} paymentStatus={o.payment_status} />
-              <UnallocatedBadge count={unallocatedCount(o)} />
+              {!isRequest && <UnallocatedBadge count={unallocatedCount(o)} />}
               <SourceBadge source={o.source} />
             </div>
           </div>
@@ -122,8 +136,9 @@ function PanelBody({ o, onClose }: { o: OrderDetail; onClose: () => void }) {
           </div>
         </div>
 
-        {(canPickup || canVerify) && (
+        {(actions || canPickup || canVerify) && (
           <div className="mt-3 flex items-center gap-2 flex-wrap">
+            {actions}
             {canPickup && (
               <button
                 type="button"
@@ -165,9 +180,9 @@ function PanelBody({ o, onClose }: { o: OrderDetail; onClose: () => void }) {
         </Section>
 
         <CustomerSection o={o} />
-        <LinesSection o={o} />
-        <DeliveriesSection o={o} />
-        <BillingSection o={o} />
+        <LinesSection o={o} pendingConfirm={isRequest} />
+        <DeliveriesSection o={o} focusDeliveryId={focusDeliveryId} showBoardLink={backofficeLinks} />
+        <BillingSection o={o} showBillingLink={backofficeLinks} />
 
         {o.special_notes && (
           <Section title="Notes">

@@ -1,18 +1,23 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useState, type KeyboardEvent } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
-import { AlertTriangle, Check, X } from 'lucide-react'
+import { AlertTriangle, ChevronRight } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { invalidateOrderWorkflow } from '../lib/workflowKeys'
 import { useStripeReconcile } from '../lib/useStripeReconcile'
 import { lineShortage, requestShortages, shortageMessage, type RequestLine, type Shortage } from './requests/stock'
+import RequestActions from './requests/RequestActions'
+import OrderDetailPanel from './orders/OrderDetailPanel'
+import { useSelectedOrder } from './orders/useSelectedOrder'
 
 export default function Requests() {
   const qc = useQueryClient()
   const [actErr, setActErr] = useState('')
   const [note, setNote] = useState('')
+  const [selected, setSelected] = useSelectedOrder()
+  const closePanel = useCallback(() => setSelected(null), [setSelected])
   // Promote paid-but-unverified Stripe purchases into this inbox (C1 backstop).
   useStripeReconcile()
 
@@ -71,12 +76,23 @@ export default function Requests() {
     },
   })
 
+  const rowState = (r: any) => {
+    const lines = (r.rental_line_items ?? []) as RequestLine[]
+    const shortages = requestShortages(lines)
+    return { lines, shortages, blocked: shortages.length > 0, busy: act.isPending && act.variables?.id === r.id }
+  }
+  const onCardKey = (id: string) => (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.target !== e.currentTarget) return
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(id) }
+  }
+  const selectedRow = data?.find((r) => r.id === selected)
+
   return (
     <div>
       <h1 className="text-2xl font-semibold mb-1">Requests</h1>
       <p className="text-slate-500 text-sm mb-6">
         Rental &amp; purchase requests from the storefront. <strong>Confirm</strong> reserves the equipment and queues a delivery (then assign a driver on the Delivery board); <strong>Decline</strong> cancels it.
-        Requests can only be confirmed once every item is in stock — add units in Inventory first.
+        Requests can only be confirmed once every item is in stock — add units in Inventory first. Click a request for full details.
       </p>
       {isLoading && <div className="text-slate-500">Loading…</div>}
       {error && <div className="text-red-600 text-sm">Couldn’t load requests. Please try again.</div>}
@@ -86,12 +102,21 @@ export default function Requests() {
 
       <div className="space-y-3">
         {data?.map((r) => {
-          const lines = (r.rental_line_items ?? []) as RequestLine[]
-          const shortages = requestShortages(lines)
-          const blocked = shortages.length > 0
-          const busy = act.isPending && act.variables?.id === r.id
+          const { lines, shortages, blocked, busy } = rowState(r)
+          const isSel = selected === r.id
           return (
-          <div key={r.id} className={`bg-white border rounded-xl p-4 ${blocked ? 'border-amber-200' : 'border-slate-200'}`}>
+          <div
+            key={r.id}
+            role="button"
+            tabIndex={0}
+            aria-label={`Open request #${r.order_no}`}
+            aria-expanded={isSel}
+            onClick={() => setSelected(r.id)}
+            onKeyDown={onCardKey(r.id)}
+            className={`group bg-white border rounded-xl p-4 cursor-pointer transition-colors ${
+              isSel ? 'border-blue-400 ring-2 ring-blue-100' : blocked ? 'border-amber-200 hover:border-amber-300' : 'border-slate-200 hover:border-slate-300'
+            } hover:bg-slate-50/60`}
+          >
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
@@ -144,28 +169,50 @@ export default function Requests() {
                   </div>
                 )}
               </div>
-              <div className="flex flex-col gap-2 shrink-0">
-                <button
-                  onClick={() => act.mutate({ id: r.id, action: 'confirm' })}
-                  disabled={busy || blocked}
-                  title={blocked ? 'Out of stock — add units in Inventory first' : 'Reserve equipment and queue a delivery'}
-                  className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Check size={15} /> Confirm
-                </button>
-                <button
-                  onClick={() => act.mutate({ id: r.id, action: 'decline' })}
-                  disabled={busy}
-                  className="flex items-center gap-1.5 text-slate-500 hover:text-red-600 text-sm rounded-lg px-3 py-1.5"
-                >
-                  <X size={15} /> Decline
-                </button>
+              <div className="flex flex-col items-end gap-2 shrink-0">
+                <RequestActions
+                  onConfirm={() => act.mutate({ id: r.id, action: 'confirm' })}
+                  onDecline={() => act.mutate({ id: r.id, action: 'decline' })}
+                  busy={busy}
+                  blocked={blocked}
+                />
+                <span className="inline-flex items-center gap-0.5 text-xs text-slate-400 group-hover:text-blue-600">
+                  Details <ChevronRight size={14} />
+                </span>
               </div>
             </div>
           </div>
           )
         })}
       </div>
+
+      {selected && (
+        <OrderDetailPanel
+          orderId={selected}
+          onClose={closePanel}
+          actions={
+            <div className="flex flex-col gap-2 w-full">
+              {selectedRow && (
+                <RequestActions
+                  layout="row"
+                  onConfirm={() => act.mutate({ id: selectedRow.id, action: 'confirm' })}
+                  onDecline={() => act.mutate({ id: selectedRow.id, action: 'decline' })}
+                  busy={rowState(selectedRow).busy}
+                  blocked={rowState(selectedRow).blocked}
+                />
+              )}
+              {selectedRow && rowState(selectedRow).blocked && (
+                <p className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+                  Can’t confirm yet — {rowState(selectedRow).shortages.map((x) => `${x.name}: ${x.requested} requested, ${x.available} available`).join('; ')}.{' '}
+                  <Link href="/inventory" className="underline hover:no-underline">Add units in Inventory</Link>, then confirm.
+                </p>
+              )}
+              {actErr && <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-1.5">{actErr}</p>}
+              {note && <p className="text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-1.5">{note}</p>}
+            </div>
+          }
+        />
+      )}
     </div>
   )
 }

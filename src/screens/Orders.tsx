@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useMemo, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { AlertCircle, Loader2, RefreshCw } from 'lucide-react'
 import { supabase } from '../lib/supabase'
@@ -11,26 +10,11 @@ import OrderCard from './orders/OrderCard'
 import UnpaidRow from './orders/UnpaidRow'
 import OrderDetailPanel from './orders/OrderDetailPanel'
 import { useSchedulePickup } from './orders/useSchedulePickup'
+import { useSelectedOrder } from './orders/useSelectedOrder'
 
 /** Confirmed / in-progress work — excludes inbox, cancelled, and unpaid checkouts. */
 const WORK_TABS = ['all', 'open', 'scheduled', 'active', 'pickup_scheduled', 'closed'] as const
 type Tab = (typeof WORK_TABS)[number] | 'unpaid'
-
-const SELECTED_PARAM = 'order'
-
-/** Selected order lives in `?order=<id>` so a detail view is linkable/refresh-safe. */
-function useSelectedOrder(): [string | null, (id: string | null) => void] {
-  const params = useSearchParams()
-  const selected = params.get(SELECTED_PARAM)
-  const setSelected = useCallback((id: string | null) => {
-    const url = new URL(window.location.href)
-    if (id) url.searchParams.set(SELECTED_PARAM, id)
-    else url.searchParams.delete(SELECTED_PARAM)
-    // `null` state (not history.state) so Next's patched replaceState syncs useSearchParams.
-    window.history.replaceState(null, '', url)
-  }, [])
-  return [selected, setSelected]
-}
 
 export default function Orders() {
   const [tab, setTab] = useState<Tab>('open')

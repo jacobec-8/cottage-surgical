@@ -1,13 +1,15 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useCallback, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Camera } from 'lucide-react'
+import { Camera, ChevronRight } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { statusClass, statusLabel } from '../lib/status'
 import { invalidateDispatch, invalidateOrderWorkflow } from '../lib/workflowKeys'
 import { useDriverStopContacts, type StopContact } from '../lib/useDriverStopContacts'
+import OrderDetailPanel from './orders/OrderDetailPanel'
+import { useSelectedOrder } from './orders/useSelectedOrder'
 
 type Photo = { storage_path: string; captured_at: string; notes: string | null }
 type Deliv = {
@@ -24,6 +26,7 @@ type Deliv = {
   address_zip: string | null
   driver_id: string | null
   order: {
+    id: string
     order_no: number
     customer: { full_name: string } | null
     rental_line_items: { quantity: number; equipment: { name: string } | null }[]
@@ -33,13 +36,22 @@ type Deliv = {
 
 const SELECT =
   'id,leg_type,status,scheduled_date,window_start,window_end,completed_at,address_line1,address_city,address_state,address_zip,driver_id,' +
-  'order:rental_orders(order_no,customer:customers(full_name),rental_line_items(quantity,equipment:equipment_items(name))),' +
+  'order:rental_orders(id,order_no,customer:customers(full_name),rental_line_items(quantity,equipment:equipment_items(name))),' +
   'delivery_photos(storage_path,captured_at,notes)'
 
 export default function Delivery() {
   const { profile } = useAuth()
   const isDriver = profile?.role === 'driver'
   const [view, setView] = useState<'active' | 'completed'>('active')
+  // Staff: click a stop to open the order panel (?order=<id>) with that leg highlighted.
+  const [selected, setSelected] = useSelectedOrder()
+  const [focusDelivery, setFocusDelivery] = useState<string | null>(null)
+  const openStop = useCallback((orderId: string, deliveryId: string) => {
+    setFocusDelivery(deliveryId)
+    setSelected(orderId)
+  }, [setSelected])
+  const closePanel = useCallback(() => { setSelected(null); setFocusDelivery(null) }, [setSelected])
+  const onOpen = isDriver ? undefined : openStop
 
   // Live updates arrive via app-level RealtimeSync. Drivers also get
   // notifications invalidations (reassignment stand-down path). Poll remains fallback.
@@ -81,7 +93,7 @@ export default function Delivery() {
       <p className="text-slate-500 text-sm mb-4">
         {isDriver
           ? 'Your assigned stops. Start a stop, then take a photo to complete it.'
-          : 'Assign drivers and windows, or step in to run a stop. Drivers complete stops with a photo; you can override.'}
+          : 'Assign drivers and windows, or step in to run a stop. Drivers complete stops with a photo; you can override. Click a stop for the full order.'}
       </p>
 
       <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1 mb-5">
@@ -104,11 +116,50 @@ export default function Delivery() {
       <div className="space-y-3">
         {data?.map((d) =>
           view === 'active'
-            ? <DeliveryRow key={d.id} d={d} drivers={drivers.data ?? []} isDriver={isDriver} contact={contacts.byDeliveryId.get(d.id)} />
-            : <CompletedRow key={d.id} d={d} contact={isDriver ? contacts.byDeliveryId.get(d.id) : undefined} />,
+            ? <DeliveryRow key={d.id} d={d} drivers={drivers.data ?? []} isDriver={isDriver} contact={contacts.byDeliveryId.get(d.id)} onOpen={onOpen} selected={selected === d.order?.id} />
+            : <CompletedRow key={d.id} d={d} contact={isDriver ? contacts.byDeliveryId.get(d.id) : undefined} onOpen={onOpen} selected={selected === d.order?.id} />,
         )}
       </div>
+
+      {!isDriver && selected && (
+        <OrderDetailPanel orderId={selected} onClose={closePanel} focusDeliveryId={focusDelivery} />
+      )}
     </div>
+  )
+}
+
+type OpenStop = (orderId: string, deliveryId: string) => void
+
+/** Props that turn a stop card into a click-to-open surface (staff only). */
+function clickableCard(d: Deliv, onOpen: OpenStop | undefined, selected: boolean) {
+  if (!onOpen || !d.order) return { className: '', props: {} as Record<string, unknown> }
+  const orderId = d.order.id
+  const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.target !== e.currentTarget) return
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(orderId, d.id) }
+  }
+  return {
+    className: `group cursor-pointer transition-colors ${selected ? 'border-blue-400 ring-2 ring-blue-100' : 'hover:border-slate-300 hover:bg-slate-50/60'}`,
+    props: {
+      role: 'button',
+      tabIndex: 0,
+      'aria-label': `Open order #${d.order.order_no}`,
+      'aria-expanded': selected,
+      onClick: () => onOpen(orderId, d.id),
+      onKeyDown: onKey,
+    },
+  }
+}
+
+/** Stop clicks inside controls from also opening the panel. */
+const stopOpen = (e: MouseEvent) => e.stopPropagation()
+
+function DetailsHint({ show }: { show: boolean }) {
+  if (!show) return null
+  return (
+    <span className="inline-flex items-center gap-0.5 text-xs text-slate-400 group-hover:text-blue-600 shrink-0">
+      Details <ChevronRight size={14} />
+    </span>
   )
 }
 
@@ -117,13 +168,16 @@ function customerLabel(d: Deliv, contact?: StopContact): string {
 }
 
 function DeliveryRow({
-  d, drivers, isDriver, contact,
+  d, drivers, isDriver, contact, onOpen, selected,
 }: {
   d: Deliv
   drivers: { id: string; first_name: string; last_name: string; user_id: string | null }[]
   isDriver: boolean
   contact?: StopContact
+  onOpen?: OpenStop
+  selected: boolean
 }) {
+  const card = clickableCard(d, onOpen, selected)
   const qc = useQueryClient()
   const [driver, setDriver] = useState(d.driver_id ?? '')
   const [date, setDate] = useState(d.scheduled_date ?? '')
@@ -203,7 +257,7 @@ function DeliveryRow({
   const inp = 'border border-slate-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-4">
+    <div className={`bg-white border border-slate-200 rounded-xl p-4 ${card.className}`} {...card.props}>
       <div className="flex items-center justify-between gap-3 mb-1">
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -234,7 +288,8 @@ function DeliveryRow({
             </div>
           )}
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0" onClick={stopOpen}>
+          <DetailsHint show={Boolean(onOpen)} />
           {d.status === 'scheduled' && isDriver && (
             <button onClick={() => start.mutate()} disabled={start.isPending || !d.driver_id}
               title={!d.driver_id ? 'Needs a driver first' : undefined}
@@ -267,7 +322,7 @@ function DeliveryRow({
       {isDriver ? (
         msg && <div className="text-xs text-red-600 mt-2">{msg}</div>
       ) : (
-        <div className="flex flex-wrap items-end gap-2 mt-3">
+        <div className="flex flex-wrap items-end gap-2 mt-3 cursor-default" onClick={stopOpen}>
           <div>
             <div className="text-[11px] text-slate-400 mb-0.5">Driver</div>
             <select value={driver} onChange={(e) => setDriver(e.target.value)} className={inp}>
@@ -293,10 +348,11 @@ function DeliveryRow({
   )
 }
 
-function CompletedRow({ d, contact }: { d: Deliv; contact?: StopContact }) {
+function CompletedRow({ d, contact, onOpen, selected }: { d: Deliv; contact?: StopContact; onOpen?: OpenStop; selected: boolean }) {
   const photo = d.delivery_photos?.[0]
+  const card = clickableCard(d, onOpen, selected)
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-4 flex items-start justify-between gap-4">
+    <div className={`bg-white border border-slate-200 rounded-xl p-4 flex items-start justify-between gap-4 ${card.className}`} {...card.props}>
       <div className="min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="font-medium">{customerLabel(d, contact)}</span>
@@ -313,7 +369,10 @@ function CompletedRow({ d, contact }: { d: Deliv; contact?: StopContact }) {
         <div className="text-xs text-slate-400 mt-1">Completed {d.completed_at ? new Date(d.completed_at).toLocaleString() : ''}</div>
         {photo?.notes && <div className="text-sm text-slate-500 mt-1 italic">“{photo.notes}”</div>}
       </div>
-      {photo ? <ProofPhoto path={photo.storage_path} /> : <span className="text-xs text-amber-600 shrink-0">no photo</span>}
+      <div className="flex flex-col items-end gap-2 shrink-0" onClick={stopOpen}>
+        {photo ? <ProofPhoto path={photo.storage_path} /> : <span className="text-xs text-amber-600">no photo</span>}
+        <DetailsHint show={Boolean(onOpen)} />
+      </div>
     </div>
   )
 }

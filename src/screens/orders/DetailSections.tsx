@@ -57,9 +57,11 @@ const LINE_STATUS_CLS: Record<string, string> = {
   allocated: 'bg-emerald-100 text-emerald-700',
   unallocated: 'bg-amber-100 text-amber-800',
   returned: 'bg-slate-100 text-slate-500',
+  'pending confirm': 'bg-sky-100 text-sky-700',
 }
 
-export function LinesSection({ o }: { o: OrderDetail }) {
+/** `pendingConfirm`: request not yet confirmed — units are reserved on Confirm, so no line is "unallocated" yet. */
+export function LinesSection({ o, pendingConfirm = false }: { o: OrderDetail; pendingConfirm?: boolean }) {
   const lines: OrderLine[] = o.rental_line_items
   const isRental = o.order_type === 'rental'
   return (
@@ -79,7 +81,7 @@ export function LinesSection({ o }: { o: OrderDetail }) {
               <tr><td colSpan={4} className="px-3 py-3 text-slate-400">No line items.</td></tr>
             )}
             {lines.map((li, i) => {
-              const st = lineStatus(li)
+              const st = pendingConfirm && !li.equipment_unit_id ? 'pending confirm' : lineStatus(li)
               const tag = unitLabel(li)
               const price = isRental ? li.monthly_rate : li.sale_price
               return (
@@ -102,7 +104,7 @@ export function LinesSection({ o }: { o: OrderDetail }) {
   )
 }
 
-function LegCard({ d, orderAddress }: { d: OrderDelivery; orderAddress: string }) {
+function LegCard({ d, orderAddress, highlight }: { d: OrderDelivery; orderAddress: string; highlight: boolean }) {
   const legAddress = addressOf({
     address_line1: d.address_line1 ?? null, address_city: d.address_city ?? null,
     address_state: d.address_state ?? null, address_zip: d.address_zip ?? null,
@@ -110,9 +112,10 @@ function LegCard({ d, orderAddress }: { d: OrderDelivery; orderAddress: string }
   const photos = d.delivery_photos?.length ?? 0
   const when = d.scheduled_date ? [fmtDate(d.scheduled_date), windowOf(d)].filter(Boolean).join(' · ') : 'Not scheduled'
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-3 text-sm">
+    <div className={`rounded-lg border bg-white p-3 text-sm ${highlight ? 'border-blue-400 ring-2 ring-blue-100' : 'border-slate-200'}`}>
       <div className="flex items-center gap-2 flex-wrap">
         <span className="font-medium capitalize">{d.leg_type}</span>
+        {highlight && <span className="text-[11px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700">this stop</span>}
         <span className={`text-xs px-2 py-0.5 rounded-full capitalize ${statusClass(d.status)}`}>{statusLabel(d.status)}</span>
         {photos > 0 && (
           <span className="inline-flex items-center gap-1 text-xs text-slate-500"><Camera size={12} />{photos} photo{photos > 1 ? 's' : ''}</span>
@@ -132,18 +135,22 @@ function LegCard({ d, orderAddress }: { d: OrderDelivery; orderAddress: string }
   )
 }
 
-export function DeliveriesSection({ o }: { o: OrderDetail }) {
+type DeliveriesProps = { o: OrderDetail; focusDeliveryId?: string | null; showBoardLink?: boolean }
+
+export function DeliveriesSection({ o, focusDeliveryId = null, showBoardLink = true }: DeliveriesProps) {
   const legs = [...o.deliveries].sort((a, b) => (a.leg_type === b.leg_type ? 0 : a.leg_type === 'delivery' ? -1 : 1))
   const orderAddress = addressOf(o)
   return (
     <Section
       title={`Delivery & pickup (${legs.length})`}
-      aside={<Link href="/delivery" className="text-xs text-blue-600 hover:underline">Open Delivery board →</Link>}
+      aside={showBoardLink ? <Link href="/delivery" className="text-xs text-blue-600 hover:underline">Open Delivery board →</Link> : undefined}
     >
       {legs.length === 0 ? (
         <div className="text-sm text-slate-400">No delivery legs yet.</div>
       ) : (
-        <div className="space-y-2">{legs.map((d) => <LegCard key={d.id} d={d} orderAddress={orderAddress} />)}</div>
+        <div className="space-y-2">
+          {legs.map((d) => <LegCard key={d.id} d={d} orderAddress={orderAddress} highlight={d.id === focusDeliveryId} />)}
+        </div>
       )}
     </Section>
   )
@@ -164,12 +171,15 @@ function pill(status: string) {
   return `text-xs px-2 py-0.5 rounded-full capitalize ${CHARGE_CLS[status] ?? 'bg-slate-100 text-slate-600'}`
 }
 
-export function BillingSection({ o }: { o: OrderDetail }) {
+export function BillingSection({ o, showBillingLink = true }: { o: OrderDetail; showBillingLink?: boolean }) {
   const charges: RecurringCharge[] = o.recurring_charges ?? []
   const deposits: Deposit[] = o.deposits ?? []
   if (charges.length === 0 && deposits.length === 0 && o.deposit_amount == null) return null
   return (
-    <Section title="Billing" aside={<Link href="/billing" className="text-xs text-blue-600 hover:underline">Open Billing →</Link>}>
+    <Section
+      title="Billing"
+      aside={showBillingLink ? <Link href="/billing" className="text-xs text-blue-600 hover:underline">Open Billing →</Link> : undefined}
+    >
       <div className="rounded-lg border border-slate-200 bg-white divide-y divide-slate-100 text-sm">
         {charges.map((c) => (
           <div key={c.id} className="flex items-center justify-between gap-3 px-3 py-2">
