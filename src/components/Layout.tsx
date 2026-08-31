@@ -6,28 +6,32 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import {
   LayoutDashboard, PlusCircle, Users, Package, CreditCard, Truck,
-  LogOut, Shield, ChevronRight, MapPin, Phone, Mail, Inbox, UserCog, ClipboardList,
+  LogOut, Shield, ChevronRight, MapPin, Phone, Mail, Inbox, UserCog, ClipboardList, LockKeyhole,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
+import type { StaffModule } from '../lib/staffModules'
+import { useStaffModuleAccess } from '../lib/useStaffModuleAccess'
 import NotificationsBell from './NotificationsBell'
 
 const STAFF = ['admin', 'staff']
 const ALL = ['admin', 'staff', 'driver']
 const NAV = [
-  { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true, roles: STAFF },
-  { to: '/requests', label: 'Requests', icon: Inbox, roles: STAFF, badge: 'requests' },
-  { to: '/orders', label: 'Orders', icon: ClipboardList, roles: STAFF, badge: 'orders' },
-  { to: '/new-order', label: 'New Order', icon: PlusCircle, roles: STAFF },
-  { to: '/customers', label: 'Customers', icon: Users, roles: STAFF },
-  { to: '/inventory', label: 'Inventory', icon: Package, roles: STAFF },
-  { to: '/billing', label: 'Billing', icon: CreditCard, roles: STAFF },
-  { to: '/delivery', label: 'Delivery & Pickup', icon: Truck, roles: ALL, badge: 'deliveries' },
-  { to: '/drivers', label: 'Drivers', icon: UserCog, roles: STAFF },
+  { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true, roles: STAFF, module: 'dashboard' },
+  { to: '/requests', label: 'Requests', icon: Inbox, roles: STAFF, badge: 'requests', module: 'requests' },
+  { to: '/orders', label: 'Orders', icon: ClipboardList, roles: STAFF, badge: 'orders', module: 'orders' },
+  { to: '/new-order', label: 'New Order', icon: PlusCircle, roles: STAFF, module: 'new_order' },
+  { to: '/customers', label: 'Customers', icon: Users, roles: STAFF, module: 'customers' },
+  { to: '/inventory', label: 'Inventory', icon: Package, roles: STAFF, module: 'inventory' },
+  { to: '/billing', label: 'Billing', icon: CreditCard, roles: STAFF, module: 'billing' },
+  { to: '/delivery', label: 'Delivery & Pickup', icon: Truck, roles: ALL, badge: 'deliveries', module: 'delivery' },
+  { to: '/drivers', label: 'Drivers', icon: UserCog, roles: STAFF, module: 'drivers' },
+  { to: '/staff-access', label: 'Staff Access', icon: LockKeyhole, roles: ['admin'], adminOnly: true },
 ]
 
 export default function Layout({ children }: { children: ReactNode }) {
   const { profile, signOut } = useAuth()
+  const access = useStaffModuleAccess()
   const pathname = usePathname()
   const router = useRouter()
   // Live work-queue counts, auto-refreshed so approving a request updates the
@@ -65,7 +69,12 @@ export default function Layout({ children }: { children: ReactNode }) {
           NAVIGATION
         </div>
         <nav className="flex-1 px-3 space-y-1">
-          {NAV.filter((n) => n.roles.includes(profile?.role || '')).map((n) => {
+          {NAV.filter((n) => {
+            if (!n.roles.includes(profile?.role || '')) return false
+            if ('adminOnly' in n && n.adminOnly && profile?.role !== 'admin') return false
+            const moduleKey = 'module' in n ? n.module as StaffModule : null
+            return !moduleKey || access.canAccess(moduleKey)
+          }).map((n) => {
             const Icon = n.icon
             const isActive = n.end
               ? pathname === n.to

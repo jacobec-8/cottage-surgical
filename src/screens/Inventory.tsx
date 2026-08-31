@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Search, Pencil, Trash2, X, ChevronDown, ChevronRight } from 'lucide-react'
 import { supabase } from '../lib/supabase'
@@ -101,10 +102,10 @@ export default function Inventory() {
                   <div className="w-16 h-16 rounded-lg bg-slate-100 shrink-0" />
                 )}
                 <div className="flex-1 min-w-0">
-                  <div className="font-semibold truncate">
+                  <Link href={`/inventory/${it.id}`} className="font-semibold truncate block hover:text-blue-600">
                     {it.name}
                     {!it.is_active && <span className="ml-2 text-xs text-slate-400">(inactive)</span>}
-                  </div>
+                  </Link>
                   <div className="text-sm text-slate-500 truncate">{it.description}</div>
                   <div className="flex items-center gap-3 mt-2">
                     <span className="text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-600 capitalize">{it.category}</span>
@@ -119,9 +120,9 @@ export default function Inventory() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <button onClick={() => setEditing(it)} className="text-slate-400 hover:text-blue-600 p-1">
+                  <Link href={`/inventory/${it.id}`} aria-label={`Edit ${it.name}`} className="text-slate-400 hover:text-blue-600 p-1">
                     <Pencil size={16} />
-                  </button>
+                  </Link>
                   <button
                     onClick={() => {
                       if (confirm(`Remove "${it.name}" from the catalog?`)) deactivate.mutate(it.id)

@@ -33,6 +33,9 @@ const STAFF_SYNC: RealtimeInvalidateMap = {
   drivers: ['drivers'],
   // Bell list + exact unread count (prefix-matches per-user keys).
   notifications: ['notifications', 'notifications_unread'],
+  // Admin module locks should disappear from or return to staff navigation immediately.
+  staff_module_access: ['staff_module_access'],
+  inventory_item_notes: ['inventory_item_notes'],
 }
 
 // Drivers: own deliveries (RLS-scoped). Notifications are the fast path when a
