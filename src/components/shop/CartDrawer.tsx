@@ -2,8 +2,9 @@
 
 import { useState, type ChangeEvent, type FormEvent } from 'react'
 import Link from 'next/link'
-import { X, ShoppingCart, Trash2, Plus, Minus, CheckCircle } from 'lucide-react'
+import { X, ShoppingCart, Trash2, Plus, Minus, CheckCircle, CreditCard, Store } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { dispatchCustomerEmails } from '../../lib/customerEmails'
 import { useCart } from './CartContext'
 
 const REASONS: Record<string, string> = {
@@ -16,6 +17,7 @@ const REASONS: Record<string, string> = {
 export default function CartDrawer() {
   const { items, open, setOpen, setQty, remove, clear, count } = useCart()
   const [checkout, setCheckout] = useState(false)
+  const [paymentChoice, setPaymentChoice] = useState<'in_store' | 'online'>('in_store')
   const [form, setForm] = useState({ full_name: '', phone: '', email: '', line1: '', city: '', state: 'NY', zip: '', notes: '' })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -34,16 +36,42 @@ export default function CartDrawer() {
       const customer = { full_name: form.full_name, phone: form.phone, email: form.email }
       const address = { line1: form.line1, city: form.city, state: form.state, zip: form.zip }
 
-      // Rentals → request flow (no payment).
+      // Rentals remain rentals whichever payment rail the customer chooses.
+      // Online = first month through Stripe, then the paid request enters the
+      // same staff review/stock workflow. In-store = submit immediately.
       let rentNo: number | null = null
       if (rentItems.length) {
-        const { data, error } = await supabase.rpc('submit_rental_request', {
-          p_order_type: 'rental', p_items: rentItems.map((i) => ({ item_id: i.id, quantity: i.qty })),
-          p_customer: customer, p_address: address, p_notes: form.notes || null,
-        })
-        if (error) throw new Error('Something went wrong. Please try again or call us.')
-        if (!data?.ok) throw new Error(REASONS[data?.reason] || 'We couldn’t submit your rental request. Please call us.')
-        rentNo = data.order_no
+        if (paymentChoice === 'online') {
+          const { data, error } = await supabase.rpc('create_stripe_rental_checkout', {
+            p_items: rentItems.map((i) => ({ item_id: i.id, quantity: i.qty })),
+            p_customer: customer,
+            p_address: address,
+            p_notes: form.notes || null,
+            p_redirect_base: window.location.origin,
+          })
+          if (error) throw new Error('Couldn’t start checkout. Please try again or call us.')
+          if (!data?.ok) {
+            if (data?.reason === 'invalid_redirect') {
+              throw new Error('Checkout is misconfigured for this site. Please call us.')
+            }
+            if (data?.reason === 'missing_email') {
+              throw new Error('Please enter a valid email for payment and order updates.')
+            }
+            throw new Error(REASONS[data?.reason] || 'We couldn’t start your payment. Please call us.')
+          }
+          clear()
+          window.location.assign(data.checkout_url)
+          return
+        } else {
+          const { data, error } = await supabase.rpc('submit_rental_request', {
+            p_order_type: 'rental', p_items: rentItems.map((i) => ({ item_id: i.id, quantity: i.qty })),
+            p_customer: customer, p_address: address, p_notes: form.notes || null,
+          })
+          if (error) throw new Error('Something went wrong. Please try again or call us.')
+          if (!data?.ok) throw new Error(REASONS[data?.reason] || 'We couldn’t submit your rental request. Please call us.')
+          rentNo = data.order_no
+          void dispatchCustomerEmails()
+        }
       }
 
       // Purchases → Stripe Checkout (kept for when SHOP_PURCHASES_ENABLED is true).
@@ -92,7 +120,7 @@ export default function CartDrawer() {
             <div>
               <CheckCircle className="mx-auto text-emerald-600 mb-3" size={42} />
               <div className="font-semibold text-navy text-lg">Request received — {done.map((n) => `#${n}`).join(' & ')}</div>
-              <p className="text-slate-500 text-sm mt-2">Our team will call to confirm details, availability, and pricing. No payment was taken.</p>
+              <p className="text-slate-500 text-sm mt-2">Pay in store selected. Our team will review availability and contact you to confirm delivery.</p>
               <button onClick={() => { setDone(null); setCheckout(false); close() }} className="mt-5 bg-navy text-white rounded-lg px-6 py-2.5 text-sm font-semibold">Done</button>
             </div>
           </div>
@@ -111,20 +139,43 @@ export default function CartDrawer() {
             <div className="grid grid-cols-2 gap-3">
               <input required placeholder="Full name" value={form.full_name} onChange={set('full_name')} className={`col-span-2 ${inp}`} />
               <input placeholder="Phone" value={form.phone} onChange={set('phone')} className={inp} />
-              <input type="email" placeholder="Email" value={form.email} onChange={set('email')} className={inp} />
+              <input required type="email" placeholder="Email" value={form.email} onChange={set('email')} className={inp} />
               <input required placeholder="Delivery address" value={form.line1} onChange={set('line1')} className={`col-span-2 ${inp}`} />
               <input required placeholder="City" value={form.city} onChange={set('city')} className={inp} />
               <input placeholder="ZIP" value={form.zip} onChange={set('zip')} className={inp} />
               <textarea placeholder="Delivery instructions (optional)" value={form.notes} onChange={set('notes')} rows={2} className={`col-span-2 ${inp}`} />
             </div>
+            {rentItems.length > 0 && (
+              <fieldset>
+                <legend className="mb-2 text-sm font-semibold text-navy">How would you like to pay?</legend>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className={`cursor-pointer rounded-xl border p-3 transition ${paymentChoice === 'in_store' ? 'border-navy bg-navy/5 ring-1 ring-navy' : 'border-slate-200 hover:border-slate-300'}`}>
+                    <input type="radio" name="payment-choice" value="in_store" checked={paymentChoice === 'in_store'} onChange={() => setPaymentChoice('in_store')} className="sr-only" />
+                    <Store size={20} className="mb-2 text-navy" />
+                    <span className="block text-sm font-semibold text-navy">Pay in store</span>
+                    <span className="mt-0.5 block text-xs leading-5 text-slate-500">Submit now and pay after confirmation.</span>
+                  </label>
+                  <label className={`cursor-pointer rounded-xl border p-3 transition ${paymentChoice === 'online' ? 'border-navy bg-navy/5 ring-1 ring-navy' : 'border-slate-200 hover:border-slate-300'}`}>
+                    <input type="radio" name="payment-choice" value="online" checked={paymentChoice === 'online'} onChange={() => setPaymentChoice('online')} className="sr-only" />
+                    <CreditCard size={20} className="mb-2 text-navy" />
+                    <span className="block text-sm font-semibold text-navy">Pay online</span>
+                    <span className="mt-0.5 block text-xs leading-5 text-slate-500">Pay ${rentTotal.toFixed(0)} securely with Stripe.</span>
+                  </label>
+                </div>
+              </fieldset>
+            )}
             {error && <div className="text-sm text-red-600">{error}</div>}
             <button disabled={busy} className="w-full bg-terracotta hover:opacity-90 text-white rounded-lg py-3 font-semibold disabled:opacity-50">
-              {busy ? (buyItems.length ? 'Redirecting…' : 'Submitting…') : buyItems.length ? 'Continue to Payment' : 'Submit Request'}
+              {busy
+                ? (buyItems.length || paymentChoice === 'online' ? 'Redirecting…' : 'Submitting…')
+                : buyItems.length || paymentChoice === 'online' ? 'Continue to Secure Payment' : 'Submit Request'}
             </button>
             <p className="text-xs text-slate-400 text-center">
               {buyItems.length
-                ? 'Purchases are paid securely with Stripe on the next step. Rentals are confirmed by our team — no rental payment online.'
-                : 'No payment online — we’ll confirm details, availability, and pricing when we call (Nassau & Suffolk).'}
+                ? 'Purchases are paid securely with Stripe on the next step.'
+                : paymentChoice === 'online'
+                  ? 'Stripe collects the first month’s rental. Your request is still reviewed for availability; a rejected paid request is refunded automatically.'
+                  : 'No payment is taken now. We’ll confirm availability and delivery details before you pay.'}
             </p>
           </form>
         ) : (
@@ -157,7 +208,7 @@ export default function CartDrawer() {
               <button onClick={() => setCheckout(true)} className="w-full mt-2 bg-navy hover:bg-navy-800 text-white rounded-lg py-3 font-semibold">
                 {buyItems.length ? 'Checkout' : 'Request Delivery'} ({count})
               </button>
-              <p className="text-xs text-slate-400 text-center pt-2">You’ll confirm contact + address next.</p>
+              <p className="text-xs text-slate-400 text-center pt-2">You’ll confirm contact, address, and payment preference next.</p>
             </div>
           </>
         )}

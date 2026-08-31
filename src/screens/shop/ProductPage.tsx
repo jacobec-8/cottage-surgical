@@ -97,8 +97,8 @@ export default function ProductPage({
               </div>
               <p className="text-xs text-slate-400 mt-3">
                 {purchasable
-                  ? 'Purchases are paid securely with Stripe at checkout. Rentals are confirmed by our team — no rental payment online yet.'
-                  : 'No payment online for rentals — we’ll confirm details, availability, and pricing when we call.'}
+                  ? 'Choose secure online payment with Stripe or pay in store when you submit your rental request.'
+                  : 'At checkout, choose secure online payment with Stripe or pay in store after confirmation.'}
               </p>
             </div>
           </div>

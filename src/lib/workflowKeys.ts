@@ -1,4 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query'
+import { dispatchCustomerEmails } from './customerEmails'
 
 /**
  * React-query keys touched by order-workflow RPCs (confirm/decline, delivery
@@ -36,9 +37,11 @@ function invalidateKeys(qc: QueryClient, keys: readonly string[]): void {
 /** Invalidate every board the order workflow can change (actor-side refresh). */
 export function invalidateOrderWorkflow(qc: QueryClient): void {
   invalidateKeys(qc, ORDER_WORKFLOW_KEYS)
+  void dispatchCustomerEmails()
 }
 
 /** Invalidate boards affected by delivery assign/unassign only (not billing/stock). */
 export function invalidateDispatch(qc: QueryClient): void {
   invalidateKeys(qc, DISPATCH_KEYS)
+  void dispatchCustomerEmails()
 }

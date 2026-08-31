@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Loader2, X } from 'lucide-react'
+import { Loader2, Pencil, X } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { PICKUP_ELIGIBLE, type OrderDetail } from './types'
 import { ageLabel, amountOf, fmtDate, fmtDateTime, fmtMoney, sourceLabel, unallocatedCount } from './format'
@@ -12,6 +12,7 @@ import { useSchedulePickup } from './useSchedulePickup'
 import { useVerifyPayment } from './useVerifyPayment'
 import { useCloseOrder } from './useCloseOrder'
 import CloseOutControls from './CloseOutControls'
+import EditRentalModal from './EditRentalModal'
 
 type Props = {
   orderId: string
@@ -104,6 +105,7 @@ function PanelBody({ o, onClose, actions, focusDeliveryId }: BodyProps) {
   // Drivers can't reach the back-office routes, so don't offer those links.
   const backofficeLinks = profile?.role !== 'driver'
   const [msg, setMsg] = useState('')
+  const [editing, setEditing] = useState(false)
   const schedulePickup = useSchedulePickup(setMsg)
   const verify = useVerifyPayment(o.id, setMsg)
   const closeOrder = useCloseOrder(setMsg)
@@ -124,7 +126,7 @@ function PanelBody({ o, onClose, actions, focusDeliveryId }: BodyProps) {
             <div className="mt-1.5 flex items-center gap-2 flex-wrap">
               <TypeBadge type={o.order_type} />
               <StatusBadge status={o.status} />
-              <PaymentBadge orderType={o.order_type} paymentStatus={o.payment_status} />
+              <PaymentBadge orderType={o.order_type} paymentStatus={o.payment_status} paymentPreference={o.payment_preference} />
               {!isRequest && <UnallocatedBadge count={unallocatedCount(o)} />}
               <SourceBadge source={o.source} />
             </div>
@@ -143,6 +145,15 @@ function PanelBody({ o, onClose, actions, focusDeliveryId }: BodyProps) {
         {(actions || canPickup || canVerify || !isClosed) && (
           <div className="mt-3 flex items-center gap-2 flex-wrap">
             {actions}
+            {backofficeLinks && isRental && !isClosed && (
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-300 px-3 text-sm text-slate-700 hover:bg-slate-50"
+              >
+                <Pencil size={14} /> Edit rental
+              </button>
+            )}
             {canPickup && (
               <button
                 type="button"
@@ -186,7 +197,11 @@ function PanelBody({ o, onClose, actions, focusDeliveryId }: BodyProps) {
         <Section title="Summary">
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3 rounded-lg border border-slate-200 bg-white p-3">
             <Field label={isRental ? 'Monthly rate' : 'Total'}>{amountOf(o)}</Field>
-            <Field label="Payment"><span className="capitalize">{o.payment_status ?? '—'}</span></Field>
+            <Field label="Payment">
+              <span className="capitalize">
+                {o.payment_preference === 'online' ? `${o.payment_status ?? 'pending'} online` : 'Pay in store'}
+              </span>
+            </Field>
             <Field label="Source">{sourceLabel(o.source) ?? '—'}</Field>
             {isRental && <Field label="Start (delivery)">{fmtDate(o.start_date)}</Field>}
             {isRental && <Field label="Return">{o.end_date ? fmtDate(o.end_date) : 'Open'}</Field>}
@@ -215,6 +230,13 @@ function PanelBody({ o, onClose, actions, focusDeliveryId }: BodyProps) {
           </dl>
         </Section>
       </div>
+      {editing && (
+        <EditRentalModal
+          order={o}
+          onClose={() => setEditing(false)}
+          onSaved={() => setMsg('Rental details updated.')}
+        />
+      )}
     </>
   )
 }

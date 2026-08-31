@@ -5,7 +5,7 @@ import ShopFooter from '../../components/shop/ShopFooter'
 
 const STEPS = [
   { n: '01', icon: Search, title: 'Choose & Request', desc: 'Browse equipment and place a rental request in minutes. Our pharmacy team confirms availability for Nassau & Suffolk deliveries.' },
-  { n: '02', icon: FileText, title: 'We Confirm With You', desc: 'Share your Long Island delivery address and contact details. No rental payment online — we confirm pricing and take payment when we schedule delivery.' },
+  { n: '02', icon: FileText, title: 'Choose How to Pay', desc: 'Share your delivery details, then pay the first month securely online with Stripe or choose to pay in store after confirmation.' },
   { n: '03', icon: Truck, title: 'Delivered & Ready to Use', desc: 'A tech delivers, sets everything up, and walks you through operation. No tools, no assembly — equipment is ready before we leave.' },
 ]
 

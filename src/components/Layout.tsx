@@ -13,6 +13,7 @@ import { supabase } from '../lib/supabase'
 import type { StaffModule } from '../lib/staffModules'
 import { useStaffModuleAccess } from '../lib/useStaffModuleAccess'
 import NotificationsBell from './NotificationsBell'
+import { dispatchCustomerEmails } from '../lib/customerEmails'
 
 const STAFF = ['admin', 'staff']
 const ALL = ['admin', 'staff', 'driver']
@@ -61,6 +62,17 @@ export default function Layout({ children }: { children: ReactNode }) {
         supabase.from('deliveries').select('*', { count: 'exact', head: true }).not('status', 'in', '(completed,cancelled)'),
       ])
       return { requests: req.count ?? 0, orders: ord.count ?? 0, deliveries: del.count ?? 0 } as Record<string, number>
+    },
+  })
+  useQuery({
+    queryKey: ['customer_email_dispatch'],
+    enabled: Boolean(profile?.id),
+    staleTime: 60_000,
+    refetchInterval: 120_000,
+    refetchIntervalInBackground: true,
+    queryFn: async () => {
+      await dispatchCustomerEmails()
+      return true
     },
   })
   const name = profile?.full_name || profile?.email || 'User'

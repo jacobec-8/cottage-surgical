@@ -24,10 +24,24 @@ const PAY: Record<string, string> = {
   refunded: 'bg-slate-200 text-slate-600',
 }
 
-/** Payment pill — shown for purchases (rentals bill monthly, not up front). */
-export function PaymentBadge({ orderType, paymentStatus }: { orderType: string; paymentStatus: string | null }) {
-  if (orderType !== 'purchase' || !paymentStatus) return null
-  return <span className={`${PILL} capitalize ${PAY[paymentStatus] ?? 'bg-slate-100 text-slate-600'}`}>{paymentStatus}</span>
+/** Payment pill — Stripe-paid rentals remain rentals, not purchases. */
+export function PaymentBadge({
+  paymentStatus,
+  paymentPreference,
+}: {
+  orderType: string
+  paymentStatus: string | null
+  paymentPreference?: string | null
+}) {
+  if (paymentPreference !== 'online') {
+    return <span className={`${PILL} bg-slate-100 text-slate-600`}>pay in store</span>
+  }
+  if (!paymentStatus) return null
+  return (
+    <span className={`${PILL} ${PAY[paymentStatus] ?? 'bg-slate-100 text-slate-600'}`}>
+      {paymentStatus === 'paid' ? 'paid online' : paymentStatus === 'refunded' ? 'refunded' : 'online payment pending'}
+    </span>
+  )
 }
 
 export function UnallocatedBadge({ count }: { count: number }) {

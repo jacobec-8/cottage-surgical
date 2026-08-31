@@ -52,6 +52,7 @@ export type Order = {
   status: string
   source: string | null
   payment_status: string | null
+  payment_preference?: 'in_store' | 'online' | string | null
   stripe_session_id: string | null
   created_at: string
   updated_at: string
@@ -110,7 +111,7 @@ const DELIVERY_DETAIL_SELECT =
   'driver:drivers!deliveries_driver_id_fkey(first_name,last_name),delivery_photos(storage_path))'
 
 const ORDER_BASE =
-  'id,order_no,order_type,status,source,payment_status,stripe_session_id,created_at,updated_at,' +
+  'id,order_no,order_type,status,source,payment_status,payment_preference,stripe_session_id,created_at,updated_at,' +
   'start_date,end_date,monthly_rate,deposit_amount,special_notes,' +
   'address_line1,address_city,address_state,address_zip'
 

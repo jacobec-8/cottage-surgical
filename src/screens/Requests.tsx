@@ -30,7 +30,7 @@ export default function Requests() {
       const { data, error } = await supabase
         .from('rental_orders')
         .select(
-          'id,order_no,order_type,status,created_at,address_line1,address_city,address_state,address_zip,special_notes,' +
+          'id,order_no,order_type,status,payment_status,payment_preference,created_at,address_line1,address_city,address_state,address_zip,special_notes,' +
             'customer:customers(full_name,phone,email),' +
             'rental_line_items(quantity,equipment:equipment_items(id,name,quantity_on_hand,is_serialized))',
         )
@@ -131,6 +131,9 @@ export default function Requests() {
                     {r.order_type}
                   </span>
                   <span className="text-xs text-slate-400">#{r.order_no}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-xs ${r.payment_preference === 'online' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                    {r.payment_preference === 'online' ? (r.payment_status === 'paid' ? 'Paid online' : 'Online payment') : 'Pay in store'}
+                  </span>
                 </div>
                 <div className="text-sm text-slate-500 mt-1">
                   {[r.customer?.phone, r.customer?.email].filter(Boolean).join(' · ')}
