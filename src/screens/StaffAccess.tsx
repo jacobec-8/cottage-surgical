@@ -27,7 +27,7 @@ export default function StaffAccess() {
 
   return (
     <div className="max-w-4xl">
-      <div className="flex items-start justify-between gap-4 mb-6">
+      <div className="mb-6 flex flex-col items-start gap-4 sm:flex-row sm:justify-between">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <ShieldCheck className="text-blue-600" size={24} />
@@ -37,13 +37,13 @@ export default function StaffAccess() {
             Choose which operational modules store staff can use. Admin access and the driver app are unaffected.
           </p>
         </div>
-        <div className="flex gap-2 shrink-0">
+        <div className="grid w-full shrink-0 grid-cols-2 gap-2 sm:flex sm:w-auto">
           <button onClick={() => setAll(false)} disabled={update.isPending}
-            className="px-3 py-2 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50">
+            className="min-h-11 rounded-lg border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50 disabled:opacity-50">
             Lock all
           </button>
           <button onClick={() => setAll(true)} disabled={update.isPending}
-            className="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
+            className="min-h-11 rounded-lg bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50">
             Unlock all
           </button>
         </div>

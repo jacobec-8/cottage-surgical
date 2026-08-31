@@ -52,11 +52,11 @@ export default function Inventory() {
 
   return (
     <div>
-      <div className="flex items-start justify-between mb-1">
+      <div className="mb-1 flex flex-col items-start gap-3 sm:flex-row sm:justify-between">
         <h1 className="text-2xl font-semibold">Inventory Management</h1>
         <button
           onClick={() => setEditing({})}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-3 py-2 text-sm"
+          className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 sm:w-auto"
         >
           <Plus size={16} /> Add Item
         </button>
@@ -87,50 +87,55 @@ export default function Inventory() {
               key={it.id}
               className={`bg-white border border-slate-200 rounded-xl ${it.is_active ? '' : 'opacity-50'}`}
             >
-              <div className="p-4 flex items-center gap-4">
-                <button
-                  type="button"
-                  onClick={() => setExpandedId(open ? null : it.id)}
-                  className="text-slate-400 hover:text-slate-700 p-1 shrink-0"
-                  aria-label={open ? 'Collapse units' : 'Expand units'}
-                >
-                  {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                </button>
-                {it.image_url ? (
-                  <img src={it.image_url} alt="" className="w-16 h-16 rounded-lg object-cover bg-slate-100 shrink-0" />
-                ) : (
-                  <div className="w-16 h-16 rounded-lg bg-slate-100 shrink-0" />
-                )}
-                <div className="flex-1 min-w-0">
-                  <Link href={`/inventory/${it.id}`} className="font-semibold truncate block hover:text-blue-600">
-                    {it.name}
-                    {!it.is_active && <span className="ml-2 text-xs text-slate-400">(inactive)</span>}
-                  </Link>
-                  <div className="text-sm text-slate-500 truncate">{it.description}</div>
-                  <div className="flex items-center gap-3 mt-2">
-                    <span className="text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-600 capitalize">{it.category}</span>
-                    <span className="text-xs text-slate-500">Qty on Hand: {it.quantity_on_hand}</span>
-                  </div>
-                  {it.sku && <div className="text-xs text-slate-400 mt-1">SN: {it.sku}</div>}
-                </div>
-                <div className="text-right shrink-0">
-                  <div className="text-sm font-semibold">${Number(it.monthly_rental_price ?? 0).toFixed(0)}/mo rental</div>
-                  <div className="text-xs text-slate-500">
-                    {it.sale_price != null ? `$${Number(it.sale_price).toFixed(0)} sale` : 'no sale price'}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <Link href={`/inventory/${it.id}`} aria-label={`Edit ${it.name}`} className="text-slate-400 hover:text-blue-600 p-1">
-                    <Pencil size={16} />
-                  </Link>
+              <div className="flex flex-col p-3 sm:flex-row sm:items-center sm:gap-4 sm:p-4">
+                <div className="flex min-w-0 items-start gap-3 sm:flex-1 sm:items-center sm:gap-4">
                   <button
-                    onClick={() => {
-                      if (confirm(`Remove "${it.name}" from the catalog?`)) deactivate.mutate(it.id)
-                    }}
-                    className="text-slate-400 hover:text-red-600 p-1"
+                    type="button"
+                    onClick={() => setExpandedId(open ? null : it.id)}
+                    className="grid h-10 w-8 shrink-0 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                    aria-label={open ? 'Collapse units' : 'Expand units'}
                   >
-                    <Trash2 size={16} />
+                    {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                   </button>
+                  {it.image_url ? (
+                    <img src={it.image_url} alt="" className="h-16 w-16 shrink-0 rounded-lg bg-slate-100 object-cover" />
+                  ) : (
+                    <div className="h-16 w-16 shrink-0 rounded-lg bg-slate-100" />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <Link href={`/inventory/${it.id}`} className="block font-semibold leading-snug hover:text-blue-600 sm:truncate">
+                      {it.name}
+                      {!it.is_active && <span className="ml-2 text-xs text-slate-400">(inactive)</span>}
+                    </Link>
+                    <div className="mt-0.5 line-clamp-2 text-sm text-slate-500 sm:truncate">{it.description}</div>
+                    <div className="mt-2 flex flex-wrap items-center gap-2 sm:gap-3">
+                      <span className="rounded-full bg-slate-100 px-2 py-1 text-xs capitalize text-slate-600">{it.category}</span>
+                      <span className="text-xs text-slate-500">Qty on hand: {it.quantity_on_hand}</span>
+                    </div>
+                    {it.sku && <div className="mt-1 text-xs text-slate-400">SN: {it.sku}</div>}
+                  </div>
+                </div>
+                <div className="mt-3 flex items-center justify-between gap-3 border-t border-slate-100 pt-3 sm:mt-0 sm:shrink-0 sm:border-0 sm:pt-0">
+                  <div className="sm:text-right">
+                    <div className="text-sm font-semibold">${Number(it.monthly_rental_price ?? 0).toFixed(0)}/mo rental</div>
+                    <div className="text-xs text-slate-500">
+                      {it.sale_price != null ? `$${Number(it.sale_price).toFixed(0)} sale` : 'no sale price'}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Link href={`/inventory/${it.id}`} aria-label={`Edit ${it.name}`} className="grid h-10 w-10 place-items-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600">
+                      <Pencil size={16} />
+                    </Link>
+                    <button
+                      aria-label={`Remove ${it.name}`}
+                      onClick={() => {
+                        if (confirm(`Remove "${it.name}" from the catalog?`)) deactivate.mutate(it.id)
+                      }}
+                      className="grid h-10 w-10 place-items-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
                 </div>
               </div>
               {open && <UnitsPanel itemId={it.id} />}
@@ -189,7 +194,7 @@ function UnitsPanel({ itemId }: { itemId: string }) {
     <div className="border-t border-slate-100 px-4 pb-4 pt-3 space-y-2">
       <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Units</div>
       {units.data.map((u) => (
-        <div key={u.id} className="flex items-center justify-between gap-3 text-sm bg-slate-50 rounded-lg px-3 py-2">
+        <div key={u.id} className="flex flex-col items-stretch gap-3 rounded-lg bg-slate-50 px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <span className="font-medium">{u.asset_tag || u.serial_number || u.id.slice(0, 8)}</span>
             <span className={`ml-2 text-xs px-2 py-0.5 rounded-full capitalize ${
@@ -204,7 +209,7 @@ function UnitsPanel({ itemId }: { itemId: string }) {
               type="button"
               onClick={() => returnUnit.mutate(u.id)}
               disabled={returnUnit.isPending}
-              className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-2.5 py-1 disabled:opacity-50 shrink-0"
+              className="min-h-10 shrink-0 rounded-lg bg-emerald-600 px-3 py-2 text-xs text-white hover:bg-emerald-700 disabled:opacity-50"
             >
               Return to stock
             </button>
@@ -260,8 +265,8 @@ function ItemModal({ item, onClose }: { item: Partial<Item>; onClose: () => void
   const inp = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 
   return (
-    <div className="fixed inset-0 bg-black/30 grid place-items-center p-4 z-20" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-lg w-full max-w-lg p-6" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-30 grid place-items-center overflow-y-auto bg-black/30 p-4" onClick={onClose}>
+      <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-lg sm:p-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold">{isNew ? 'Add Item' : 'Edit Item'}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-700">
@@ -277,7 +282,7 @@ function ItemModal({ item, onClose }: { item: Partial<Item>; onClose: () => void
             <label className="block text-xs text-slate-500 mb-1">Description</label>
             <textarea value={f.description} onChange={set('description')} className={inp} rows={2} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="block text-xs text-slate-500 mb-1">Category</label>
               <select value={f.category} onChange={set('category')} className={inp}>

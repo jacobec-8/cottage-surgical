@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Camera, ChevronRight } from 'lucide-react'
+import { Camera, ChevronRight, Truck } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { statusClass, statusLabel } from '../lib/status'
@@ -88,18 +88,18 @@ export default function Delivery() {
   })
 
   return (
-    <div>
-      <h1 className="text-2xl font-semibold mb-1">{isDriver ? 'My Deliveries' : 'Delivery & Pickup'}</h1>
-      <p className="text-slate-500 text-sm mb-4">
+    <div className={isDriver ? 'mx-auto w-full max-w-4xl' : ''}>
+      <h1 className="mb-1 text-2xl font-semibold text-slate-950 sm:text-3xl">{isDriver ? 'My Deliveries' : 'Delivery & Pickup'}</h1>
+      <p className="mb-5 max-w-2xl text-sm leading-6 text-slate-500">
         {isDriver
-          ? 'Your assigned stops. Start a stop, then take a photo to complete it.'
+          ? 'Your assigned stops. Start when you arrive, then take a photo to complete the stop.'
           : 'Assign drivers and windows, or step in to run a stop. Drivers complete stops with a photo; you can override. Click a stop for the full order.'}
       </p>
 
-      <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1 mb-5">
+      <div className={`${isDriver ? 'grid w-full grid-cols-2 sm:inline-grid sm:w-auto' : 'inline-flex'} mb-5 rounded-xl border border-slate-200 bg-white p-1`}>
         {(['active', 'completed'] as const).map((v) => (
           <button key={v} onClick={() => setView(v)}
-            className={`px-4 py-1.5 text-sm rounded-md capitalize ${view === v ? 'bg-slate-900 text-white' : 'text-slate-600'}`}>
+            className={`min-h-11 rounded-lg px-4 py-2 text-sm font-medium capitalize transition-colors ${view === v ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
             {v === 'active' ? 'Active' : 'Completed'}
           </button>
         ))}
@@ -111,7 +111,15 @@ export default function Delivery() {
         <div className="text-amber-700 text-sm mb-3">Customer names may be incomplete — contact lookup failed.</div>
       )}
       {data && data.length === 0 && (
-        <div className="text-slate-500 text-sm">{view === 'active' ? 'No open stops right now.' : 'No completed deliveries yet.'}</div>
+        <div className="rounded-xl border border-dashed border-slate-300 bg-white px-5 py-12 text-center">
+          <TruckEmptyState />
+          <div className="mt-3 font-medium text-slate-700">
+            {view === 'active' ? 'No open stops' : 'No completed deliveries'}
+          </div>
+          <div className="mt-1 text-sm text-slate-500">
+            {view === 'active' ? 'New assignments will appear here.' : 'Completed stops will be saved here.'}
+          </div>
+        </div>
       )}
       <div className="space-y-3">
         {data?.map((d) =>
@@ -124,6 +132,14 @@ export default function Delivery() {
       {!isDriver && selected && (
         <OrderDetailPanel orderId={selected} onClose={closePanel} focusDeliveryId={focusDelivery} />
       )}
+    </div>
+  )
+}
+
+function TruckEmptyState() {
+  return (
+    <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-blue-50 text-blue-600" aria-hidden="true">
+      <Truck size={21} />
     </div>
   )
 }
@@ -258,8 +274,8 @@ function DeliveryRow({
 
   return (
     <div className={`bg-white border border-slate-200 rounded-xl p-4 ${card.className}`} {...card.props}>
-      <div className="flex items-center justify-between gap-3 mb-1">
-        <div className="min-w-0">
+      <div className="mb-1 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-medium">{customerLabel(d, contact)}</span>
             {isDriver && contact?.phone && (
@@ -288,12 +304,12 @@ function DeliveryRow({
             </div>
           )}
         </div>
-        <div className="flex items-center gap-2 shrink-0" onClick={stopOpen}>
+        <div className={`flex shrink-0 items-center gap-2 ${isDriver ? 'w-full sm:w-auto' : ''}`} onClick={stopOpen}>
           <DetailsHint show={Boolean(onOpen)} />
           {d.status === 'scheduled' && isDriver && (
             <button onClick={() => start.mutate()} disabled={start.isPending || !d.driver_id}
               title={!d.driver_id ? 'Needs a driver first' : undefined}
-              className="text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed">Start</button>
+              className="min-h-11 w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">Start stop</button>
           )}
           {d.status === 'scheduled' && !isDriver && (
             <span className="text-xs text-slate-400">waiting for driver to start</span>
@@ -304,7 +320,7 @@ function DeliveryRow({
                 <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden"
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) completeWithPhoto(f) }} />
                 <button onClick={() => fileRef.current?.click()} disabled={completing}
-                  className="flex items-center gap-1.5 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-3 py-1.5 disabled:opacity-50">
+                  className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50 sm:w-auto">
                   <Camera size={15} /> {completing ? 'Uploading…' : 'Complete + photo'}
                 </button>
               </>
@@ -352,7 +368,7 @@ function CompletedRow({ d, contact, onOpen, selected }: { d: Deliv; contact?: St
   const photo = d.delivery_photos?.[0]
   const card = clickableCard(d, onOpen, selected)
   return (
-    <div className={`bg-white border border-slate-200 rounded-xl p-4 flex items-start justify-between gap-4 ${card.className}`} {...card.props}>
+    <div className={`flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-start sm:justify-between ${card.className}`} {...card.props}>
       <div className="min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="font-medium">{customerLabel(d, contact)}</span>
@@ -369,7 +385,7 @@ function CompletedRow({ d, contact, onOpen, selected }: { d: Deliv; contact?: St
         <div className="text-xs text-slate-400 mt-1">Completed {d.completed_at ? new Date(d.completed_at).toLocaleString() : ''}</div>
         {photo?.notes && <div className="text-sm text-slate-500 mt-1 italic">“{photo.notes}”</div>}
       </div>
-      <div className="flex flex-col items-end gap-2 shrink-0" onClick={stopOpen}>
+      <div className="flex shrink-0 flex-row items-end justify-between gap-2 sm:flex-col sm:justify-start" onClick={stopOpen}>
         {photo ? <ProofPhoto path={photo.storage_path} /> : <span className="text-xs text-amber-600">no photo</span>}
         <DetailsHint show={Boolean(onOpen)} />
       </div>
