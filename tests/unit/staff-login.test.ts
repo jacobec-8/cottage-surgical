@@ -23,6 +23,10 @@ test('rejects email addresses and unknown usernames', () => {
   assert.equal(usernameToAuthEmail(''), null)
 })
 
+test('allows the real admin email', () => {
+  assert.equal(usernameToAuthEmail(' JACOB.CHANDRAN@GMAIL.COM '), 'jacob.chandran@gmail.com')
+})
+
 test('shows internal aliases as usernames', () => {
   assert.equal(
     authEmailToUsername('cottage-admin@staff-login.cottagesurgical.invalid'),

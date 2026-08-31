@@ -88,7 +88,7 @@ export default function Login() {
             <h2 className="text-xl font-bold">Sign In</h2>
             <p className="text-sm text-slate-500 mb-6">Enter your credentials to continue</p>
             <form onSubmit={submit}>
-              <label htmlFor="username" className="block text-xs font-medium tracking-wide text-slate-500 mb-1">USERNAME</label>
+              <label htmlFor="username" className="block text-xs font-medium tracking-wide text-slate-500 mb-1">USERNAME OR EMAIL</label>
               <input
                 id="username"
                 name="username"
@@ -98,7 +98,7 @@ export default function Login() {
                 autoComplete="username"
                 autoCapitalize="none"
                 spellCheck={false}
-                placeholder="Enter username"
+                placeholder="Enter username or email"
                 required
                 className="w-full border border-slate-300 rounded-lg px-3 py-2.5 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
