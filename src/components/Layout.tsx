@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import {
   LayoutDashboard, PlusCircle, Users, Package, CreditCard, Truck,
-  LogOut, Shield, ChevronRight, MapPin, Phone, Mail, Inbox, UserCog, ClipboardList, LockKeyhole,
+  LogOut, Shield, ChevronRight, MapPin, Phone, Mail, Inbox, UserCog, ClipboardList, LockKeyhole, UsersRound,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
@@ -26,6 +26,7 @@ const NAV = [
   { to: '/billing', label: 'Billing', icon: CreditCard, roles: STAFF, module: 'billing' },
   { to: '/delivery', label: 'Delivery & Pickup', icon: Truck, roles: ALL, badge: 'deliveries', module: 'delivery' },
   { to: '/drivers', label: 'Drivers', icon: UserCog, roles: STAFF, module: 'drivers' },
+  { to: '/staff', label: 'Staff & Users', icon: UsersRound, roles: ['admin'], adminOnly: true },
   { to: '/staff-access', label: 'Staff Access', icon: LockKeyhole, roles: ['admin'], adminOnly: true },
 ]
 

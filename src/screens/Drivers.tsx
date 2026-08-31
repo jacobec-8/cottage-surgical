@@ -1,8 +1,11 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Truck, AlertTriangle } from 'lucide-react'
+import { Plus, Truck, AlertTriangle, ChevronRight } from 'lucide-react'
+import { useAuth } from '../contexts/AuthContext'
+import { authEmailToUsername } from '../lib/staffLogin'
 import { supabase } from '../lib/supabase'
 
 type Driver = {
@@ -16,6 +19,7 @@ type Driver = {
 type DriverLogin = { id: string; email: string; full_name: string | null }
 
 export default function Drivers() {
+  const { profile } = useAuth()
   const qc = useQueryClient()
   const [adding, setAdding] = useState(false)
   const [f, setF] = useState({ first_name: '', last_name: '', phone: '' })
@@ -146,6 +150,7 @@ export default function Drivers() {
             d={d}
             unlinkedLogins={unlinkedLogins}
             linking={link.isPending}
+            openSettings={profile?.role === 'admin'}
             onLink={(profileId) => link.mutate({ driverId: d.id, profileId })}
           />
         ))}
@@ -158,11 +163,13 @@ function DriverRow({
   d,
   unlinkedLogins,
   linking,
+  openSettings,
   onLink,
 }: {
   d: Driver
   unlinkedLogins: DriverLogin[]
   linking: boolean
+  openSettings: boolean
   onLink: (profileId: string) => void
 }) {
   const [selected, setSelected] = useState('')
@@ -170,23 +177,14 @@ function DriverRow({
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-4">
-      <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-lg bg-slate-100 grid place-items-center text-slate-500">
-          <Truck size={18} />
-        </div>
-        <div className="flex-1">
-          <div className="font-medium">
-            {d.first_name} {d.last_name}
-          </div>
-          <div className="text-sm text-slate-500">{d.phone || 'no phone'}</div>
-        </div>
-        {unlinked && (
-          <span className="flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-700">
-            <AlertTriangle size={12} /> no login
-          </span>
-        )}
-        <span className="text-xs px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 capitalize">{d.status}</span>
-      </div>
+      {d.user_id && openSettings ? (
+        <Link href={`/staff/${d.user_id}`} className="flex items-center gap-3 rounded-lg -m-2 p-2 hover:bg-slate-50">
+          <DriverSummary d={d} unlinked={unlinked} />
+          <ChevronRight size={18} className="text-slate-400" />
+        </Link>
+      ) : (
+        <div className="flex items-center gap-3"><DriverSummary d={d} unlinked={unlinked} /></div>
+      )}
       {unlinked && (
         <div className="mt-3 pt-3 border-t border-slate-100">
           <div className="text-xs text-amber-700 mb-2">
@@ -194,8 +192,7 @@ function DriverRow({
           </div>
           {unlinkedLogins.length === 0 ? (
             <div className="text-xs text-slate-500">
-              No unlinked driver logins available. Create a user with role{' '}
-              <code className="bg-slate-100 px-1 rounded">driver</code> (seed script or admin), then link them here.
+              No unlinked driver logins available. Login provisioning is handled separately.
             </div>
           ) : (
             <div className="flex items-center gap-2 flex-wrap">
@@ -207,7 +204,7 @@ function DriverRow({
                 <option value="">Select a login…</option>
                 {unlinkedLogins.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.full_name ? `${p.full_name} — ${p.email}` : p.email}
+                    {p.full_name ? `${p.full_name} — ${authEmailToUsername(p.email)}` : authEmailToUsername(p.email)}
                   </option>
                 ))}
               </select>
@@ -224,4 +221,8 @@ function DriverRow({
       )}
     </div>
   )
+}
+
+function DriverSummary({ d, unlinked }: { d: Driver; unlinked: boolean }) {
+  return <><div className="w-9 h-9 rounded-lg bg-slate-100 grid place-items-center text-slate-500"><Truck size={18} /></div><div className="flex-1"><div className="font-medium">{d.first_name} {d.last_name}</div><div className="text-sm text-slate-500">{d.phone || 'no phone'}</div></div>{unlinked && <span className="flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-700"><AlertTriangle size={12} /> no login</span>}<span className="text-xs px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 capitalize">{d.status}</span></>
 }

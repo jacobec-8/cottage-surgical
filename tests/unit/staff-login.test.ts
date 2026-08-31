@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { usernameToAuthEmail } from '../../src/lib/staffLogin.ts'
+import { authEmailToUsername, usernameToAuthEmail } from '../../src/lib/staffLogin.ts'
 
 test('maps the three staff usernames to internal auth aliases', () => {
   assert.equal(
@@ -21,4 +21,12 @@ test('rejects email addresses and unknown usernames', () => {
   assert.equal(usernameToAuthEmail('admin@example.com'), null)
   assert.equal(usernameToAuthEmail('admin'), null)
   assert.equal(usernameToAuthEmail(''), null)
+})
+
+test('shows internal aliases as usernames', () => {
+  assert.equal(
+    authEmailToUsername('cottage-admin@staff-login.cottagesurgical.invalid'),
+    'cottage-admin',
+  )
+  assert.equal(authEmailToUsername('legacy@example.com'), 'legacy@example.com')
 })

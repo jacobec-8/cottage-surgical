@@ -36,6 +36,7 @@ const STAFF_SYNC: RealtimeInvalidateMap = {
   // Admin module locks should disappear from or return to staff navigation immediately.
   staff_module_access: ['staff_module_access'],
   inventory_item_notes: ['inventory_item_notes'],
+  staff_profile_notes: ['staff_profile_notes'],
 }
 
 // Drivers: own deliveries (RLS-scoped). Notifications are the fast path when a
