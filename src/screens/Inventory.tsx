@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Search, Pencil, Trash2, X, ChevronDown, ChevronRight } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, X, ChevronDown, ChevronRight, ImagePlus } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
 type Item = {
@@ -233,9 +233,32 @@ function ItemModal({ item, onClose }: { item: Partial<Item>; onClose: () => void
     quantity_on_hand: item.quantity_on_hand?.toString() ?? '0',
     is_active: item.is_active ?? true,
   })
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(item.image_url ?? null)
   const [err, setErr] = useState('')
   const set = (k: keyof typeof f) => (e: any) =>
     setF({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value })
+
+  useEffect(() => {
+    if (!imageFile) return
+    const url = URL.createObjectURL(imageFile)
+    setImagePreview(url)
+    return () => URL.revokeObjectURL(url)
+  }, [imageFile])
+
+  const chooseImage = (file?: File) => {
+    setErr('')
+    if (!file) return
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
+      setErr('Choose a JPG, PNG, WebP, or GIF image.')
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setErr('Image must be 5 MB or smaller.')
+      return
+    }
+    setImageFile(file)
+  }
 
   const save = useMutation({
     mutationFn: async () => {
@@ -250,10 +273,27 @@ function ItemModal({ item, onClose }: { item: Partial<Item>; onClose: () => void
         is_active: f.is_active,
       }
       if (!payload.name) throw new Error('Name is required')
+
+      let uploadedPath: string | null = null
+      if (imageFile) {
+        const ext = imageFile.name.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg'
+        uploadedPath = `${crypto.randomUUID()}/catalog.${ext}`
+        const upload = await supabase.storage.from('equipment-images').upload(uploadedPath, imageFile, {
+          cacheControl: '3600',
+          contentType: imageFile.type,
+          upsert: false,
+        })
+        if (upload.error) throw upload.error
+        payload.image_url = supabase.storage.from('equipment-images').getPublicUrl(uploadedPath).data.publicUrl
+      }
+
       const res = isNew
         ? await supabase.from('equipment_items').insert(payload)
         : await supabase.from('equipment_items').update(payload).eq('id', item.id!)
-      if (res.error) throw res.error
+      if (res.error) {
+        if (uploadedPath) await supabase.storage.from('equipment-images').remove([uploadedPath])
+        throw res.error
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['equipment_items'] })
@@ -265,8 +305,8 @@ function ItemModal({ item, onClose }: { item: Partial<Item>; onClose: () => void
   const inp = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 
   return (
-    <div className="fixed inset-0 z-30 grid place-items-center overflow-y-auto bg-black/30 p-4" onClick={onClose}>
-      <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-lg sm:p-6" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-30 grid items-start justify-items-center overflow-y-auto bg-black/30 p-4 sm:items-center" onClick={onClose}>
+      <div className="max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 shadow-lg sm:p-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold">{isNew ? 'Add Item' : 'Edit Item'}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-700">
@@ -274,6 +314,33 @@ function ItemModal({ item, onClose }: { item: Partial<Item>; onClose: () => void
           </button>
         </div>
         <div className="space-y-3">
+          <div>
+            <label className="mb-1 block text-xs text-slate-500">Product image</label>
+            <label className="flex min-h-28 cursor-pointer items-center gap-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-3 transition hover:border-blue-400 hover:bg-blue-50/40">
+              {imagePreview ? (
+                <img src={imagePreview} alt="Product preview" className="h-24 w-24 shrink-0 rounded-lg bg-white object-contain" />
+              ) : (
+                <span className="grid h-24 w-24 shrink-0 place-items-center rounded-lg bg-white text-slate-400">
+                  <ImagePlus size={28} />
+                </span>
+              )}
+              <span className="min-w-0">
+                <span className="block text-sm font-medium text-slate-700">
+                  {imageFile ? imageFile.name : 'Choose a product picture'}
+                </span>
+                <span className="mt-1 block text-xs leading-5 text-slate-500">JPG, PNG, WebP, or GIF · up to 5 MB</span>
+                <span className="mt-2 inline-flex rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-blue-600 shadow-sm ring-1 ring-slate-200">
+                  {imagePreview ? 'Change image' : 'Upload image'}
+                </span>
+              </span>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                className="sr-only"
+                onChange={(e) => chooseImage(e.target.files?.[0])}
+              />
+            </label>
+          </div>
           <div>
             <label className="block text-xs text-slate-500 mb-1">Name</label>
             <input value={f.name} onChange={set('name')} className={inp} />

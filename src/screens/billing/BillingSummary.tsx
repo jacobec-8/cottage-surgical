@@ -24,7 +24,7 @@ export default function BillingSummary({ s }: { s: Summary }) {
       <Tile label="Overdue" value={fmtMoney(s.overdue.amount)} sub={`${s.overdue.count} payment${s.overdue.count === 1 ? '' : 's'}`} tone={s.overdue.count ? 'red' : 'slate'} />
       <Tile label="Due in 7 days" value={fmtMoney(s.dueSoon.amount)} sub={`${s.dueSoon.count} payment${s.dueSoon.count === 1 ? '' : 's'}`} tone={s.dueSoon.count ? 'amber' : 'slate'} />
       <Tile label="Returns due" value={String(s.returnsDue)} sub="next 7 days or late" tone={s.returnsDue ? 'blue' : 'slate'} />
-      <Tile label="Active rentals" value={String(s.active)} sub="being billed" tone="emerald" />
+      <Tile label="Open rentals" value={String(s.active)} sub="being billed" tone="emerald" />
       <Tile label="Deposits held" value={fmtMoney(s.depositsHeld)} tone="slate" />
     </div>
   )

@@ -15,7 +15,7 @@ import { fmtDate } from './orders/format'
 
 const TABS: { id: BillingTab; label: string }[] = [
   { id: 'attention', label: 'Needs attention' },
-  { id: 'active', label: 'Active' },
+  { id: 'active', label: 'Current' },
   { id: 'awaiting', label: 'Awaiting delivery' },
   { id: 'ended', label: 'Ended' },
   { id: 'all', label: 'All' },

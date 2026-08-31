@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
+import { statusLabel } from '../lib/status'
 
 type Item = {
   id: string
@@ -268,7 +269,7 @@ function RentalCard({ assignments, loading, full = false }: { assignments: Renta
     <section className="bg-white border border-slate-200 rounded-2xl p-5">
       <div className="flex items-center justify-between mb-4"><h2 className="font-semibold text-lg">Anything out for rent</h2><span className="text-xs bg-blue-50 text-blue-700 rounded-full px-2 py-1">{assignments.length} active</span></div>
       {loading ? <div className="text-sm text-slate-500">Loading assignments…</div> : visible.length === 0 ? <div className="text-sm text-slate-500">Nothing is currently reserved or out for rent.</div> : (
-        <div className="space-y-3">{visible.map((line) => <Link key={line.id} href={`/orders?order=${line.order?.id}`} className="block border border-slate-100 rounded-xl p-3 hover:border-blue-200"><div className="flex items-center justify-between gap-3"><div className="font-medium">{line.order?.customer?.full_name || 'Customer'}</div><span className="text-xs capitalize bg-slate-100 rounded-full px-2 py-1">{line.order?.status}</span></div><div className="text-sm text-slate-500 mt-1">Order #{line.order?.order_no} · {line.unit?.asset_tag || line.unit?.serial_number || `${line.quantity} unit${line.quantity === 1 ? '' : 's'}`}</div></Link>)}</div>
+        <div className="space-y-3">{visible.map((line) => <Link key={line.id} href={`/orders?order=${line.order?.id}`} className="block border border-slate-100 rounded-xl p-3 hover:border-blue-200"><div className="flex items-center justify-between gap-3"><div className="font-medium">{line.order?.customer?.full_name || 'Customer'}</div><span className="text-xs capitalize bg-slate-100 rounded-full px-2 py-1">{statusLabel(line.order?.status ?? '')}</span></div><div className="text-sm text-slate-500 mt-1">Order #{line.order?.order_no} · {line.unit?.asset_tag || line.unit?.serial_number || `${line.quantity} unit${line.quantity === 1 ? '' : 's'}`}</div></Link>)}</div>
       )}
     </section>
   )

@@ -14,7 +14,7 @@ import { statusClass, statusLabel } from '../lib/status'
 
 const MODULES = [
   { to: '/customers', icon: Users, title: 'Customers', desc: 'Directory with rental history and payment methods on file' },
-  { to: '/orders', icon: ClipboardList, title: 'Rentals', desc: 'All open, pending, delivered, active, overdue, pickup, closed' },
+  { to: '/orders', icon: ClipboardList, title: 'Rentals', desc: 'Approved, open, scheduled, overdue, pickup, and closed rentals' },
   { to: '/inventory', icon: Package, title: 'Inventory', desc: 'Wheelchairs, beds, oxygen, supplies, serial/asset tracking' },
   { to: '/billing', icon: CreditCard, title: 'Billing', desc: 'Invoices, deposits, recurring charges, failed payments, refunds' },
   { to: '/delivery', icon: Truck, title: 'Routes', desc: 'Delivery and pickup schedule by driver' },
@@ -81,7 +81,7 @@ export default function Dashboard() {
   const items = (r: any) => r.rental_line_items?.[0]?.count ?? 0
 
   const tiles = [
-    { label: 'Active', value: stats.data?.active_rentals ?? 0, icon: CheckCircle, color: 'text-emerald-600 bg-emerald-50' },
+    { label: 'Open Rentals', value: stats.data?.active_rentals ?? 0, icon: CheckCircle, color: 'text-emerald-600 bg-emerald-50' },
     { label: 'Overdue', value: stats.data?.overdue_rentals ?? 0, icon: AlertCircle, color: 'text-red-600 bg-red-50' },
     { label: 'Scheduled', value: stats.data?.scheduled_rentals ?? 0, icon: CalendarClock, color: 'text-blue-600 bg-blue-50' },
     { label: 'Monthly Rev', value: `$${Number(stats.data?.active_monthly_rate ?? 0).toLocaleString()}`, icon: DollarSign, color: 'text-violet-600 bg-violet-50' },

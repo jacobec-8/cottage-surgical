@@ -19,5 +19,7 @@ export function statusClass(s: string): string {
 }
 
 export function statusLabel(s: string): string {
+  if (s === 'open') return 'approved'
+  if (s === 'active') return 'open'
   return (s || '').replace(/_/g, ' ')
 }

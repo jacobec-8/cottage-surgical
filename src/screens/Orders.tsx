@@ -13,8 +13,9 @@ import { useSchedulePickup } from './orders/useSchedulePickup'
 import { useSelectedOrder } from './orders/useSelectedOrder'
 
 /** Confirmed / in-progress work — excludes inbox and unpaid checkouts; cancelled has its own tab. */
-const WORK_TABS = ['all', 'open', 'scheduled', 'active', 'pickup_scheduled', 'closed', 'cancelled'] as const
+const WORK_TABS = ['all', 'open', 'scheduled', 'pickup_scheduled', 'closed', 'cancelled'] as const
 type Tab = (typeof WORK_TABS)[number] | 'unpaid'
+const OPEN_RENTAL_STATUSES = new Set(['open', 'active', 'overdue'])
 
 export default function Orders() {
   const [tab, setTab] = useState<Tab>('open')
@@ -63,13 +64,20 @@ export default function Orders() {
     // "All" = live work; cancelled orders only count under their own tab.
     const live = (work.data ?? []).filter((o) => o.status !== 'cancelled')
     const c: Record<string, number> = { all: live.length, unpaid: unpaid.data?.length ?? 0 }
-    for (const o of work.data ?? []) c[o.status] = (c[o.status] ?? 0) + 1
+    for (const o of work.data ?? []) {
+      const group = OPEN_RENTAL_STATUSES.has(o.status) ? 'open' : o.status
+      c[group] = (c[group] ?? 0) + 1
+    }
     return c
   }, [work.data, unpaid.data])
 
   const shown = tab === 'unpaid'
     ? (unpaid.data ?? [])
-    : (work.data ?? []).filter((o) => (tab === 'all' ? o.status !== 'cancelled' : o.status === tab))
+    : (work.data ?? []).filter((o) => (
+        tab === 'all' ? o.status !== 'cancelled'
+          : tab === 'open' ? OPEN_RENTAL_STATUSES.has(o.status)
+            : o.status === tab
+      ))
 
   const isLoading = tab === 'unpaid' ? unpaid.isLoading : work.isLoading
   const error = tab === 'unpaid' ? unpaid.error : work.error
@@ -86,8 +94,8 @@ export default function Orders() {
     <div>
       <h1 className="text-2xl font-semibold mb-1">Orders</h1>
       <p className="text-slate-500 text-sm mb-5">
-        Confirmed and in-progress orders — click any order for full details. Unpaid storefront checkouts live under Unpaid (not mixed into Open).
-        Active rentals: use Schedule pickup to queue a return on the Delivery board.
+        Open includes approved rentals awaiting delivery and rentals currently out. The status changes from Approved to Open after delivery.
+        Use Schedule pickup to queue a return on the Delivery board. Unpaid checkouts stay under Unpaid.
       </p>
 
       {actionMsg && (
