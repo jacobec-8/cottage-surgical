@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { hasSupabaseConfig, supabase } from '../lib/supabase'
+import { usernameToAuthEmail } from '../lib/staffLogin'
 
 export type Profile = {
   id: string
@@ -23,7 +24,7 @@ type AuthCtx = {
   profile: Profile | null
   loading: boolean
   profileLoaded: boolean
-  signIn: (email: string, password: string) => Promise<{ error?: string }>
+  signIn: (username: string, password: string) => Promise<{ error?: string }>
   signOut: () => Promise<void>
 }
 
@@ -144,9 +145,11 @@ export function AuthProvider({ children, initialUserId, initialProfile }: AuthPr
     prevProfileAccess.current = accessKey
   }, [profile, profileLoaded, queryClient, userId])
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (username: string, password: string) => {
+    const email = usernameToAuthEmail(username)
+    if (!email) return { error: 'Invalid username or password' }
     const { error } = await supabase.auth.signInWithPassword({ email, password })
-    return error ? { error: error.message } : {}
+    return error ? { error: 'Invalid username or password' } : {}
   }
 
   const signOut = async () => {

@@ -16,16 +16,16 @@ const FEATURES = [
 export default function Login() {
   const { signIn } = useAuth()
   const router = useRouter()
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [show, setShow] = useState(false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
-  const doSignIn = async (email: string, pw: string) => {
+  const doSignIn = async (loginUsername: string, pw: string) => {
     setBusy(true)
     setError('')
-    const { error } = await signIn(email, pw)
+    const { error } = await signIn(loginUsername, pw)
     setBusy(false)
     if (error) setError(error)
     else {
@@ -35,7 +35,7 @@ export default function Login() {
   }
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    doSignIn(email, password)
+    doSignIn(username, password)
   }
 
   return (
@@ -88,21 +88,29 @@ export default function Login() {
             <h2 className="text-xl font-bold">Sign In</h2>
             <p className="text-sm text-slate-500 mb-6">Enter your credentials to continue</p>
             <form onSubmit={submit}>
-              <label className="block text-xs font-medium tracking-wide text-slate-500 mb-1">EMAIL</label>
+              <label htmlFor="username" className="block text-xs font-medium tracking-wide text-slate-500 mb-1">USERNAME</label>
               <input
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                type="email"
-                placeholder="Enter email"
+                id="username"
+                name="username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                type="text"
+                autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
+                placeholder="Enter username"
                 required
                 className="w-full border border-slate-300 rounded-lg px-3 py-2.5 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
-              <label className="block text-xs font-medium tracking-wide text-slate-500 mb-1">PASSWORD</label>
+              <label htmlFor="password" className="block text-xs font-medium tracking-wide text-slate-500 mb-1">PASSWORD</label>
               <div className="relative mb-5">
                 <input
+                  id="password"
+                  name="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   type={show ? 'text' : 'password'}
+                  autoComplete="current-password"
                   placeholder="Enter password"
                   required
                   className="w-full border border-slate-300 rounded-lg px-3 py-2.5 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -110,6 +118,7 @@ export default function Login() {
                 <button
                   type="button"
                   onClick={() => setShow((s) => !s)}
+                  aria-label={show ? 'Hide password' : 'Show password'}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                 >
                   {show ? <EyeOff size={18} /> : <Eye size={18} />}
