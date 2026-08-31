@@ -22,7 +22,7 @@ function effects(o: OrderDetail, kind: CloseKind): string[] {
   if (kind === 'cancel') {
     if (activeUnits) out.push(`Release ${activeUnits} reserved unit${activeUnits === 1 ? '' : 's'} back to available stock`)
   } else if (activeUnits) {
-    out.push(`Move ${activeUnits} unit${activeUnits === 1 ? '' : 's'} to maintenance (inspect before re-renting)`)
+    out.push(`Return ${activeUnits} unit${activeUnits === 1 ? '' : 's'} to available inventory`)
   }
   if (openLegs) out.push(`Cancel ${openLegs} open delivery/pickup stop${openLegs === 1 ? '' : 's'} on the Delivery board`)
   if (liveCharge) out.push(`End the ${fmtMoney(liveCharge.amount)}/mo billing (any overdue amount stays on record)`)
@@ -47,7 +47,7 @@ export default function CloseOutControls({ o, onConfirm, busy }: Props) {
         onClick={() => { setReason(''); setOpen(kind) }}
         disabled={busy}
         className="inline-flex items-center gap-1.5 text-sm border border-slate-300 text-slate-700 hover:border-red-300 hover:text-red-700 rounded-lg px-3 py-1.5 disabled:opacity-50"
-        title={kind === 'cancel' ? 'Equipment not delivered yet — release stock and cancel' : 'Equipment came back but the pickup wasn’t logged — close the rental'}
+        title={kind === 'cancel' ? 'Release reserved stock and cancel the order' : 'Return the equipment to inventory and close the rental'}
       >
         <Icon size={15} /> {label}
       </button>
@@ -60,7 +60,7 @@ export default function CloseOutControls({ o, onConfirm, busy }: Props) {
       <div className="flex items-start gap-2">
         <AlertTriangle size={16} className="mt-0.5 shrink-0" />
         <div className="min-w-0 flex-1">
-          <p className="font-medium">{label} — this will:</p>
+          <p className="font-medium">{label}. This will:</p>
           <ul className="mt-1 list-disc pl-5 space-y-0.5 text-red-900/90">
             {effects(o, kind).map((e) => <li key={e}>{e}</li>)}
           </ul>

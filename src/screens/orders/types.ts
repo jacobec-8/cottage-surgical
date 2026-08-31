@@ -131,5 +131,5 @@ export const PICKUP_ELIGIBLE: ReadonlySet<string> = new Set(['active', 'overdue'
 
 /** Equipment not yet delivered → "Cancel order" (releases stock, cancels legs). */
 export const CANCELLABLE: ReadonlySet<string> = new Set(['requested', 'open', 'pending', 'scheduled', 'pending_payment'])
-/** Equipment is out (or came back untracked) → "Close out" (units to maintenance, order closed). */
+/** Equipment is out (or came back untracked) → "Close out" (units available, order closed). */
 export const CLOSEABLE: ReadonlySet<string> = new Set(['delivered', 'active', 'overdue', 'pickup_scheduled'])

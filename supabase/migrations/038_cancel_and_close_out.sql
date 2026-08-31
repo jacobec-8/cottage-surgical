@@ -18,7 +18,7 @@
 --   close_out_order(p_order_id, p_reason) — equipment IS out / came back untracked
 --     statuses: delivered | active | overdue | pickup_scheduled
 --     Same effect as a completed pickup minus driver + photo:
---     * units → maintenance (inspect before re-rent)   * line items → inactive
+--     * units → available                              * line items → inactive
 --     * open pickup leg → cancelled                     * recurring charge → ended
 --     * order → closed, end_date = today
 --     Refuses with reason 'not_delivered' for not-yet-delivered orders (use cancel).
@@ -135,9 +135,9 @@ BEGIN
     RETURN jsonb_build_object('ok', false, 'reason', 'not_delivered', 'status', v_status);
   END IF;
 
-  -- Equipment came back (untracked): route units through inspection.
+  -- Equipment came back and returns directly to available inventory.
   UPDATE public.equipment_units u
-     SET status = 'maintenance'
+     SET status = 'available'
     FROM public.rental_line_items li
    WHERE li.order_id = p_order_id AND li.is_active AND li.equipment_unit_id = u.id
      AND u.status IN ('reserved', 'rented');
@@ -157,7 +157,7 @@ BEGIN
          closed_reason = btrim(p_reason), closed_at = now(), closed_by = auth.uid()
    WHERE id = p_order_id;
 
-  RETURN jsonb_build_object('ok', true, 'units_to_maintenance', v_units, 'legs_cancelled', v_legs);
+  RETURN jsonb_build_object('ok', true, 'units_released', v_units, 'legs_cancelled', v_legs);
 END;
 $$;
 

@@ -16,7 +16,7 @@ const REASONS: Record<string, string> = {
   refund_failed: 'Stripe did not accept the refund. The order was not cancelled; try again or check Stripe.',
 }
 
-type Result = { ok: boolean; reason?: string; units_released?: number; units_to_maintenance?: number; legs_cancelled?: number; refunded?: boolean }
+type Result = { ok: boolean; reason?: string; units_released?: number; legs_cancelled?: number; refunded?: boolean }
 
 /** Cancel (not delivered) or close out (equipment out) an order via the atomic RPCs (038). */
 export function useCloseOrder(onMessage: (msg: string) => void) {
@@ -36,8 +36,8 @@ export function useCloseOrder(onMessage: (msg: string) => void) {
       qc.invalidateQueries({ queryKey: ['equipment_units'] })
       onMessage(
         r.kind === 'cancel'
-          ? `Order cancelled${r.refunded ? ' and Stripe refund initiated' : ''} — ${r.units_released ?? 0} unit(s) released, ${r.legs_cancelled ?? 0} stop(s) cancelled, billing ended. Deposit (if any) is still held.`
-          : `Order closed out — ${r.units_to_maintenance ?? 0} unit(s) moved to maintenance for inspection, billing ended. Deposit (if any) is still held.`,
+          ? `Order cancelled${r.refunded ? ' and Stripe refund initiated' : ''}. ${r.units_released ?? 0} unit(s) released. ${r.legs_cancelled ?? 0} stop(s) cancelled. Billing ended. The deposit remains held.`
+          : `Order closed. ${r.units_released ?? 0} unit(s) returned to available inventory. Billing ended. The deposit remains held.`,
       )
     },
     onError: (e) => onMessage((e as Error).message),

@@ -63,7 +63,7 @@ export default function Inventory() {
       </div>
       <h2 className="text-lg font-semibold mt-2">Equipment &amp; Supplies</h2>
       <p className="text-slate-500 text-sm mb-5">
-        Manage rental inventory, pricing, and stock. Expand an item to return units from maintenance to available stock.
+        Manage rental inventory, pricing, and stock. Returned units become available when the rental closes.
       </p>
 
       <div className="relative mb-4">
@@ -152,7 +152,6 @@ export default function Inventory() {
 type Unit = { id: string; serial_number: string | null; asset_tag: string | null; status: string }
 
 function UnitsPanel({ itemId }: { itemId: string }) {
-  const qc = useQueryClient()
   const units = useQuery({
     queryKey: ['equipment_units', itemId],
     queryFn: async () => {
@@ -164,20 +163,6 @@ function UnitsPanel({ itemId }: { itemId: string }) {
       if (error) throw error
       return data as Unit[]
     },
-  })
-
-  const returnUnit = useMutation({
-    mutationFn: async (unitId: string) => {
-      const { data, error } = await supabase.rpc('return_unit_to_available', { p_unit_id: unitId })
-      if (error) throw error
-      if (!data?.ok) throw new Error(data?.reason || 'Could not return unit')
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['equipment_units', itemId] })
-      qc.invalidateQueries({ queryKey: ['equipment_items'] })
-      qc.invalidateQueries({ queryKey: ['neworder_items'] })
-    },
-    onError: (e) => alert((e as Error).message),
   })
 
   if (units.isLoading) return <div className="px-4 pb-4 text-sm text-slate-500">Loading units…</div>
@@ -199,21 +184,10 @@ function UnitsPanel({ itemId }: { itemId: string }) {
             <span className="font-medium">{u.asset_tag || u.serial_number || u.id.slice(0, 8)}</span>
             <span className={`ml-2 text-xs px-2 py-0.5 rounded-full capitalize ${
               u.status === 'available' ? 'bg-emerald-100 text-emerald-700'
-                : u.status === 'maintenance' ? 'bg-amber-100 text-amber-800'
-                  : u.status === 'rented' || u.status === 'reserved' ? 'bg-blue-100 text-blue-700'
-                    : 'bg-slate-200 text-slate-600'
+                : u.status === 'rented' || u.status === 'reserved' ? 'bg-blue-100 text-blue-700'
+                  : 'bg-slate-200 text-slate-600'
             }`}>{u.status}</span>
           </div>
-          {u.status === 'maintenance' && (
-            <button
-              type="button"
-              onClick={() => returnUnit.mutate(u.id)}
-              disabled={returnUnit.isPending}
-              className="min-h-10 shrink-0 rounded-lg bg-emerald-600 px-3 py-2 text-xs text-white hover:bg-emerald-700 disabled:opacity-50"
-            >
-              Return to stock
-            </button>
-          )}
         </div>
       ))}
     </div>

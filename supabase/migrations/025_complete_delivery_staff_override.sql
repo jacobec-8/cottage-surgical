@@ -77,7 +77,7 @@ BEGIN
      WHERE order_id = v_order AND status IN ('current', 'paused');
 
   ELSIF v_leg = 'pickup' THEN
-    UPDATE public.equipment_units u SET status = 'maintenance'
+    UPDATE public.equipment_units u SET status = 'available'
       FROM public.rental_line_items li
      WHERE li.order_id = v_order AND li.is_active AND li.equipment_unit_id = u.id;
     UPDATE public.rental_line_items SET is_active = FALSE WHERE order_id = v_order AND is_active;

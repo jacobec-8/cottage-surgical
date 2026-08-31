@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, Boxes, CheckCircle2, ClipboardList, History, MessageSquarePlus,
-  Package, Pencil, Save, Tag, Wrench, X,
+  Package, Pencil, Save, Tag, X,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
@@ -33,7 +33,7 @@ type Unit = {
   id: string
   asset_tag: string | null
   serial_number: string | null
-  status: 'available' | 'reserved' | 'rented' | 'maintenance' | 'retired' | string
+  status: 'available' | 'reserved' | 'rented' | 'retired' | string
   condition_notes: string | null
   acquired_on: string | null
 }
@@ -119,7 +119,7 @@ export default function InventoryItemDetail({ itemId }: { itemId: string }) {
   })
 
   const counts = useMemo(() => {
-    const result = { total: units.data?.length ?? 0, available: 0, reserved: 0, rented: 0, maintenance: 0, retired: 0 }
+    const result = { total: units.data?.length ?? 0, available: 0, reserved: 0, rented: 0, retired: 0 }
     units.data?.forEach((unit) => {
       if (unit.status in result) result[unit.status as keyof typeof result] += 1
     })
@@ -202,12 +202,11 @@ export default function InventoryItemDetail({ itemId }: { itemId: string }) {
           <div className="space-y-5">
             <section className="bg-white border border-slate-200 rounded-2xl p-5">
               <h2 className="font-semibold text-lg mb-4">Inventory position</h2>
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <Metric label="Total units" value={product.is_serialized ? counts.total : product.quantity_on_hand} icon={Boxes} />
                 <Metric label="Available" value={product.is_serialized ? counts.available : product.quantity_on_hand} icon={CheckCircle2} tone="green" />
                 <Metric label="Reserved" value={counts.reserved} icon={Tag} tone="blue" />
                 <Metric label="Rented" value={counts.rented} icon={ClipboardList} tone="violet" />
-                <Metric label="Maintenance" value={counts.maintenance} icon={Wrench} tone="amber" />
               </div>
             </section>
 
