@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, type ChangeEvent, type FormEvent } from 'react'
+import { useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import Link from 'next/link'
 import { X, ShoppingCart, Trash2, Plus, Minus, CheckCircle, CreditCard, Store } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
@@ -8,7 +8,7 @@ import { dispatchCustomerEmails } from '../../lib/customerEmails'
 import { useCart } from './CartContext'
 
 const REASONS: Record<string, string> = {
-  rate_limited: 'You just submitted a request — please wait a moment before sending the rest.',
+  rate_limited: 'A request was recently submitted with this contact information. Please wait two minutes and try again, or call us if you need help.',
   missing_name: 'Please enter your name.',
   invalid_item: 'One of your items isn’t available right now. Please remove it and try again.',
   no_items: 'Your cart is empty.',
@@ -20,6 +20,7 @@ export default function CartDrawer() {
   const [paymentChoice, setPaymentChoice] = useState<'in_store' | 'online'>('in_store')
   const [form, setForm] = useState({ full_name: '', phone: '', email: '', line1: '', city: '', state: 'NY', zip: '', notes: '' })
   const [busy, setBusy] = useState(false)
+  const submittingRef = useRef(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState<number[] | null>(null)
 
@@ -31,7 +32,11 @@ export default function CartDrawer() {
     setForm({ ...form, [k]: e.target.value })
 
   const submit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault(); setBusy(true); setError('')
+    e.preventDefault()
+    if (submittingRef.current) return
+    submittingRef.current = true
+    setBusy(true)
+    setError('')
     try {
       const customer = { full_name: form.full_name, phone: form.phone, email: form.email }
       const address = { line1: form.line1, city: form.city, state: form.state, zip: form.zip }
@@ -68,7 +73,14 @@ export default function CartDrawer() {
             p_customer: customer, p_address: address, p_notes: form.notes || null,
           })
           if (error) throw new Error('Something went wrong. Please try again or call us.')
-          if (!data?.ok) throw new Error(REASONS[data?.reason] || 'We couldn’t submit your rental request. Please call us.')
+          if (!data?.ok) {
+            if (data?.reason === 'rate_limited') {
+              clear()
+              setDone([])
+              return
+            }
+            throw new Error(REASONS[data?.reason] || 'We couldn’t submit your rental request. Please call us.')
+          }
           rentNo = data.order_no
           void dispatchCustomerEmails()
         }
@@ -99,6 +111,7 @@ export default function CartDrawer() {
     } catch (e) {
       setError((e as Error).message)
     } finally {
+      submittingRef.current = false
       setBusy(false)
     }
   }
@@ -119,8 +132,14 @@ export default function CartDrawer() {
           <div className="flex-1 grid place-items-center p-8 text-center">
             <div>
               <CheckCircle className="mx-auto text-emerald-600 mb-3" size={42} />
-              <div className="font-semibold text-navy text-lg">Request received — {done.map((n) => `#${n}`).join(' & ')}</div>
-              <p className="text-slate-500 text-sm mt-2">Pay in store selected. Our team will review availability and contact you to confirm delivery.</p>
+              <div className="font-semibold text-navy text-lg">
+                {done.length ? `Request received: ${done.map((n) => `#${n}`).join(' & ')}` : 'Request already received'}
+              </div>
+              <p className="text-slate-500 text-sm mt-2">
+                {done.length
+                  ? 'Pay in store selected. Our team will review availability and contact you to confirm delivery.'
+                  : 'We already have a recent request with this contact information. Our team will review it and contact you.'}
+              </p>
               <button onClick={() => { setDone(null); setCheckout(false); close() }} className="mt-5 bg-navy text-white rounded-lg px-6 py-2.5 text-sm font-semibold">Done</button>
             </div>
           </div>

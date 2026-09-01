@@ -251,6 +251,42 @@ test('cart quantity persists across reload and items can be removed', async ({ p
     .toBe(0)
 })
 
+test('a repeated rental submission resolves as already received', async ({ page }) => {
+  await mockCatalogReads(page)
+  let submissions = 0
+  await page.route('**/rest/v1/rpc/submit_rental_request', async (route) => {
+    submissions += 1
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: false, reason: 'rate_limited' }),
+      headers: { 'access-control-allow-origin': '*' },
+    })
+  })
+
+  await openPublicRoute(page, '/')
+  const productDetails = page
+    .getByRole('link', { name: 'Playwright Wheelchair', exact: true })
+    .locator('..')
+  await productDetails.getByRole('button', { name: 'Rent Now' }).click()
+
+  const drawer = page.locator('aside')
+  await drawer.getByRole('button', { name: 'Request Delivery (1)' }).click()
+  await drawer.getByPlaceholder('Full name').fill('Repeat Customer')
+  await drawer.getByPlaceholder('Phone').fill('5165550100')
+  await drawer.getByPlaceholder('Email').fill('repeat@example.com')
+  await drawer.getByPlaceholder('Delivery address').fill('1 Test Lane')
+  await drawer.getByPlaceholder('City').fill('Woodbury')
+  await drawer.getByPlaceholder('ZIP').fill('11797')
+
+  await drawer.getByRole('button', { name: 'Submit Request' }).dblclick()
+
+  await expect(drawer.getByText('Request already received', { exact: true })).toBeVisible()
+  await expect(drawer).not.toContainText('please wait a moment before sending the rest')
+  expect(submissions).toBe(1)
+})
+
 test('public links use client navigation and support browser history', async ({ page }) => {
   await mockCatalogReads(page)
   await openPublicRoute(page, '/')
