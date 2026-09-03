@@ -16,12 +16,12 @@ const REASONS: Record<string, string> = {
   invalid_pickup_location: 'Choose an available pickup location.',
   pickup_unavailable: 'Pickup is no longer available for one of your items. Choose delivery or update your cart.',
   delivery_unavailable: 'Delivery is not available for one of your items. Choose pickup or update your cart.',
+  online_payment_required: 'Delivery orders must be paid online.',
 }
 
 export default function CartDrawer() {
   const { items, open, setOpen, setQty, remove, clear, count } = useCart()
   const [checkout, setCheckout] = useState(false)
-  const [paymentChoice, setPaymentChoice] = useState<'in_store' | 'online'>('in_store')
   const [fulfillmentChoice, setFulfillmentChoice] = useState<'pickup' | 'delivery'>('delivery')
   const [pickupLocationId, setPickupLocationId] = useState('')
   const [form, setForm] = useState({ full_name: '', phone: '', email: '', line1: '', city: '', state: 'NY', zip: '', notes: '' })
@@ -42,6 +42,7 @@ export default function CartDrawer() {
   const pickupLocations = commonPickupLocations(items)
   const pickupAvailable = pickupLocations.length > 0
   const deliveryAvailable = items.length > 0 && items.every((item) => item.delivery_enabled)
+  const paymentChoice = fulfillmentChoice === 'delivery' ? 'online' : 'in_store'
   const selectedPickupLocation = pickupLocations.find((location) => location.id === pickupLocationId)
   const set = (k: keyof typeof form) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm({ ...form, [k]: e.target.value })
@@ -55,10 +56,6 @@ export default function CartDrawer() {
     const next = pickupLocationSelection(pickupLocations, pickupLocationId)
     if (next !== pickupLocationId) setPickupLocationId(next)
   }, [pickupLocationId, pickupLocations])
-
-  useEffect(() => {
-    if (fulfillmentChoice === 'pickup') setPaymentChoice('in_store')
-  }, [fulfillmentChoice])
 
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -240,23 +237,10 @@ export default function CartDrawer() {
               </div>
             )}
             {rentItems.length > 0 && fulfillmentChoice === 'delivery' && (
-              <fieldset>
-                <legend className="mb-2 text-sm font-semibold text-navy">How would you like to pay?</legend>
-                <div className="grid grid-cols-2 gap-2">
-                  <label className={`cursor-pointer rounded-xl border p-3 transition ${paymentChoice === 'in_store' ? 'border-navy bg-navy/5 ring-1 ring-navy' : 'border-slate-200 hover:border-slate-300'}`}>
-                    <input type="radio" name="payment-choice" value="in_store" checked={paymentChoice === 'in_store'} onChange={() => setPaymentChoice('in_store')} className="sr-only" />
-                    <Store size={20} className="mb-2 text-navy" />
-                    <span className="block text-sm font-semibold text-navy">Pay in store</span>
-                    <span className="mt-0.5 block text-xs leading-5 text-slate-500">Submit now and pay after confirmation.</span>
-                  </label>
-                  <label className={`cursor-pointer rounded-xl border p-3 transition ${paymentChoice === 'online' ? 'border-navy bg-navy/5 ring-1 ring-navy' : 'border-slate-200 hover:border-slate-300'}`}>
-                    <input type="radio" name="payment-choice" value="online" checked={paymentChoice === 'online'} onChange={() => setPaymentChoice('online')} className="sr-only" />
-                    <CreditCard size={20} className="mb-2 text-navy" />
-                    <span className="block text-sm font-semibold text-navy">Pay online</span>
-                    <span className="mt-0.5 block text-xs leading-5 text-slate-500">Pay ${rentTotal.toFixed(0)} securely with Stripe.</span>
-                  </label>
-                </div>
-              </fieldset>
+              <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+                <span className="flex items-center gap-2 font-semibold text-navy"><CreditCard size={18} /> Online payment required for delivery</span>
+                <span className="mt-1 block text-xs leading-5">Pay ${rentTotal.toFixed(0)} securely with Stripe on the next step. Pay in store is available only with in-store pickup.</span>
+              </div>
             )}
             {error && <div className="text-sm text-red-600">{error}</div>}
             <button disabled={busy} className="w-full bg-terracotta hover:opacity-90 text-white rounded-lg py-3 font-semibold disabled:opacity-50">

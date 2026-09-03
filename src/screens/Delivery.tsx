@@ -11,6 +11,7 @@ import { useDriverStopContacts, type StopContact } from '../lib/useDriverStopCon
 import OrderDetailPanel from './orders/OrderDetailPanel'
 import { useSelectedOrder } from './orders/useSelectedOrder'
 import { useLocationScope } from '../contexts/LocationContext'
+import { PaymentBadge } from './orders/badges'
 
 type Photo = { storage_path: string; captured_at: string; notes: string | null }
 type Deliv = {
@@ -29,6 +30,8 @@ type Deliv = {
   order: {
     id: string
     order_no: number
+    payment_status: string | null
+    payment_preference: string | null
     customer: { full_name: string } | null
     rental_line_items: { quantity: number; equipment: { name: string } | null }[]
   } | null
@@ -37,7 +40,7 @@ type Deliv = {
 
 const SELECT =
   'id,leg_type,status,scheduled_date,window_start,window_end,completed_at,address_line1,address_city,address_state,address_zip,driver_id,' +
-  'order:rental_orders(id,order_no,customer:customers(full_name),rental_line_items(quantity,equipment:equipment_items(name))),' +
+  'order:rental_orders(id,order_no,payment_status,payment_preference,customer:customers(full_name),rental_line_items(quantity,equipment:equipment_items(name))),' +
   'delivery_photos(storage_path,captured_at,notes)'
 
 export default function Delivery() {
@@ -293,6 +296,7 @@ function DeliveryRow({
               <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 capitalize">{d.leg_type}</span>
             )}
             <span className={`text-xs px-2 py-0.5 rounded-full capitalize ${statusClass(d.status)}`}>{statusLabel(d.status)}</span>
+            {d.order && <PaymentBadge paymentStatus={d.order.payment_status} paymentPreference={d.order.payment_preference} />}
           </div>
           <div className="text-sm text-slate-500 mt-0.5">{[d.address_line1, d.address_city, d.address_state, d.address_zip].filter(Boolean).join(', ')}</div>
           {(d.order?.rental_line_items?.length ?? 0) > 0 && (
@@ -380,6 +384,7 @@ function CompletedRow({ d, contact, onOpen, selected }: { d: Deliv; contact?: St
           <span className="text-xs text-slate-400">#{d.order?.order_no}</span>
           <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 capitalize">{d.leg_type}</span>
           <span className={`text-xs px-2 py-0.5 rounded-full capitalize ${statusClass(d.status)}`}>{statusLabel(d.status)}</span>
+          {d.order && <PaymentBadge paymentStatus={d.order.payment_status} paymentPreference={d.order.payment_preference} />}
         </div>
         <div className="text-sm text-slate-500 mt-0.5">{[d.address_line1, d.address_city].filter(Boolean).join(', ')}</div>
         {(d.order?.rental_line_items?.length ?? 0) > 0 && (

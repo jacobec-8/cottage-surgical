@@ -2,9 +2,12 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Loader2, Pencil, X } from 'lucide-react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../../contexts/AuthContext'
+import { supabase } from '../../lib/supabase'
+import { invalidateOrderWorkflow } from '../../lib/workflowKeys'
 import { PICKUP_ELIGIBLE, type OrderDetail } from './types'
-import { ageLabel, amountOf, fmtDate, fmtDateTime, fmtMoney, sourceLabel, unallocatedCount } from './format'
+import { ageLabel, amountOf, fmtDate, fmtDateTime, fmtMoney, orderPaymentState, paymentStateLabel, sourceLabel, unallocatedCount, type OrderPaymentState } from './format'
 import { PaymentBadge, SourceBadge, StatusBadge, TypeBadge, UnallocatedBadge } from './badges'
 import { BillingSection, CustomerSection, DeliveriesSection, Field, LinesSection, Section } from './DetailSections'
 import { useOrderDetail } from './useOrderDetail'
@@ -126,7 +129,7 @@ function PanelBody({ o, onClose, actions, focusDeliveryId }: BodyProps) {
             <div className="mt-1.5 flex items-center gap-2 flex-wrap">
               <TypeBadge type={o.order_type} />
               <StatusBadge status={o.status} />
-              <PaymentBadge orderType={o.order_type} paymentStatus={o.payment_status} paymentPreference={o.payment_preference} />
+              <PaymentBadge paymentStatus={o.payment_status} paymentPreference={o.payment_preference} />
               {!isRequest && <UnallocatedBadge count={unallocatedCount(o)} />}
               <SourceBadge source={o.source} />
             </div>
@@ -198,9 +201,9 @@ function PanelBody({ o, onClose, actions, focusDeliveryId }: BodyProps) {
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3 rounded-lg border border-slate-200 bg-white p-3">
             <Field label={isRental ? 'Monthly rate' : 'Total'}>{amountOf(o)}</Field>
             <Field label="Payment">
-              <span className="capitalize">
-                {o.payment_preference === 'online' ? `${o.payment_status ?? 'pending'} online` : 'Pay in store'}
-              </span>
+              {backofficeLinks
+                ? <PaymentStateSetting order={o} onMessage={setMsg} />
+                : paymentStateLabel(orderPaymentState(o.payment_status, o.payment_preference))}
             </Field>
             <Field label="Source">{sourceLabel(o.source) ?? '—'}</Field>
             {isRental && <Field label="Start (delivery)">{fmtDate(o.start_date)}</Field>}
@@ -238,5 +241,58 @@ function PanelBody({ o, onClose, actions, focusDeliveryId }: BodyProps) {
         />
       )}
     </>
+  )
+}
+
+function PaymentStateSetting({ order, onMessage }: { order: OrderDetail; onMessage: (message: string) => void }) {
+  const qc = useQueryClient()
+  const stored = orderPaymentState(order.payment_status, order.payment_preference)
+  const [value, setValue] = useState<OrderPaymentState>(stored)
+  const isDelivery = order.fulfillment_method === 'delivery'
+    || order.deliveries.some((delivery) => delivery.leg_type === 'delivery')
+
+  useEffect(() => setValue(stored), [stored])
+
+  const update = useMutation({
+    mutationFn: async (next: Exclude<OrderPaymentState, 'refunded'>) => {
+      const { data, error } = await supabase.rpc('set_order_payment_state', {
+        p_order_id: order.id,
+        p_payment_state: next,
+      })
+      if (error) throw error
+      if (!data?.ok) {
+        if (data?.reason === 'delivery_requires_online_payment') {
+          throw new Error('Delivery orders cannot be marked paid in store.')
+        }
+        throw new Error(data?.reason || 'Couldn’t update payment state.')
+      }
+    },
+    onSuccess: () => {
+      invalidateOrderWorkflow(qc)
+      onMessage('Payment state updated.')
+    },
+    onError: (error) => {
+      setValue(stored)
+      onMessage((error as Error).message)
+    },
+  })
+
+  if (stored === 'refunded') return <span>{paymentStateLabel(stored)}</span>
+  return (
+    <select
+      aria-label="Payment state"
+      value={value}
+      disabled={update.isPending}
+      onChange={(event) => {
+        const next = event.target.value as Exclude<OrderPaymentState, 'refunded'>
+        setValue(next)
+        update.mutate(next)
+      }}
+      className="w-full min-w-32 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:opacity-60"
+    >
+      <option value="not_paid">Not Paid</option>
+      <option value="paid_online">Paid Online</option>
+      {(!isDelivery || stored === 'paid_in_store') && <option value="paid_in_store" disabled={isDelivery}>Paid In Store</option>}
+    </select>
   )
 }

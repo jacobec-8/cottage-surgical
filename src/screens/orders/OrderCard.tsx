@@ -54,7 +54,7 @@ export default function OrderCard({ o, selected, onOpen, onSchedulePickup, picku
           <span className="text-xs text-slate-400">#{o.order_no}</span>
           <TypeBadge type={o.order_type} />
           <StatusBadge status={o.status} />
-          <PaymentBadge orderType={o.order_type} paymentStatus={o.payment_status} paymentPreference={o.payment_preference} />
+          <PaymentBadge paymentStatus={o.payment_status} paymentPreference={o.payment_preference} />
           <UnallocatedBadge count={unalloc} />
           <SourceBadge source={o.source} />
         </div>

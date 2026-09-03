@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import type { Order } from './types'
 import { ageLabel, amountOf } from './format'
-import { StatusBadge, TypeBadge } from './badges'
+import { PaymentBadge, StatusBadge, TypeBadge } from './badges'
 import { useVerifyPayment } from './useVerifyPayment'
 
 /** Abandoned / unconfirmed storefront checkout — verify at Stripe before fulfilling. */
@@ -21,9 +21,7 @@ export default function UnpaidRow({ o, onOpen }: { o: Order; onOpen: (id: string
           <span className="text-xs text-slate-400">#{o.order_no}</span>
           <TypeBadge type={o.order_type} />
           <StatusBadge status={o.status} />
-          {o.payment_status && (
-            <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 capitalize">pay: {o.payment_status}</span>
-          )}
+          <PaymentBadge paymentStatus={o.payment_status} paymentPreference={o.payment_preference} />
           <span className="text-xs text-slate-400">started {ageLabel(o.created_at)}</span>
         </div>
         {(o.customer?.phone || o.customer?.email) && (

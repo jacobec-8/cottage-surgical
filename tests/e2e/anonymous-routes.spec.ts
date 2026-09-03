@@ -297,6 +297,9 @@ test('checkout offers assigned pickup locations and keeps hospital beds delivery
   await expect(drawer.getByRole('radio', { name: /In-store pickup/i })).toBeDisabled()
   await expect(drawer.getByRole('radio', { name: /Delivery/i })).toBeChecked()
   await expect(drawer.getByPlaceholder('Delivery address')).toBeVisible()
+  await expect(drawer.getByText('Online payment required for delivery')).toBeVisible()
+  await expect(drawer.getByText('Pay in store', { exact: true })).toHaveCount(0)
+  await expect(drawer.getByRole('button', { name: 'Continue to Secure Payment' })).toBeVisible()
 })
 
 test('double-clicking rental submit sends one request', async ({ page }) => {
@@ -321,13 +324,10 @@ test('double-clicking rental submit sends one request', async ({ page }) => {
 
   const drawer = page.locator('aside')
   await drawer.getByRole('button', { name: 'Continue to checkout (1)' }).click()
+  await drawer.getByText('In-store pickup', { exact: true }).click()
   await drawer.getByPlaceholder('Full name').fill('Repeat Customer')
   await drawer.getByPlaceholder('Phone').fill('5165550100')
   await drawer.getByPlaceholder('Email').fill('repeat@example.com')
-  await drawer.getByPlaceholder('Delivery address').fill('1 Test Lane')
-  await drawer.getByPlaceholder('City').fill('Woodbury')
-  await drawer.getByPlaceholder('ZIP').fill('11797')
-
   await drawer.getByRole('button', { name: 'Submit Request' }).dblclick()
 
   await expect(drawer.getByText('Request received: #4321', { exact: true })).toBeVisible()

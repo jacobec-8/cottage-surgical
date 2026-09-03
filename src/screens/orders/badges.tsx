@@ -1,5 +1,5 @@
 import { statusClass, statusLabel } from '../../lib/status'
-import { sourceLabel } from './format'
+import { orderPaymentState, paymentStateLabel, sourceLabel } from './format'
 
 const PILL = 'text-xs px-2 py-0.5 rounded-full whitespace-nowrap'
 
@@ -19,8 +19,9 @@ export function SourceBadge({ source }: { source: string | null }) {
 }
 
 const PAY: Record<string, string> = {
-  paid: 'bg-emerald-100 text-emerald-700',
-  unpaid: 'bg-amber-100 text-amber-800',
+  paid_online: 'bg-emerald-100 text-emerald-700',
+  paid_in_store: 'bg-blue-100 text-blue-700',
+  not_paid: 'bg-amber-100 text-amber-800',
   refunded: 'bg-slate-200 text-slate-600',
 }
 
@@ -29,17 +30,13 @@ export function PaymentBadge({
   paymentStatus,
   paymentPreference,
 }: {
-  orderType: string
   paymentStatus: string | null
   paymentPreference?: string | null
 }) {
-  if (paymentPreference !== 'online') {
-    return <span className={`${PILL} bg-slate-100 text-slate-600`}>pay in store</span>
-  }
-  if (!paymentStatus) return null
+  const state = orderPaymentState(paymentStatus, paymentPreference)
   return (
-    <span className={`${PILL} ${PAY[paymentStatus] ?? 'bg-slate-100 text-slate-600'}`}>
-      {paymentStatus === 'paid' ? 'paid online' : paymentStatus === 'refunded' ? 'refunded' : 'online payment pending'}
+    <span className={`${PILL} ${PAY[state]}`}>
+      {paymentStateLabel(state)}
     </span>
   )
 }

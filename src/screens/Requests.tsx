@@ -12,6 +12,7 @@ import RequestActions from './requests/RequestActions'
 import OrderDetailPanel from './orders/OrderDetailPanel'
 import { useSelectedOrder } from './orders/useSelectedOrder'
 import { useLocationScope } from '../contexts/LocationContext'
+import { PaymentBadge } from './orders/badges'
 
 export default function Requests() {
   const { selectedLocationId } = useLocationScope()
@@ -146,9 +147,7 @@ export default function Requests() {
                     {r.order_type}
                   </span>
                   <span className="text-xs text-slate-400">#{r.order_no}</span>
-                  <span className={`rounded-full px-2 py-0.5 text-xs ${r.payment_preference === 'online' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
-                    {r.payment_preference === 'online' ? (r.payment_status === 'paid' ? 'Paid online' : 'Online payment') : 'Pay in store'}
-                  </span>
+                  <PaymentBadge paymentStatus={r.payment_status} paymentPreference={r.payment_preference} />
                 </div>
                 <div className="text-sm text-slate-500 mt-1">
                   {[r.customer?.phone, r.customer?.email].filter(Boolean).join(' · ')}
