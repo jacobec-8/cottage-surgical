@@ -220,8 +220,7 @@ function DeliveryRow({
   const qc = useQueryClient()
   const [driver, setDriver] = useState(d.driver_id ?? '')
   const [date, setDate] = useState(d.scheduled_date ?? '')
-  const [ws, setWs] = useState((d.window_start ?? '').slice(0, 5))
-  const [we, setWe] = useState((d.window_end ?? '').slice(0, 5))
+  const [appointmentTime, setAppointmentTime] = useState((d.window_start ?? '').slice(0, 5))
   const [msg, setMsg] = useState('')
   const [completing, setCompleting] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -236,8 +235,8 @@ function DeliveryRow({
       const patch = {
         driver_id: isStorePickup ? null : driver || null,
         scheduled_date: date || null,
-        window_start: ws || null,
-        window_end: we || null,
+        window_start: appointmentTime || null,
+        window_end: null,
       }
       const { error } = await supabase.from('deliveries').update(patch).eq('id', d.id)
       if (error) throw error
@@ -336,7 +335,7 @@ function DeliveryRow({
             <div className="text-xs text-slate-500 mt-1">
               {[
                 d.scheduled_date ? new Date(d.scheduled_date + 'T00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : 'Date TBD',
-                d.window_start ? `${d.window_start.slice(0, 5)}–${(d.window_end ?? '').slice(0, 5)}` : null,
+                d.window_start ? d.window_start.slice(0, 5) : null,
               ].filter(Boolean).join(' · ')}
             </div>
           )}
@@ -396,8 +395,7 @@ function DeliveryRow({
             </div>
           )}
           <div><div className="text-[11px] text-slate-400 mb-0.5">{isStorePickup ? 'Pickup date' : 'Date'}</div><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inp} /></div>
-          <div><div className="text-[11px] text-slate-400 mb-0.5">From</div><input type="time" value={ws} onChange={(e) => setWs(e.target.value)} className={inp} /></div>
-          <div><div className="text-[11px] text-slate-400 mb-0.5">To</div><input type="time" value={we} onChange={(e) => setWe(e.target.value)} className={inp} /></div>
+          <div><div className="text-[11px] text-slate-400 mb-0.5">{d.leg_type === 'pickup' ? 'Pickup time' : 'Delivery time'}</div><input type="time" value={appointmentTime} onChange={(e) => setAppointmentTime(e.target.value)} className={inp} /></div>
           <button onClick={() => save.mutate()} disabled={save.isPending}
             className="text-sm border border-slate-300 hover:bg-slate-50 rounded-lg px-3 py-1.5 disabled:opacity-50">
             {save.isPending ? 'Saving…' : 'Save'}

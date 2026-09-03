@@ -123,14 +123,14 @@ test('fmtDate renders a short date and tolerates null', () => {
   assert.match(fmtDate('2026-08-20'), /Aug 20/)
 })
 
-test('windowOf prefers the label, then a start–end range', () => {
+test('windowOf prefers the label, then a single appointment time', () => {
   const d = (over: Partial<OrderDelivery>): OrderDelivery => ({
     id: 'd1', leg_type: 'delivery', requires_driver: true, status: 'scheduled', scheduled_date: '2026-08-20',
     window_start: '09:00:00', window_end: '11:00:00', window_label: null, driver: null, ...over,
   })
   assert.equal(windowOf(d({ window_label: 'Morning' })), 'Morning')
-  assert.equal(windowOf(d({})), '9:00 AM–11:00 AM')
-  assert.equal(windowOf(d({ window_start: '13:30:00', window_end: null })), 'from 1:30 PM')
+  assert.equal(windowOf(d({})), 'at 9:00 AM')
+  assert.equal(windowOf(d({ window_start: '13:30:00', window_end: null })), 'at 1:30 PM')
   assert.equal(windowOf(d({ window_start: null, window_end: null })), null)
 })
 
@@ -146,7 +146,7 @@ test('legSummary describes a leg for the card', () => {
     driver: { first_name: 'Sam', last_name: 'Lee' },
   }
   assert.match(legSummary(d), /Aug 20/)
-  assert.match(legSummary(d), /9:00 AM–11:00 AM/)
+  assert.match(legSummary(d), /at 9:00 AM/)
   assert.match(legSummary(d), /Sam Lee/)
   assert.equal(legSummary({ ...d, status: 'pending', scheduled_date: null, window_start: null, window_end: null, driver: null }), 'pending · unassigned')
 })

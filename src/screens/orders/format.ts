@@ -86,8 +86,7 @@ export function windowOf(
   d: Pick<OrderDelivery, 'window_label' | 'window_start' | 'window_end'>,
 ): string | null {
   if (d.window_label) return d.window_label
-  if (d.window_start && d.window_end) return `${fmtTime(d.window_start)}–${fmtTime(d.window_end)}`
-  if (d.window_start) return `from ${fmtTime(d.window_start)}`
+  if (d.window_start) return `at ${fmtTime(d.window_start)}`
   return null
 }
 

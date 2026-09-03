@@ -46,7 +46,7 @@ export default function NewOrder() {
   // cart + delivery
   const [cart, setCart] = useState<CartLine[]>([])
   const [itemSearch, setItemSearch] = useState('')
-  const [deliv, setDeliv] = useState({ date: '', ws: '', we: '', driver: '', notes: '', deposit: '' })
+  const [deliv, setDeliv] = useState({ date: '', time: '', driver: '', notes: '', deposit: '' })
 
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -138,7 +138,7 @@ export default function NewOrder() {
         p_customer_id: customerId,
         p_order_type: mode,
         p_items: cart.map((l) => ({ item_id: l.item_id, quantity: l.qty })),
-        p_delivery: { location_id: selectedLocationId, scheduled_date: deliv.date || null, window_start: deliv.ws || null, window_end: deliv.we || null, driver_id: deliv.driver || null, notes: deliv.notes || null },
+        p_delivery: { location_id: selectedLocationId, scheduled_date: deliv.date || null, window_start: deliv.time || null, window_end: null, driver_id: deliv.driver || null, notes: deliv.notes || null },
         p_deposit: mode === 'rental' && deliv.deposit ? Math.max(0, Number(deliv.deposit)) : null,
         p_new_customer: newCustomer,
       })
@@ -146,7 +146,7 @@ export default function NewOrder() {
       if (!data?.ok) throw new Error(orderErrorMessage(data?.reason))
       setResult({ order_no: data.order_no, unallocated: data.unallocated })
       setCart([]); setCust(null); setNc({ full_name: '', phone: '', email: '', dob: '', coverage: '', line1: '', city: '', state: 'NY', zip: '' })
-      setDeliv({ date: '', ws: '', we: '', driver: '', notes: '', deposit: '' })
+      setDeliv({ date: '', time: '', driver: '', notes: '', deposit: '' })
       // create_staff_order may create a customer, reserve stock, and queue a
       // delivery — refresh every board so the actor's screens match the toast.
       invalidateOrderWorkflow(qc)
@@ -300,8 +300,7 @@ export default function NewOrder() {
               {drivers.data?.map((d) => <option key={d.id} value={d.id}>{d.first_name} {d.last_name}</option>)}
             </select>
           </div>
-          <div><span className="text-xs text-slate-500">Window start</span><input type="time" value={deliv.ws} onChange={(e) => setDeliv({ ...deliv, ws: e.target.value })} className={`w-full ${inp}`} /></div>
-          <div><span className="text-xs text-slate-500">Window end</span><input type="time" value={deliv.we} onChange={(e) => setDeliv({ ...deliv, we: e.target.value })} className={`w-full ${inp}`} /></div>
+          <div><span className="text-xs text-slate-500">Delivery time</span><input type="time" value={deliv.time} onChange={(e) => setDeliv({ ...deliv, time: e.target.value })} className={`w-full ${inp}`} /></div>
           {mode === 'rental' && <div><span className="text-xs text-slate-500">Deposit ($)</span><input type="number" value={deliv.deposit} onChange={(e) => setDeliv({ ...deliv, deposit: e.target.value })} className={`w-full ${inp}`} /></div>}
           <div className={mode === 'rental' ? '' : 'col-span-2'}><span className="text-xs text-slate-500">Notes</span><input value={deliv.notes} onChange={(e) => setDeliv({ ...deliv, notes: e.target.value })} placeholder="Access, parking…" className={`w-full ${inp}`} /></div>
         </div>

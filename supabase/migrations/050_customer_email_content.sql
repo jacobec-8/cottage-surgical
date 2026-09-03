@@ -226,9 +226,7 @@ BEGIN
       WHEN NEW.window_label IS NOT NULL AND btrim(NEW.window_label) <> ''
         THEN ', ' || btrim(NEW.window_label)
       WHEN NEW.window_start IS NOT NULL
-        THEN ' from ' || to_char(NEW.window_start, 'FMHH12:MI AM')
-          || CASE WHEN NEW.window_end IS NOT NULL
-            THEN ' to ' || to_char(NEW.window_end, 'FMHH12:MI AM') ELSE '' END
+        THEN ' at ' || to_char(NEW.window_start, 'FMHH12:MI AM')
       ELSE ''
     END;
   v_address := concat_ws(', ', NULLIF(btrim(NEW.address_line1), ''),
@@ -356,9 +354,7 @@ BEGIN
         WHEN NEW.window_label IS NOT NULL AND btrim(NEW.window_label) <> ''
           THEN ', ' || btrim(NEW.window_label)
         WHEN NEW.window_start IS NOT NULL
-          THEN ' from ' || to_char(NEW.window_start, 'FMHH12:MI AM')
-            || CASE WHEN NEW.window_end IS NOT NULL
-              THEN ' to ' || to_char(NEW.window_end, 'FMHH12:MI AM') ELSE '' END
+          THEN ' at ' || to_char(NEW.window_start, 'FMHH12:MI AM')
         ELSE ''
       END
   END;
@@ -420,8 +416,6 @@ BEGIN
         THEN btrim(v_leg.window_label)
       WHEN v_leg.window_start IS NOT NULL
         THEN to_char(v_leg.window_start, 'FMHH12:MI AM')
-          || CASE WHEN v_leg.window_end IS NOT NULL
-            THEN ' to ' || to_char(v_leg.window_end, 'FMHH12:MI AM') ELSE '' END
       ELSE 'the scheduled route time'
     END;
     v_id := public.queue_customer_status_email(
