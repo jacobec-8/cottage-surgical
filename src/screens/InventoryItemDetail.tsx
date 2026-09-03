@@ -376,14 +376,25 @@ function PickupLocationsTab({ item, locations, assignments, loading }: {
   })
 
   if (loading) return <div className="text-sm text-slate-500">Loading pickup locations…</div>
-  const shown = view === 'selected' ? locations.filter((location) => assignedIds.has(location.id)) : locations
+  // Admins configure every shop. A store login can only assign inventory to
+  // the location the admin associated with that account.
+  const availableLocations = profile?.role === 'admin'
+    ? locations
+    : locations.filter((location) => location.id === profile?.location_id)
+  const shown = view === 'selected'
+    ? availableLocations.filter((location) => assignedIds.has(location.id))
+    : availableLocations
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5">
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="flex items-center gap-2 text-lg font-semibold"><MapPin size={19} className="text-blue-600" /> Locations</h2>
-          <p className="mt-1 text-sm text-slate-500">Stock this item at every shop or selected shops. Only selected locations with stock appear in customer pickup.</p>
+          <p className="mt-1 text-sm text-slate-500">
+            {profile?.role === 'admin'
+              ? 'Stock this item at every shop or selected shops. Only selected locations with stock appear in customer pickup.'
+              : 'Assign this item to your store. New locations and store logins are created by an admin.'}
+          </p>
         </div>
         {profile?.role === 'admin' && <Link href="/locations" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-blue-200 px-4 py-2 text-sm text-blue-700 hover:bg-blue-50"><Plus size={15} /> Manage shops</Link>}
       </div>
@@ -395,7 +406,7 @@ function PickupLocationsTab({ item, locations, assignments, loading }: {
       )}
 
       <div className="mb-4 inline-flex rounded-lg bg-slate-100 p-1">
-        <button onClick={() => setView('all')} className={`rounded-md px-3 py-1.5 text-sm ${view === 'all' ? 'bg-white font-medium shadow-sm' : 'text-slate-500'}`}>All locations ({locations.length})</button>
+        <button onClick={() => setView('all')} className={`rounded-md px-3 py-1.5 text-sm ${view === 'all' ? 'bg-white font-medium shadow-sm' : 'text-slate-500'}`}>All locations ({availableLocations.length})</button>
         <button onClick={() => setView('selected')} className={`rounded-md px-3 py-1.5 text-sm ${view === 'selected' ? 'bg-white font-medium shadow-sm' : 'text-slate-500'}`}>Selected ({assignments.length})</button>
       </div>
 

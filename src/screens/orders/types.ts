@@ -123,7 +123,7 @@ const ORDER_BASE =
   'id,order_no,order_type,status,source,payment_status,payment_preference,stripe_session_id,created_at,updated_at,' +
   'start_date,end_date,monthly_rate,deposit_amount,special_notes,' +
   'address_line1,address_city,address_state,address_zip,fulfillment_method,' +
-  'pickup_location:pickup_locations(name,address_line1,address_line2,address_city,address_state,address_zip)'
+  'pickup_location:pickup_locations!rental_orders_pickup_location_id_fkey(name,address_line1,address_line2,address_city,address_state,address_zip)'
 
 export const ORDER_LIST_SELECT =
   `${ORDER_BASE},customer:customers(full_name,phone,email),${LINE_SELECT},${DELIVERY_LIST_SELECT}`

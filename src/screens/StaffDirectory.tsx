@@ -28,7 +28,7 @@ export default function StaffDirectory() {
     queryFn: async () => {
       let request = supabase
         .from('profiles')
-        .select('id,email,full_name,phone,role,is_active,created_at,location_id,location:pickup_locations(name)')
+        .select('id,email,full_name,phone,role,is_active,created_at,location_id,location:pickup_locations!profiles_location_id_fkey(name)')
         .in('role', ['admin', 'staff', 'driver'])
         .order('role')
         .order('full_name')
