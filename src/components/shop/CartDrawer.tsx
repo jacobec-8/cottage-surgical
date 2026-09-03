@@ -3,9 +3,9 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import Link from 'next/link'
 import { X, ShoppingCart, Trash2, Plus, Minus, CheckCircle, CreditCard, Store, Truck, MapPin, Zap } from 'lucide-react'
-import { supabase } from '../../lib/supabase'
 import { dispatchCustomerEmails } from '../../lib/customerEmails'
 import { commonPickupLocations, pickupLocationSelection } from '../../lib/fulfillment'
+import { publicSupabase } from '../../lib/publicSupabase'
 import { useCart } from './CartContext'
 
 const REASONS: Record<string, string> = {
@@ -92,7 +92,7 @@ export default function CartDrawer() {
       let rentNo: number | null = null
       if (rentItems.length) {
         if (paymentChoice === 'online') {
-          const { data, error } = await supabase.rpc('create_stripe_rental_checkout_with_fulfillment', {
+          const { data, error } = await publicSupabase.rpc('create_stripe_rental_checkout_with_fulfillment', {
             p_items: rentItems.map((i) => ({ item_id: i.id, quantity: i.qty })),
             p_customer: customer,
             p_address: address,
@@ -114,7 +114,7 @@ export default function CartDrawer() {
           window.location.assign(data.checkout_url)
           return
         } else {
-          const { data, error } = await supabase.rpc('submit_rental_request_with_fulfillment', {
+          const { data, error } = await publicSupabase.rpc('submit_rental_request_with_fulfillment', {
             p_order_type: 'rental', p_items: rentItems.map((i) => ({ item_id: i.id, quantity: i.qty })),
             p_customer: customer, p_address: address, p_notes: form.notes || null,
             p_fulfillment: fulfillment,
@@ -128,7 +128,7 @@ export default function CartDrawer() {
 
       // Purchases → Stripe Checkout (kept for when SHOP_PURCHASES_ENABLED is true).
       if (buyItems.length) {
-        const { data, error } = await supabase.rpc('create_stripe_checkout_with_fulfillment', {
+        const { data, error } = await publicSupabase.rpc('create_stripe_checkout_with_fulfillment', {
           p_items: buyItems.map((i) => ({ item_id: i.id, quantity: i.qty })),
           p_customer: customer,
           p_address: address,
