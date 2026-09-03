@@ -167,7 +167,9 @@ BEGIN
       v_order.id, 'payment_received',
       'Payment received for rental request #' || v_order.order_no,
       'Payment received and request submitted',
-      'We received your first month rental payment. Our team is reviewing your equipment and delivery details.');
+      CASE WHEN v_order.fulfillment_method = 'pickup'
+        THEN 'We received your first month rental payment. Please expect a call from the pharmacy to confirm your pickup.'
+        ELSE 'We received your first month rental payment. Our team is reviewing your equipment and delivery details.' END);
   ELSE
     PERFORM public.queue_customer_status_email(
       v_order.id, 'request_received',
@@ -175,7 +177,9 @@ BEGIN
       'We received your rental request',
       CASE WHEN v_order.payment_preference = 'on_delivery'
         THEN 'Our team is reviewing your equipment and delivery details. Payment will be collected by the delivery person when your equipment arrives.'
-        ELSE 'Our team is reviewing your equipment and delivery details. Payment will be collected in store after approval.' END);
+        WHEN v_order.fulfillment_method = 'pickup'
+        THEN 'Our team is reviewing your equipment and pickup details. Please expect a call from the pharmacy to confirm your pickup. Payment will be collected in store after approval.'
+        ELSE 'Our team is reviewing your equipment and delivery details.' END);
   END IF;
   RETURN COALESCE(NEW, OLD);
 EXCEPTION WHEN others THEN
@@ -259,13 +263,17 @@ BEGIN
     v_heading := 'We received your rental request';
     v_message := CASE WHEN NEW.payment_preference = 'on_delivery'
       THEN 'Our team is reviewing your equipment and delivery details. Payment will be collected by the delivery person when your equipment arrives.'
-      ELSE 'Our team is reviewing your equipment and delivery details. Payment will be collected in store after approval.' END;
+      WHEN NEW.fulfillment_method = 'pickup'
+      THEN 'Our team is reviewing your equipment and pickup details. Please expect a call from the pharmacy to confirm your pickup. Payment will be collected in store after approval.'
+      ELSE 'Our team is reviewing your equipment and delivery details.' END;
   ELSIF TG_OP = 'UPDATE' AND OLD.status = 'pending_payment'
         AND NEW.status = 'requested' AND NEW.payment_status = 'paid' THEN
     v_event := 'payment_received';
     v_subject := 'Payment received for rental request #' || NEW.order_no;
     v_heading := 'Payment received and request submitted';
-    v_message := 'We received your first month rental payment. Our team is reviewing your equipment and delivery details.';
+    v_message := CASE WHEN NEW.fulfillment_method = 'pickup'
+      THEN 'We received your first month rental payment. Please expect a call from the pharmacy to confirm your pickup.'
+      ELSE 'We received your first month rental payment. Our team is reviewing your equipment and delivery details.' END;
   ELSIF NEW.status = 'open' THEN
     v_event := 'request_accepted';
     v_subject := 'Rental request #' || NEW.order_no || ' approved';

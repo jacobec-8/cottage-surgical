@@ -165,7 +165,7 @@ BEGIN
         'We received your rental request',
         CASE WHEN v_payment_method = 'on_delivery'
           THEN 'Our team is reviewing your equipment and delivery details. Payment will be collected by the delivery person when your equipment arrives.'
-          ELSE 'Our team is reviewing your equipment and pickup details. Payment will be collected in store after approval.' END
+          ELSE 'Our team is reviewing your equipment and pickup details. Please expect a call from the pharmacy to confirm your pickup. Payment will be collected in store after approval.' END
       );
     END IF;
   END IF;
