@@ -18,15 +18,13 @@ type Location = {
   instructions: string | null
   fulfillment_mode: 'pickup_and_delivery' | 'pickup_only'
   partner_type: 'owned' | 'partner'
-  revenue_share_percent: number
   is_active: boolean
   business: { id: string; name: string } | null
   login: { id: string; email: string; is_active: boolean } | null
 }
 
 type LocationForm = {
-  businessName: string
-  locationName: string
+  shopName: string
   line1: string
   line2: string
   city: string
@@ -38,14 +36,13 @@ type LocationForm = {
   password: string
   fulfillmentMode: 'pickup_and_delivery' | 'pickup_only'
   partnerType: 'owned' | 'partner'
-  revenueShare: string
   active: boolean
 }
 
 const EMPTY: LocationForm = {
-  businessName: '', locationName: '', line1: '', line2: '', city: '', state: 'NY', zip: '',
+  shopName: '', line1: '', line2: '', city: '', state: 'NY', zip: '',
   phone: '', instructions: '', username: '', password: '', fulfillmentMode: 'pickup_and_delivery',
-  partnerType: 'owned', revenueShare: '0', active: true,
+  partnerType: 'owned', active: true,
 }
 
 export default function Locations() {
@@ -57,7 +54,7 @@ export default function Locations() {
     queryFn: async () => {
       const { data, error } = await supabase.from('pickup_locations').select(
         'id,name,address_line1,address_line2,address_city,address_state,address_zip,phone,instructions,' +
-        'fulfillment_mode,partner_type,revenue_share_percent,is_active,business:businesses(id,name),' +
+        'fulfillment_mode,partner_type,is_active,business:businesses(id,name),' +
         'login:profiles!pickup_locations_login_profile_id_fkey(id,email,is_active)',
       ).order('name')
       if (error) throw error
@@ -69,11 +66,11 @@ export default function Locations() {
   const startEdit = (location: Location) => {
     setEditing(location)
     setForm({
-      ...EMPTY, businessName: location.business?.name ?? '', locationName: location.name,
+      ...EMPTY, shopName: location.name,
       line1: location.address_line1, line2: location.address_line2 ?? '', city: location.address_city,
       state: location.address_state, zip: location.address_zip, phone: location.phone ?? '',
       instructions: location.instructions ?? '', fulfillmentMode: location.fulfillment_mode,
-      partnerType: location.partner_type, revenueShare: String(location.revenue_share_percent), active: location.is_active,
+      partnerType: location.partner_type, active: location.is_active,
     })
   }
   const close = () => { setEditing(null); setForm(EMPTY) }
@@ -81,17 +78,17 @@ export default function Locations() {
 
   const save = useMutation({
     mutationFn: async () => {
-      if (!form.businessName.trim() || !form.locationName.trim() || !form.line1.trim() || !form.city.trim() || !form.zip.trim()) {
-        throw new Error('Business, store name, street, city, and ZIP are required.')
+      if (!form.shopName.trim() || !form.line1.trim() || !form.city.trim() || !form.zip.trim()) {
+        throw new Error('Shop name, street, city, and ZIP are required.')
       }
       if (editing === 'new') {
         if (!form.username.trim() || form.password.length < 10) throw new Error('A username and password of at least 10 characters are required.')
         const { data, error } = await supabase.rpc('create_business_location', {
-          p_business_name: form.businessName.trim(), p_location_name: form.locationName.trim(),
+          p_business_name: form.shopName.trim(), p_location_name: form.shopName.trim(),
           p_address: { line1: form.line1, line2: form.line2, city: form.city, state: form.state, zip: form.zip, phone: form.phone, instructions: form.instructions },
           p_username: form.username.trim().toLowerCase(), p_password: form.password,
           p_fulfillment_mode: form.fulfillmentMode, p_partner_type: form.partnerType,
-          p_revenue_share_percent: Number(form.revenueShare) || 0,
+          p_revenue_share_percent: 0,
         })
         if (error) throw error
         if (!data?.ok) {
@@ -100,15 +97,15 @@ export default function Locations() {
         }
       } else if (editing) {
         const { error } = await supabase.from('pickup_locations').update({
-          name: form.locationName.trim(), address_line1: form.line1.trim(), address_line2: form.line2.trim() || null,
+          name: form.shopName.trim(), address_line1: form.line1.trim(), address_line2: form.line2.trim() || null,
           address_city: form.city.trim(), address_state: form.state.trim().toUpperCase(), address_zip: form.zip.trim(),
           phone: form.phone.trim() || null, instructions: form.instructions.trim() || null,
           fulfillment_mode: form.fulfillmentMode, partner_type: form.partnerType,
-          revenue_share_percent: Number(form.revenueShare) || 0, is_active: form.active,
+          is_active: form.active,
         }).eq('id', editing.id)
         if (error) throw error
         if (editing.business) {
-          const { error: businessError } = await supabase.from('businesses').update({ name: form.businessName.trim() }).eq('id', editing.business.id)
+          const { error: businessError } = await supabase.from('businesses').update({ name: form.shopName.trim() }).eq('id', editing.business.id)
           if (businessError) throw businessError
         }
       }
@@ -127,9 +124,9 @@ export default function Locations() {
       <div className="grid gap-4 lg:grid-cols-2">
         {(locations.data ?? []).map((location) => (
           <article key={location.id} className={`rounded-2xl border border-slate-200 bg-white p-5 ${location.is_active ? '' : 'opacity-60'}`}>
-            <div className="flex items-start justify-between gap-3"><div><div className="text-xs font-medium uppercase tracking-wide text-slate-400">{location.business?.name}</div><h2 className="mt-1 text-lg font-semibold">{location.name}</h2></div><button onClick={() => startEdit(location)} className="grid h-10 w-10 place-items-center rounded-lg text-blue-600 hover:bg-blue-50" aria-label={`Edit ${location.name}`}><Pencil size={16} /></button></div>
+            <div className="flex items-start justify-between gap-3"><h2 className="text-lg font-semibold">{location.name}</h2><button onClick={() => startEdit(location)} className="grid h-10 w-10 place-items-center rounded-lg text-blue-600 hover:bg-blue-50" aria-label={`Edit ${location.name}`}><Pencil size={16} /></button></div>
             <div className="mt-3 flex items-start gap-2 text-sm text-slate-600"><MapPin size={15} className="mt-0.5 shrink-0" /><span>{location.address_line1}{location.address_line2 ? `, ${location.address_line2}` : ''}<br />{location.address_city}, {location.address_state} {location.address_zip}</span></div>
-            <div className="mt-4 flex flex-wrap gap-2 text-xs"><Pill icon={Store}>{location.fulfillment_mode === 'pickup_only' ? 'Pickup only location' : 'Pickup + delivery location'}</Pill><Pill icon={Users}>{location.partner_type === 'partner' ? `Partner · ${Number(location.revenue_share_percent)}% share` : 'Owned store'}</Pill><Pill icon={Users}>{location.login ? `Login: ${authEmailToUsername(location.login.email)}` : 'No login linked'}</Pill></div>
+            <div className="mt-4 flex flex-wrap gap-2 text-xs"><Pill icon={Store}>{location.fulfillment_mode === 'pickup_only' ? 'Pickup only location' : 'Pickup + delivery location'}</Pill><Pill icon={Users}>{location.partner_type === 'partner' ? 'Partner pickup store' : 'Owned store'}</Pill><Pill icon={Users}>{location.login ? `Login: ${authEmailToUsername(location.login.email)}` : 'No login linked'}</Pill></div>
           </article>
         ))}
       </div>
@@ -139,8 +136,7 @@ export default function Locations() {
           <div className="max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
             <h2 className="mb-5 text-xl font-semibold">{editing === 'new' ? 'Add shop and login' : 'Edit shop'}</h2>
             <div className="grid gap-4 sm:grid-cols-2">
-              <Input label="Business / pharmacy" value={form.businessName} onChange={(value) => set('businessName', value)} />
-              <Input label="Store / location name" value={form.locationName} onChange={(value) => set('locationName', value)} />
+              <div className="sm:col-span-2"><Input label="Shop name" value={form.shopName} onChange={(value) => set('shopName', value)} /></div>
               <div className="sm:col-span-2"><Input label="Street address" value={form.line1} onChange={(value) => set('line1', value)} /></div>
               <div className="sm:col-span-2"><Input label="Suite / unit" value={form.line2} onChange={(value) => set('line2', value)} /></div>
               <Input label="City" value={form.city} onChange={(value) => set('city', value)} />
@@ -148,8 +144,7 @@ export default function Locations() {
               <Input label="Phone" value={form.phone} onChange={(value) => set('phone', value)} />
               <label><span className="mb-1 block text-xs font-medium text-slate-500">Location capability</span><select value={form.fulfillmentMode} onChange={(event) => set('fulfillmentMode', event.target.value as typeof form.fulfillmentMode)} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"><option value="pickup_and_delivery">Pickup and delivery</option><option value="pickup_only">Pickup only</option></select></label>
               <label><span className="mb-1 block text-xs font-medium text-slate-500">Store relationship</span><select value={form.partnerType} onChange={(event) => set('partnerType', event.target.value as typeof form.partnerType)} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"><option value="owned">Owned store</option><option value="partner">Partner pickup store</option></select></label>
-              <Input label="Revenue share %" value={form.revenueShare} type="number" onChange={(value) => set('revenueShare', value)} />
-              <div className="sm:col-span-2"><Input label="Pickup instructions" value={form.instructions} onChange={(value) => set('instructions', value)} /></div>
+              <div className="sm:col-span-2"><Input label="Notes" value={form.instructions} onChange={(value) => set('instructions', value)} /></div>
               {editing === 'new' && <><Input label="Store login username" value={form.username} onChange={(value) => set('username', value.toLowerCase())} /><Input label="Temporary password (10+ characters)" value={form.password} type="password" onChange={(value) => set('password', value)} /></>}
               {editing !== 'new' && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.active} onChange={(event) => set('active', event.target.checked)} /> Active location</label>}
             </div>
