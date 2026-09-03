@@ -129,7 +129,7 @@ BEGIN
         SELECT 1 FROM public.equipment_location_inventory li
         JOIN public.equipment_items i ON i.id = li.equipment_item_id
         WHERE li.location_id = v_location AND li.equipment_item_id = v_item_id
-          AND li.quantity_on_hand >= v_qty
+          AND li.quantity_on_hand > 0
           AND li.pickup_enabled AND i.is_active AND i.pickup_enabled
       ) THEN RETURN jsonb_build_object('ok', false, 'reason', 'pickup_unavailable'); END IF;
     END LOOP;

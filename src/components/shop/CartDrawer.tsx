@@ -163,7 +163,7 @@ export default function CartDrawer() {
   return (
     <>
       {open && <div className="fixed inset-0 bg-black/40 z-40" onClick={close} />}
-      <aside className={`fixed top-0 right-0 h-full w-full max-w-md bg-white z-50 shadow-2xl flex flex-col font-poppins transition-transform duration-300 ${open ? 'translate-x-0' : 'translate-x-full'}`}>
+      <aside className={`fixed top-0 right-0 h-full w-full max-w-md bg-white z-50 shadow-2xl flex flex-col font-poppins transition-transform duration-300 lg:w-1/2 lg:max-w-none ${open ? 'translate-x-0' : 'translate-x-full'}`}>
         <div className="bg-navy text-white px-5 py-4 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2 font-semibold"><ShoppingCart size={18} /> Your Cart</div>
           <button onClick={close} className="p-1 hover:bg-white/10 rounded"><X size={20} /></button>
