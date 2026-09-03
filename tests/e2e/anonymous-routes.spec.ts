@@ -97,9 +97,15 @@ async function mockCatalogReads(page: Page, products = catalog) {
 
     const url = new URL(request.url())
     const handle = url.searchParams.get('shopify_handle')?.replace(/^eq\./, '')
-    const id = url.searchParams.get('id')?.replace(/^eq\./, '')
+    const rawId = url.searchParams.get('id')
+    const ids = rawId?.startsWith('in.(')
+      ? rawId.slice(4, -1).split(',')
+      : null
+    const id = rawId?.replace(/^eq\./, '')
     const requestedProduct = handle || id
-    const result = requestedProduct
+    const result = ids
+      ? products.filter((product) => ids.includes(product.id))
+      : requestedProduct
       ? products.filter(
           (product) =>
             product.shopify_handle === requestedProduct || product.id === requestedProduct,
@@ -302,6 +308,36 @@ test('checkout offers assigned pickup locations and keeps hospital beds delivery
   await expect(drawer.getByText('Pay Online', { exact: true })).toBeVisible()
   await expect(drawer.getByText('Pay In Store', { exact: true })).toHaveCount(0)
   await expect(drawer.getByRole('button', { name: 'Submit Request' })).toBeVisible()
+})
+
+test('checkout refreshes pickup settings in a saved cart', async ({ page }) => {
+  await mockCatalogReads(page)
+  await page.addInitScript((savedItem) => {
+    localStorage.setItem('cs_cart_v1', JSON.stringify([savedItem]))
+  }, {
+    id: catalog[0].id,
+    name: catalog[0].name,
+    image_url: null,
+    category: catalog[0].category,
+    mode: 'rent',
+    price: catalog[0].delivery_rental_price,
+    pickup_price: catalog[0].pickup_rental_price,
+    delivery_price: catalog[0].delivery_rental_price,
+    qty: 1,
+    pickup_enabled: true,
+    delivery_enabled: true,
+    same_day_pickup: false,
+    pickup_locations: [],
+  })
+
+  await openPublicRoute(page, '/')
+  await page.getByRole('button', { name: 'Cart', exact: true }).click()
+  const drawer = page.locator('aside')
+  await drawer.getByRole('button', { name: 'Continue to checkout (1)' }).click()
+
+  await expect(drawer.getByRole('radio', { name: /In-store pickup/i })).toBeEnabled()
+  await drawer.getByText('In-store pickup', { exact: true }).click()
+  await expect(drawer.getByLabel('Pickup location')).toHaveValue('playwright-woodbury')
 })
 
 test('double-clicking rental submit sends one request', async ({ page }) => {

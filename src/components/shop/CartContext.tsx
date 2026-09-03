@@ -1,8 +1,9 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { SHOP_PURCHASES_ENABLED } from '../../lib/shopFlags'
-import type { PickupLocation } from '../../lib/shop'
+import { PRODUCT_FIELDS, productPickupLocations, type PickupLocation, type Product } from '../../lib/shop'
+import { publicSupabase } from '../../lib/publicSupabase'
 
 export type CartMode = 'rent' | 'purchase'
 export type CartItem = {
@@ -71,6 +72,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([])
   const [hydrated, setHydrated] = useState(false)
   const [open, setOpen] = useState(false)
+  const refreshedSavedCart = useRef(false)
 
   useEffect(() => {
     try {
@@ -88,6 +90,43 @@ export function CartProvider({ children }: { children: ReactNode }) {
     } catch {
       /* ignore */
     }
+  }, [hydrated, items])
+
+  // Availability can change after a cart was saved. Refresh the storefront
+  // fields once after hydration so an old cart cannot keep stale fulfillment
+  // settings or pickup-location assignments.
+  useEffect(() => {
+    if (!hydrated || items.length === 0 || refreshedSavedCart.current) return
+    refreshedSavedCart.current = true
+
+    const itemIds = [...new Set(items.map((item) => item.id))]
+    void publicSupabase.from('equipment_items').select(PRODUCT_FIELDS)
+      .in('id', itemIds).eq('is_active', true)
+      .then(({ data, error }) => {
+        if (error || !data) return
+        const products = new Map(
+          (data as unknown as Product[]).map((product) => [product.id, product]),
+        )
+        setItems((current) => current.map((item) => {
+          const product = products.get(item.id)
+          if (!product) return item
+          return {
+            ...item,
+            name: product.name,
+            image_url: product.image_url,
+            category: product.category,
+            price: item.mode === 'rent'
+              ? Number(product.delivery_rental_price ?? product.pickup_rental_price ?? item.price)
+              : Number(product.sale_price ?? item.price),
+            pickup_price: product.pickup_rental_price,
+            delivery_price: product.delivery_rental_price,
+            pickup_enabled: product.pickup_enabled,
+            delivery_enabled: product.delivery_enabled,
+            same_day_pickup: product.same_day_pickup,
+            pickup_locations: productPickupLocations(product),
+          }
+        }))
+      })
   }, [hydrated, items])
 
   const add: Ctx['add'] = (i) => {
