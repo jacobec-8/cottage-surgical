@@ -107,7 +107,7 @@ export function sourceLabel(s: string | null | undefined): string | null {
   return s ? SOURCE_LABELS[s] ?? s : null
 }
 
-export type OrderPaymentState = 'paid_online' | 'paid_in_store' | 'not_paid' | 'refunded'
+export type OrderPaymentState = 'paid_online' | 'paid_in_store' | 'paid_on_delivery' | 'not_paid' | 'refunded'
 
 /** Staff-facing payment state derived from the stored status + payment rail. */
 export function orderPaymentState(
@@ -116,12 +116,14 @@ export function orderPaymentState(
 ): OrderPaymentState {
   if (paymentStatus === 'refunded') return 'refunded'
   if (paymentStatus !== 'paid') return 'not_paid'
-  return paymentPreference === 'online' ? 'paid_online' : 'paid_in_store'
+  if (paymentPreference === 'online') return 'paid_online'
+  return paymentPreference === 'on_delivery' ? 'paid_on_delivery' : 'paid_in_store'
 }
 
 export function paymentStateLabel(state: OrderPaymentState): string {
   if (state === 'paid_online') return 'Paid Online'
   if (state === 'paid_in_store') return 'Paid In Store'
+  if (state === 'paid_on_delivery') return 'Paid Delivery Person'
   if (state === 'refunded') return 'Refunded'
   return 'Not Paid'
 }

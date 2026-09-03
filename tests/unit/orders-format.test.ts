@@ -71,10 +71,11 @@ test('amountOf: rentals show monthly rate, purchases sum sale prices', () => {
   assert.equal(amountOf(order({ order_type: 'purchase', rental_line_items: [line()] })), '—')
 })
 
-test('payment state distinguishes online, in-store, and unpaid orders', () => {
+test('payment state distinguishes online, in-store, delivery-person, and unpaid orders', () => {
   assert.equal(orderPaymentState('paid', 'online'), 'paid_online')
   assert.equal(paymentStateLabel(orderPaymentState('paid', 'online')), 'Paid Online')
   assert.equal(paymentStateLabel(orderPaymentState('paid', 'in_store')), 'Paid In Store')
+  assert.equal(paymentStateLabel(orderPaymentState('paid', 'on_delivery')), 'Paid Delivery Person')
   assert.equal(paymentStateLabel(orderPaymentState('unpaid', 'online')), 'Not Paid')
   assert.equal(paymentStateLabel(orderPaymentState(null, null)), 'Not Paid')
   assert.equal(paymentStateLabel(orderPaymentState('refunded', 'online')), 'Refunded')

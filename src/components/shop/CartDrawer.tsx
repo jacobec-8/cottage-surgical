@@ -16,12 +16,13 @@ const REASONS: Record<string, string> = {
   invalid_pickup_location: 'Choose an available pickup location.',
   pickup_unavailable: 'Pickup is no longer available for one of your items. Choose delivery or update your cart.',
   delivery_unavailable: 'Delivery is not available for one of your items. Choose pickup or update your cart.',
-  online_payment_required: 'Delivery orders must be paid online.',
+  invalid_payment_method: 'Choose a payment method that matches pickup or delivery.',
 }
 
 export default function CartDrawer() {
   const { items, open, setOpen, setQty, remove, clear, count } = useCart()
   const [checkout, setCheckout] = useState(false)
+  const [paymentChoice, setPaymentChoice] = useState<'in_store' | 'on_delivery' | 'online'>('on_delivery')
   const [fulfillmentChoice, setFulfillmentChoice] = useState<'pickup' | 'delivery'>('delivery')
   const [pickupLocationId, setPickupLocationId] = useState('')
   const [form, setForm] = useState({ full_name: '', phone: '', email: '', line1: '', city: '', state: 'NY', zip: '', notes: '' })
@@ -42,7 +43,6 @@ export default function CartDrawer() {
   const pickupLocations = commonPickupLocations(items)
   const pickupAvailable = pickupLocations.length > 0
   const deliveryAvailable = items.length > 0 && items.every((item) => item.delivery_enabled)
-  const paymentChoice = fulfillmentChoice === 'delivery' ? 'online' : 'in_store'
   const selectedPickupLocation = pickupLocations.find((location) => location.id === pickupLocationId)
   const set = (k: keyof typeof form) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm({ ...form, [k]: e.target.value })
@@ -56,6 +56,12 @@ export default function CartDrawer() {
     const next = pickupLocationSelection(pickupLocations, pickupLocationId)
     if (next !== pickupLocationId) setPickupLocationId(next)
   }, [pickupLocationId, pickupLocations])
+
+  useEffect(() => {
+    setPaymentChoice((current) => current === 'online'
+      ? current
+      : fulfillmentChoice === 'delivery' ? 'on_delivery' : 'in_store')
+  }, [fulfillmentChoice])
 
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -77,11 +83,12 @@ export default function CartDrawer() {
       const fulfillment = {
         method: fulfillmentChoice,
         pickup_location_id: fulfillmentChoice === 'pickup' ? pickupLocationId : null,
+        payment_method: paymentChoice,
       }
 
       // Rentals remain rentals whichever payment rail the customer chooses.
       // Online = first month through Stripe, then the paid request enters the
-      // same staff review/stock workflow. In-store = submit immediately.
+      // same staff review/stock workflow. In-store/on-delivery = submit immediately.
       let rentNo: number | null = null
       if (rentItems.length) {
         if (paymentChoice === 'online') {
@@ -230,17 +237,33 @@ export default function CartDrawer() {
               </div>
             )}
             <textarea placeholder={`${fulfillmentChoice === 'pickup' ? 'Pickup' : 'Delivery'} instructions (optional)`} value={form.notes} onChange={set('notes')} rows={2} className={`w-full ${inp}`} />
-            {rentItems.length > 0 && fulfillmentChoice === 'pickup' && (
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
-                <span className="font-semibold text-navy">Pay at pickup</span>
-                <span className="mt-0.5 block text-xs">The store will confirm availability before payment.</span>
-              </div>
-            )}
-            {rentItems.length > 0 && fulfillmentChoice === 'delivery' && (
-              <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
-                <span className="flex items-center gap-2 font-semibold text-navy"><CreditCard size={18} /> Online payment required for delivery</span>
-                <span className="mt-1 block text-xs leading-5">Pay ${rentTotal.toFixed(0)} securely with Stripe on the next step. Pay in store is available only with in-store pickup.</span>
-              </div>
+            {rentItems.length > 0 && (
+              <fieldset>
+                <legend className="mb-2 text-sm font-semibold text-navy">How would you like to pay?</legend>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className={`cursor-pointer rounded-xl border p-3 transition ${paymentChoice !== 'online' ? 'border-navy bg-navy/5 ring-1 ring-navy' : 'border-slate-200 hover:border-slate-300'}`}>
+                    <input
+                      type="radio"
+                      name="payment-choice"
+                      value={fulfillmentChoice === 'delivery' ? 'on_delivery' : 'in_store'}
+                      checked={paymentChoice !== 'online'}
+                      onChange={() => setPaymentChoice(fulfillmentChoice === 'delivery' ? 'on_delivery' : 'in_store')}
+                      className="sr-only"
+                    />
+                    {fulfillmentChoice === 'delivery'
+                      ? <Truck size={20} className="mb-2 text-navy" />
+                      : <Store size={20} className="mb-2 text-navy" />}
+                    <span className="block text-sm font-semibold text-navy">{fulfillmentChoice === 'delivery' ? 'Pay Delivery Person' : 'Pay In Store'}</span>
+                    <span className="mt-0.5 block text-xs leading-5 text-slate-500">{fulfillmentChoice === 'delivery' ? 'Pay when your equipment arrives.' : 'Pay when you pick up your equipment.'}</span>
+                  </label>
+                  <label className={`cursor-pointer rounded-xl border p-3 transition ${paymentChoice === 'online' ? 'border-navy bg-navy/5 ring-1 ring-navy' : 'border-slate-200 hover:border-slate-300'}`}>
+                    <input type="radio" name="payment-choice" value="online" checked={paymentChoice === 'online'} onChange={() => setPaymentChoice('online')} className="sr-only" />
+                    <CreditCard size={20} className="mb-2 text-navy" />
+                    <span className="block text-sm font-semibold text-navy">Pay Online</span>
+                    <span className="mt-0.5 block text-xs leading-5 text-slate-500">Pay ${rentTotal.toFixed(0)} securely with Stripe.</span>
+                  </label>
+                </div>
+              </fieldset>
             )}
             {error && <div className="text-sm text-red-600">{error}</div>}
             <button disabled={busy} className="w-full bg-terracotta hover:opacity-90 text-white rounded-lg py-3 font-semibold disabled:opacity-50">
@@ -253,7 +276,9 @@ export default function CartDrawer() {
                 ? 'Purchases are paid securely with Stripe on the next step.'
                 : paymentChoice === 'online'
                   ? 'Stripe collects the first month’s rental. Your request is still reviewed for availability; a rejected paid request is refunded automatically.'
-                  : 'No payment is taken now. We’ll confirm availability and delivery details before you pay.'}
+                  : fulfillmentChoice === 'delivery'
+                    ? 'No payment is taken now. Pay the delivery person when your equipment arrives.'
+                    : 'No payment is taken now. Pay in store when you pick up your equipment.'}
             </p>
           </form>
         ) : (

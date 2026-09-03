@@ -21,6 +21,7 @@ export function SourceBadge({ source }: { source: string | null }) {
 const PAY: Record<string, string> = {
   paid_online: 'bg-emerald-100 text-emerald-700',
   paid_in_store: 'bg-blue-100 text-blue-700',
+  paid_on_delivery: 'bg-cyan-100 text-cyan-800',
   not_paid: 'bg-amber-100 text-amber-800',
   refunded: 'bg-slate-200 text-slate-600',
 }

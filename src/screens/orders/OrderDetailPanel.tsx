@@ -261,8 +261,8 @@ function PaymentStateSetting({ order, onMessage }: { order: OrderDetail; onMessa
       })
       if (error) throw error
       if (!data?.ok) {
-        if (data?.reason === 'delivery_requires_online_payment') {
-          throw new Error('Delivery orders cannot be marked paid in store.')
+        if (data?.reason === 'invalid_payment_method_for_fulfillment') {
+          throw new Error('Choose the payment method that matches this order’s fulfillment.')
         }
         throw new Error(data?.reason || 'Couldn’t update payment state.')
       }
@@ -292,7 +292,9 @@ function PaymentStateSetting({ order, onMessage }: { order: OrderDetail; onMessa
     >
       <option value="not_paid">Not Paid</option>
       <option value="paid_online">Paid Online</option>
-      {(!isDelivery || stored === 'paid_in_store') && <option value="paid_in_store" disabled={isDelivery}>Paid In Store</option>}
+      {isDelivery
+        ? <option value="paid_on_delivery">Paid Delivery Person</option>
+        : <option value="paid_in_store">Paid In Store</option>}
     </select>
   )
 }

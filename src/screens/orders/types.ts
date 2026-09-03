@@ -52,7 +52,7 @@ export type Order = {
   status: string
   source: string | null
   payment_status: string | null
-  payment_preference?: 'in_store' | 'online' | string | null
+  payment_preference?: 'in_store' | 'on_delivery' | 'online' | string | null
   stripe_session_id: string | null
   created_at: string
   updated_at: string

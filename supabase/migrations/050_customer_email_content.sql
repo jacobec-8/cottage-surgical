@@ -71,8 +71,11 @@ BEGIN
 
   v_payment_label := CASE
     WHEN v_payment_status = 'refunded' THEN 'Full refund initiated'
-    WHEN v_payment_status = 'paid' THEN 'First month paid online'
+    WHEN v_payment_status = 'paid' AND v_payment_preference = 'online' THEN 'First month paid online'
+    WHEN v_payment_status = 'paid' AND v_payment_preference = 'on_delivery' THEN 'Paid to delivery person'
+    WHEN v_payment_status = 'paid' THEN 'Paid in store'
     WHEN v_payment_preference = 'online' THEN 'Online payment pending'
+    WHEN v_payment_preference = 'on_delivery' THEN 'Payment due to delivery person'
     ELSE 'Payment due in store'
   END;
 
@@ -170,7 +173,9 @@ BEGIN
       v_order.id, 'request_received',
       'Rental request #' || v_order.order_no || ' received',
       'We received your rental request',
-      'Our team is reviewing your equipment and delivery details. Payment will be collected in store after approval.');
+      CASE WHEN v_order.payment_preference = 'on_delivery'
+        THEN 'Our team is reviewing your equipment and delivery details. Payment will be collected by the delivery person when your equipment arrives.'
+        ELSE 'Our team is reviewing your equipment and delivery details. Payment will be collected in store after approval.' END);
   END IF;
   RETURN COALESCE(NEW, OLD);
 EXCEPTION WHEN others THEN
@@ -252,7 +257,9 @@ BEGIN
     v_event := 'request_received';
     v_subject := 'Rental request #' || NEW.order_no || ' received';
     v_heading := 'We received your rental request';
-    v_message := 'Our team is reviewing your equipment and delivery details. Payment will be collected in store after approval.';
+    v_message := CASE WHEN NEW.payment_preference = 'on_delivery'
+      THEN 'Our team is reviewing your equipment and delivery details. Payment will be collected by the delivery person when your equipment arrives.'
+      ELSE 'Our team is reviewing your equipment and delivery details. Payment will be collected in store after approval.' END;
   ELSIF TG_OP = 'UPDATE' AND OLD.status = 'pending_payment'
         AND NEW.status = 'requested' AND NEW.payment_status = 'paid' THEN
     v_event := 'payment_received';
