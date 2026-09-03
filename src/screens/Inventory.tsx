@@ -3,8 +3,10 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Search, Pencil, Trash2, X, ChevronDown, ChevronRight, ImagePlus } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, X, ChevronDown, ChevronRight, ImagePlus, MapPin, Truck, Zap } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { fulfillmentLabel } from '../lib/fulfillment'
+import { useLocationScope } from '../contexts/LocationContext'
 
 type Item = {
   id: string
@@ -13,24 +15,34 @@ type Item = {
   category: string
   sku: string | null
   monthly_rental_price: number | null
+  pickup_rental_price: number | null
+  delivery_rental_price: number | null
   sale_price: number | null
   quantity_on_hand: number
   image_url: string | null
   is_serialized: boolean
   is_active: boolean
+  is_rentable: boolean
+  is_purchasable: boolean
+  pickup_enabled: boolean
+  delivery_enabled: boolean
+  same_day_pickup: boolean
+  installation_required: boolean
+  location_inventory: { location_id: string; quantity_on_hand: number }[]
 }
 
 const CATEGORIES = ['mobility', 'seating', 'bedroom', 'respiratory']
-const SELECT = 'id,name,description,category,sku,monthly_rental_price,sale_price,quantity_on_hand,image_url,is_serialized,is_active'
+const SELECT = 'id,name,description,category,sku,monthly_rental_price,pickup_rental_price,delivery_rental_price,sale_price,quantity_on_hand,image_url,is_serialized,is_active,is_rentable,is_purchasable,pickup_enabled,delivery_enabled,same_day_pickup,installation_required,location_inventory:equipment_location_inventory(location_id,quantity_on_hand)'
 
 export default function Inventory() {
   const qc = useQueryClient()
+  const { selectedLocationId, selectedLocation, isAllLocations } = useLocationScope()
   const [q, setQ] = useState('')
   const [editing, setEditing] = useState<Partial<Item> | null>(null) // null=closed, {} = new
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['equipment_items'],
+    queryKey: ['equipment_items', selectedLocationId],
     queryFn: async () => {
       const { data, error } = await supabase.from('equipment_items').select(SELECT).order('category').order('name')
       if (error) throw error
@@ -83,6 +95,9 @@ export default function Inventory() {
       <div className="space-y-3">
         {filtered.map((it) => {
           const open = expandedId === it.id
+          const scopedStock = selectedLocationId
+            ? it.location_inventory?.find((entry) => entry.location_id === selectedLocationId)?.quantity_on_hand ?? 0
+            : (it.location_inventory ?? []).reduce((sum, entry) => sum + entry.quantity_on_hand, 0)
           return (
             <div
               key={it.id}
@@ -111,16 +126,25 @@ export default function Inventory() {
                     <div className="mt-0.5 line-clamp-2 text-sm text-slate-500 sm:truncate">{it.description}</div>
                     <div className="mt-2 flex flex-wrap items-center gap-2 sm:gap-3">
                       <span className="rounded-full bg-slate-100 px-2 py-1 text-xs capitalize text-slate-600">{it.category}</span>
-                      <span className="text-xs text-slate-500">Qty on hand: {it.quantity_on_hand}</span>
+                      <span className="text-xs text-slate-500">Qty on hand{selectedLocation ? ` at ${selectedLocation.name}` : isAllLocations ? ' across stores' : ''}: {scopedStock}</span>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium ${it.pickup_enabled ? 'bg-emerald-50 text-emerald-700' : 'bg-blue-50 text-blue-700'}`}>
+                        {it.pickup_enabled ? <MapPin size={11} /> : <Truck size={11} />}{fulfillmentLabel(it)}
+                      </span>
+                      {it.same_day_pickup && it.pickup_enabled && <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-700"><Zap size={11} /> Same-day pickup</span>}
+                      {it.is_rentable && !it.is_purchasable && <span className="rounded-full bg-violet-50 px-2 py-1 text-[11px] font-medium text-violet-700">Rent only</span>}
                     </div>
                     {it.sku && <div className="mt-1 text-xs text-slate-400">SN: {it.sku}</div>}
                   </div>
                 </div>
                 <div className="mt-3 flex items-center justify-between gap-3 border-t border-slate-100 pt-3 sm:mt-0 sm:shrink-0 sm:border-0 sm:pt-0">
                   <div className="sm:text-right">
-                    <div className="text-sm font-semibold">${Number(it.monthly_rental_price ?? 0).toFixed(0)}/mo rental</div>
+                    <div className="text-sm font-semibold">
+                      {it.is_rentable ? [it.pickup_enabled && it.pickup_rental_price != null ? `$${Number(it.pickup_rental_price).toFixed(0)} pickup` : null, it.delivery_enabled && it.delivery_rental_price != null ? `$${Number(it.delivery_rental_price).toFixed(0)} delivered` : null].filter(Boolean).join(' · ') : 'Not rentable'}
+                    </div>
                     <div className="text-xs text-slate-500">
-                      {it.sale_price != null ? `$${Number(it.sale_price).toFixed(0)} sale` : 'no sale price'}
+                      {it.is_purchasable && it.sale_price != null ? `$${Number(it.sale_price).toFixed(0)} sale` : 'Not for sale'}
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
@@ -139,7 +163,7 @@ export default function Inventory() {
                   </div>
                 </div>
               </div>
-              {open && <UnitsPanel itemId={it.id} />}
+              {open && <UnitsPanel itemId={it.id} locationId={selectedLocationId} />}
             </div>
           )
         })}
@@ -152,15 +176,17 @@ export default function Inventory() {
 
 type Unit = { id: string; serial_number: string | null; asset_tag: string | null; status: string }
 
-function UnitsPanel({ itemId }: { itemId: string }) {
+function UnitsPanel({ itemId, locationId }: { itemId: string; locationId: string | null }) {
   const units = useQuery({
-    queryKey: ['equipment_units', itemId],
+    queryKey: ['equipment_units', itemId, locationId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('equipment_units')
         .select('id,serial_number,asset_tag,status')
         .eq('item_id', itemId)
         .order('status')
+      if (locationId) query = query.eq('location_id', locationId)
+      const { data, error } = await query
       if (error) throw error
       return data as Unit[]
     },
@@ -203,11 +229,18 @@ function ItemModal({ item, onClose }: { item: Partial<Item>; onClose: () => void
     description: item.description ?? '',
     category: item.category ?? 'mobility',
     sku: item.sku ?? '',
-    monthly_rental_price: item.monthly_rental_price?.toString() ?? '',
+    pickup_rental_price: item.pickup_rental_price?.toString() ?? '',
+    delivery_rental_price: item.delivery_rental_price?.toString() ?? item.monthly_rental_price?.toString() ?? '',
     sale_price: item.sale_price?.toString() ?? '',
     quantity_on_hand: item.quantity_on_hand?.toString() ?? '0',
     is_serialized: item.is_serialized ?? true,
     is_active: item.is_active ?? true,
+    is_rentable: item.is_rentable ?? true,
+    is_purchasable: item.is_purchasable ?? false,
+    pickup_enabled: item.pickup_enabled ?? false,
+    delivery_enabled: item.delivery_enabled ?? true,
+    same_day_pickup: item.same_day_pickup ?? false,
+    installation_required: item.installation_required ?? false,
   })
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(item.image_url ?? null)
@@ -243,13 +276,26 @@ function ItemModal({ item, onClose }: { item: Partial<Item>; onClose: () => void
         description: f.description.trim() || null,
         category: f.category,
         sku: f.sku.trim() || null,
-        monthly_rental_price: f.monthly_rental_price === '' ? null : Number(f.monthly_rental_price),
-        sale_price: f.sale_price === '' ? null : Number(f.sale_price),
+        pickup_rental_price: f.is_rentable && f.pickup_enabled && f.pickup_rental_price !== '' ? Number(f.pickup_rental_price) : null,
+        delivery_rental_price: f.is_rentable && f.delivery_enabled && f.delivery_rental_price !== '' ? Number(f.delivery_rental_price) : null,
+        monthly_rental_price: f.is_rentable && f.delivery_enabled && f.delivery_rental_price !== '' ? Number(f.delivery_rental_price) : (f.pickup_rental_price !== '' ? Number(f.pickup_rental_price) : null),
+        sale_price: f.is_purchasable && f.sale_price !== '' ? Number(f.sale_price) : null,
         quantity_on_hand: f.is_serialized ? 0 : Math.max(0, Number(f.quantity_on_hand) || 0),
         is_serialized: f.is_serialized,
         is_active: f.is_active,
+        is_rentable: f.is_rentable,
+        is_purchasable: f.is_purchasable,
+        pickup_enabled: f.pickup_enabled,
+        delivery_enabled: f.delivery_enabled,
+        same_day_pickup: f.pickup_enabled && f.same_day_pickup,
+        installation_required: f.installation_required,
       }
       if (!payload.name) throw new Error('Name is required')
+      if (!payload.is_rentable && !payload.is_purchasable) throw new Error('Choose rental, purchase, or both.')
+      if (payload.is_rentable && payload.pickup_enabled && payload.pickup_rental_price == null) throw new Error('Enter the in-store pickup rental price.')
+      if (payload.is_rentable && payload.delivery_enabled && payload.delivery_rental_price == null) throw new Error('Enter the delivery + return pickup rental price.')
+      if (payload.is_purchasable && payload.sale_price == null) throw new Error('Enter a sale price for purchasable items.')
+      if (!payload.pickup_enabled && !payload.delivery_enabled) throw new Error('Choose pickup, delivery, or both.')
 
       let uploadedPath: string | null = null
       if (imageFile) {
@@ -342,13 +388,14 @@ function ItemModal({ item, onClose }: { item: Partial<Item>; onClose: () => void
               <input value={f.sku} onChange={set('sku')} className={inp} />
             </div>
             <div>
-              <label className="block text-xs text-slate-500 mb-1">Rental price ($/mo)</label>
-              <input value={f.monthly_rental_price} onChange={set('monthly_rental_price')} type="number" className={inp} />
+              <label className="block text-xs text-slate-500 mb-1">Pickup rental ($/mo)</label>
+              <input value={f.pickup_rental_price} onChange={set('pickup_rental_price')} type="number" min="0" step="0.01" disabled={!f.is_rentable || !f.pickup_enabled} className={inp} />
             </div>
             <div>
-              <label className="block text-xs text-slate-500 mb-1">Sale price ($)</label>
-              <input value={f.sale_price} onChange={set('sale_price')} type="number" className={inp} />
+              <label className="block text-xs text-slate-500 mb-1">Delivery + return pickup rental ($/mo)</label>
+              <input value={f.delivery_rental_price} onChange={set('delivery_rental_price')} type="number" min="0" step="0.01" disabled={!f.is_rentable || !f.delivery_enabled} className={inp} />
             </div>
+            <div><label className="block text-xs text-slate-500 mb-1">Sale price ($) {f.is_purchasable ? '' : '— not required'}</label><input value={f.sale_price} onChange={set('sale_price')} type="number" min="0" step="0.01" disabled={!f.is_purchasable} className={inp} /></div>
             <div>
               <label className="block text-xs text-slate-500 mb-1">Qty on hand</label>
               <input value={f.quantity_on_hand} onChange={set('quantity_on_hand')} type="number" min="0" disabled={f.is_serialized} className={inp} />
@@ -363,6 +410,17 @@ function ItemModal({ item, onClose }: { item: Partial<Item>; onClose: () => void
               </label>
             </div>
           </div>
+          <fieldset className="rounded-xl border border-slate-200 p-3">
+            <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-500">How this item is offered</legend>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.is_rentable} onChange={set('is_rentable')} /> Available to rent</label>
+              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.is_purchasable} onChange={set('is_purchasable')} /> Available for sale</label>
+              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.pickup_enabled} onChange={set('pickup_enabled')} /> In-store pickup</label>
+              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.delivery_enabled} onChange={set('delivery_enabled')} /> Delivery</label>
+              <label className={`flex items-center gap-2 text-sm sm:col-span-2 ${f.pickup_enabled ? '' : 'text-slate-400'}`}><input type="checkbox" checked={f.same_day_pickup} onChange={set('same_day_pickup')} disabled={!f.pickup_enabled} /> Same-day pickup may be available</label>
+              <label className="flex items-center gap-2 text-sm sm:col-span-2"><input type="checkbox" checked={f.installation_required} onChange={set('installation_required')} /> Staff installation required</label>
+            </div>
+          </fieldset>
           {err && <div className="text-sm text-red-600">{err}</div>}
           <div className="flex justify-end gap-2 pt-2">
             <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">

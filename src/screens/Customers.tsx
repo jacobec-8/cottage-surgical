@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
+import { useLocationScope } from '../contexts/LocationContext'
 
 type Customer = {
   id: string
@@ -12,13 +13,16 @@ type Customer = {
 }
 
 export default function Customers() {
+  const { selectedLocationId } = useLocationScope()
   const { data, isLoading, error } = useQuery({
-    queryKey: ['customers'],
+    queryKey: ['customers', selectedLocationId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('customers')
         .select('id,full_name,phone,coverage_type,address_city')
         .order('full_name')
+      if (selectedLocationId) query = query.eq('location_id', selectedLocationId)
+      const { data, error } = await query
       if (error) throw error
       return data as Customer[]
     },

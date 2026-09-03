@@ -32,11 +32,25 @@ const catalog = [
     description: 'Read-only browser-test fixture.',
     category: 'mobility',
     monthly_rental_price: 125,
+    pickup_rental_price: 125,
+    delivery_rental_price: 125,
     sale_price: null,
     image_url: null,
     shopify_handle: 'playwright-wheelchair',
     is_rentable: true,
     is_purchasable: false,
+    pickup_enabled: true,
+    delivery_enabled: true,
+    same_day_pickup: true,
+    installation_required: false,
+    pickup_locations: [{
+      pickup_location: {
+        id: 'playwright-woodbury', name: 'Woodbury Store', address_line1: '1 Test Lane',
+        address_line2: null, address_city: 'Woodbury', address_state: 'NY', address_zip: '11797',
+        phone: null, instructions: 'Bring photo ID.',
+        fulfillment_mode: 'pickup_and_delivery', partner_type: 'owned',
+      },
+    }],
   },
   {
     id: 'playwright-bed-1',
@@ -44,11 +58,18 @@ const catalog = [
     description: 'Read-only browser-test fixture.',
     category: 'beds',
     monthly_rental_price: 275,
+    pickup_rental_price: null,
+    delivery_rental_price: 275,
     sale_price: null,
     image_url: null,
     shopify_handle: 'playwright-hospital-bed',
     is_rentable: true,
     is_purchasable: false,
+    pickup_enabled: false,
+    delivery_enabled: true,
+    same_day_pickup: false,
+    installation_required: true,
+    pickup_locations: [],
   },
 ]
 
@@ -213,10 +234,10 @@ test('cart quantity persists across reload and items can be removed', async ({ p
     .locator('div.border.border-slate-200.rounded-xl')
     .filter({ hasText: 'Playwright Wheelchair' })
   await expect(cartItem).toBeVisible()
-  await expect(drawer.getByRole('button', { name: 'Request Delivery (1)' })).toBeVisible()
+  await expect(drawer.getByRole('button', { name: 'Continue to checkout (1)' })).toBeVisible()
 
   await cartItem.locator('button').nth(1).click()
-  await expect(drawer.getByRole('button', { name: 'Request Delivery (2)' })).toBeVisible()
+  await expect(drawer.getByRole('button', { name: 'Continue to checkout (2)' })).toBeVisible()
   await expect(drawer.getByText('$250/mo', { exact: true })).toBeVisible()
   await expect
     .poll(() =>
@@ -236,10 +257,10 @@ test('cart quantity persists across reload and items can be removed', async ({ p
     .locator('aside div.border.border-slate-200.rounded-xl')
     .filter({ hasText: 'Playwright Wheelchair' })
   await expect(restoredItem).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Request Delivery (2)' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Continue to checkout (2)' })).toBeVisible()
 
   await restoredItem.locator('button').first().click()
-  await expect(page.getByRole('button', { name: 'Request Delivery (1)' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Continue to checkout (1)' })).toBeVisible()
   await expect(drawer.getByText('$125/mo', { exact: true }).last()).toBeVisible()
 
   await restoredItem.locator('button').nth(2).click()
@@ -251,10 +272,37 @@ test('cart quantity persists across reload and items can be removed', async ({ p
     .toBe(0)
 })
 
+test('checkout offers assigned pickup locations and keeps hospital beds delivery-only', async ({ page }) => {
+  await mockCatalogReads(page)
+  await openPublicRoute(page, '/')
+
+  const wheelchair = page.getByRole('link', { name: 'Playwright Wheelchair', exact: true }).locator('..')
+  await wheelchair.getByRole('button', { name: 'Rent Now' }).click()
+  const drawer = page.locator('aside')
+  await drawer.getByRole('button', { name: 'Continue to checkout (1)' }).click()
+
+  const pickup = drawer.getByRole('radio', { name: /In-store pickup/i })
+  await expect(pickup).toBeEnabled()
+  await drawer.getByText('In-store pickup', { exact: true }).click()
+  await expect(drawer.getByLabel('Pickup location')).toHaveValue('playwright-woodbury')
+  await expect(drawer.getByText(/Same-day pickup may be available/i)).toBeVisible()
+  await expect(drawer.getByPlaceholder('Delivery address')).toHaveCount(0)
+
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await page.evaluate(() => localStorage.removeItem('cs_cart_v1'))
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  const bed = page.getByRole('link', { name: 'Playwright Hospital Bed', exact: true }).locator('..')
+  await bed.getByRole('button', { name: 'Rent Now' }).click()
+  await drawer.getByRole('button', { name: 'Continue to checkout (1)' }).click()
+  await expect(drawer.getByRole('radio', { name: /In-store pickup/i })).toBeDisabled()
+  await expect(drawer.getByRole('radio', { name: /Delivery/i })).toBeChecked()
+  await expect(drawer.getByPlaceholder('Delivery address')).toBeVisible()
+})
+
 test('double-clicking rental submit sends one request', async ({ page }) => {
   await mockCatalogReads(page)
   let submissions = 0
-  await page.route('**/rest/v1/rpc/submit_rental_request', async (route) => {
+  await page.route('**/rest/v1/rpc/submit_rental_request_with_fulfillment', async (route) => {
     submissions += 1
     await new Promise((resolve) => setTimeout(resolve, 100))
     await route.fulfill({
@@ -272,7 +320,7 @@ test('double-clicking rental submit sends one request', async ({ page }) => {
   await productDetails.getByRole('button', { name: 'Rent Now' }).click()
 
   const drawer = page.locator('aside')
-  await drawer.getByRole('button', { name: 'Request Delivery (1)' }).click()
+  await drawer.getByRole('button', { name: 'Continue to checkout (1)' }).click()
   await drawer.getByPlaceholder('Full name').fill('Repeat Customer')
   await drawer.getByPlaceholder('Phone').fill('5165550100')
   await drawer.getByPlaceholder('Email').fill('repeat@example.com')

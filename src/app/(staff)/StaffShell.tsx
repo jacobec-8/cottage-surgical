@@ -5,6 +5,7 @@ import Layout from '../../components/Layout'
 import ProtectedRoute from '../../components/ProtectedRoute'
 import RealtimeSync from '../../components/RealtimeSync'
 import { AuthProvider, type Profile } from '../../contexts/AuthContext'
+import { LocationProvider } from '../../contexts/LocationContext'
 import Providers from '../providers'
 
 export default function StaffShell({
@@ -21,14 +22,16 @@ export default function StaffShell({
   return (
     <Providers>
       <AuthProvider initialUserId={initialUserId} initialProfile={initialProfile}>
-        <ProtectedRoute>
-          {authorized ? (
-            <>
-              <RealtimeSync />
-              <Layout>{children}</Layout>
-            </>
-          ) : null}
-        </ProtectedRoute>
+        <LocationProvider>
+          <ProtectedRoute>
+            {authorized ? (
+              <>
+                <RealtimeSync />
+                <Layout>{children}</Layout>
+              </>
+            ) : null}
+          </ProtectedRoute>
+        </LocationProvider>
       </AuthProvider>
     </Providers>
   )

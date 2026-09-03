@@ -65,6 +65,15 @@ export type Order = {
   address_city: string | null
   address_state: string | null
   address_zip: string | null
+  fulfillment_method?: 'pickup' | 'delivery' | string | null
+  pickup_location?: {
+    name: string
+    address_line1: string
+    address_line2: string | null
+    address_city: string
+    address_state: string
+    address_zip: string
+  } | null
   customer: OrderCustomer | null
   rental_line_items: OrderLine[]
   deliveries: OrderDelivery[]
@@ -113,7 +122,8 @@ const DELIVERY_DETAIL_SELECT =
 const ORDER_BASE =
   'id,order_no,order_type,status,source,payment_status,payment_preference,stripe_session_id,created_at,updated_at,' +
   'start_date,end_date,monthly_rate,deposit_amount,special_notes,' +
-  'address_line1,address_city,address_state,address_zip'
+  'address_line1,address_city,address_state,address_zip,fulfillment_method,' +
+  'pickup_location:pickup_locations(name,address_line1,address_line2,address_city,address_state,address_zip)'
 
 export const ORDER_LIST_SELECT =
   `${ORDER_BASE},customer:customers(full_name,phone,email),${LINE_SELECT},${DELIVERY_LIST_SELECT}`

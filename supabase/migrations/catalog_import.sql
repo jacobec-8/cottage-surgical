@@ -9,15 +9,22 @@
 -- NO sale price in Shopify for these rental items -> sale_price left NULL.
 --
 -- Idempotent: upsert on shopify_product_id; units created once per asset_tag.
--- Run on demand AFTER migrations 001-014:
+-- Run on demand AFTER migrations 001-054:
 --   python3 scripts/run_migrations.py --only catalog_import.sql
--- Requires migration 014 (shopify_product_id, vendor columns).
+-- Requires migrations 014 (Shopify fields) and 053-054 (fulfillment pricing).
 -- ═══════════════════════════════════════════════════════════════════════════
 
 INSERT INTO public.equipment_items
   (name, description, category, sku, image_url, monthly_rental_price,
-   quantity_on_hand, is_serialized, is_rentable, is_purchasable, vendor, shopify_product_id)
-VALUES
+   quantity_on_hand, is_serialized, is_rentable, is_purchasable, vendor, shopify_product_id,
+   pickup_enabled, delivery_enabled, same_day_pickup, installation_required,
+   pickup_rental_price, delivery_rental_price)
+SELECT imported.*,
+  lower(imported.name) NOT LIKE '%hospital bed%', TRUE, FALSE,
+  lower(imported.name) LIKE '%hospital bed%',
+  CASE WHEN lower(imported.name) NOT LIKE '%hospital bed%' THEN imported.monthly_rental_price END,
+  imported.monthly_rental_price
+FROM (VALUES
   ('3 Position Seat Lift Chair', 'Delivers 3-position and infinite position seat lift chairs, also known as medical recliners, for short-term and long-term rental needs.', 'seating', '3PSL', 'https://cdn.shopify.com/s/files/1/0083/8687/1358/products/71PAW-IkmML._SX522.jpg?v=1550251686', 250.00, 1, TRUE, TRUE, FALSE, 'Cottage Pharmacy & Surgicals', 2019018047550),
   ('5 Liter Compact Stationary Oxygen Concentrator', '5 Liter Concentrator Oxygen Sensor It is the most reliable, efficient, and convenient source of supplemental oxygen available. The oxygen concentrator is 34% smaller than other traditional 5 liter units and is electrically operated. This unit separates the oxygen from the air in the room allowing high-purity oxygen to be delivered through the oxygen outlet. Even though the compact concentrator filters oxygen in the room, it will not affect the normal level of oxygen throughout the room. Stationary must be plugged in to use. Oxygen concentrating effectiveness: 1-5 lpm@93%02 (+/-3%). Use with a maximum of 50'' of tubing when using a 7'' foot cannula and bubble humidifier.', 'respiratory', '5LCS', 'https://cdn.shopify.com/s/files/1/0083/8687/1358/products/devilbiss-oxygen-concentrator-5-liter-d54.png?v=1550251699', 299.00, 4, TRUE, TRUE, FALSE, 'Cottage Pharmacy & Surgicals', 2019018571838),
   ('COMPANION WHEELCHAIR', NULL, 'mobility', 'CW', 'https://cdn.shopify.com/s/files/1/0083/8687/1358/products/f9e676d2-a92a-42ec-a1ce-238fbc831e12._CR0_0_300_300_PT0_SX300__-Copy.jpg?v=1635358384', 199.99, 5, TRUE, TRUE, FALSE, 'Cottage Pharmacy & Surgical', 7036766290093),
@@ -32,12 +39,17 @@ VALUES
   ('Suction Machine - Assist Suction Aspirator', 'Suction Aspirator is simple to use and has rugged construction to withstand the rigors of homecare use. It is also great for the crash cart. Vac-Assist Suction Aspirator features heavy-duty handle design that prevents breakage, heavy-duty vacuum regulator and ultra-quiet motor (only 58 decibel operation noise level). The solid base is easy to keep clean and features suction cup to keep the unit stationary while in use.', 'respiratory', 'SMAS', 'https://cdn.shopify.com/s/files/1/0083/8687/1358/products/suction_machine.jpg?v=1550251696', 200.00, 9, TRUE, TRUE, FALSE, 'PYK Local', 2019018440766),
   ('Trapeze Bar', 'Heavy-gauge two-piece square steel tubing provides maximum support Mounts easily to metal frame headboards and fits most major manufacturers'' Attractive brown-vein finish Easy-to-install without tools Easy-to-adjust height, length and horizontal position', 'bedroom', 'TB', 'https://cdn.shopify.com/s/files/1/0083/8687/1358/products/13009KT-BV_4.jpg?v=1550251705', 125.00, 10, TRUE, TRUE, FALSE, 'Cottage Pharmacy & Surgicals', 2019018768446),
   ('Wheelchair - Light Weight Wheelchair with Various Flip Back Arm Styles and Front Rigging Options', 'Carbon steel frame with silver vein finish; Nylon upholstery is durable, lightweight, attractive, and easy to clean; Weighs under 36 lbs (excluding front riggings) Built-in seat rail extensions and extendable upholstery easily adjust seat depth from 16" to 18"; Padded armrests provide additional comfort Composite, Mag-style wheels are lightweight and maintenance free; 8" front casters are adjustable in three positions New frame style eliminates seat guides and allows for custom back inserts and accessories; Dual axle provides easy transition of seat height to hemi-level Precision sealed wheel bearings in front and rear ensure long-lasting performance and reliability; Comes with push-to-lock wheel locks', 'mobility', 'WLWW', 'https://cdn.shopify.com/s/files/1/0083/8687/1358/products/91xNn9rThxL._SX522.jpg?v=1550251694', 299.99, 5, TRUE, TRUE, FALSE, 'PYK Local', 2019018309694)
+) AS imported(
+  name, description, category, sku, image_url, monthly_rental_price,
+  quantity_on_hand, is_serialized, is_rentable, is_purchasable, vendor, shopify_product_id
+)
 ON CONFLICT (shopify_product_id) DO UPDATE SET
   name = EXCLUDED.name,
   description = EXCLUDED.description,
   category = EXCLUDED.category,
   image_url = EXCLUDED.image_url,
-  monthly_rental_price = EXCLUDED.monthly_rental_price,
+  -- Split fulfillment prices are staff-owned after import. A later catalog
+  -- sync must not mistake two different products' prices for variants.
   vendor = EXCLUDED.vendor;
 
 -- Generate serialized units to match on-hand quantity (idempotent via asset_tag).

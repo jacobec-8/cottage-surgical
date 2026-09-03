@@ -11,6 +11,7 @@ export type Profile = {
   full_name: string | null
   role: string
   is_active: boolean
+  location_id: string | null
 }
 
 const STAFF_ROLES = ['admin', 'staff', 'driver']
@@ -109,7 +110,7 @@ export function AuthProvider({ children, initialUserId, initialProfile }: AuthPr
       if (showLoading) setProfileLoaded(false)
       const { data, error } = await supabase
         .from('profiles')
-        .select('id,email,full_name,role,is_active')
+        .select('id,email,full_name,role,is_active,location_id')
         .eq('id', userId)
         .single()
       if (!active) return

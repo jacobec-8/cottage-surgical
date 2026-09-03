@@ -8,7 +8,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { authEmailToUsername } from '../lib/staffLogin'
 import { supabase } from '../lib/supabase'
 
-type Profile = { id: string; email: string; full_name: string | null; phone: string | null; role: 'admin' | 'staff' | 'driver'; is_active: boolean; created_at: string; updated_at: string }
+type Profile = { id: string; email: string; full_name: string | null; phone: string | null; role: 'admin' | 'staff' | 'driver'; is_active: boolean; created_at: string; updated_at: string; location_id: string | null }
 type Driver = { id: string; first_name: string; last_name: string; phone: string | null; license_number: string | null; license_expiry: string | null; hire_date: string | null; status: 'active' | 'inactive' | 'on_leave' }
 type Note = { id: string; body: string; created_at: string; author: { full_name: string | null; email: string } | null }
 type Delivery = { id: string; leg_type: string; status: string; scheduled_date: string | null }
@@ -20,7 +20,7 @@ export default function StaffDetail({ profileId }: { profileId: string }) {
   const person = useQuery({
     queryKey: ['profiles', 'detail', profileId],
     queryFn: async () => {
-      const { data, error } = await supabase.from('profiles').select('id,email,full_name,phone,role,is_active,created_at,updated_at').eq('id', profileId).maybeSingle()
+      const { data, error } = await supabase.from('profiles').select('id,email,full_name,phone,role,is_active,created_at,updated_at,location_id').eq('id', profileId).maybeSingle()
       if (error) throw error
       return data as Profile | null
     },
@@ -111,7 +111,7 @@ function ProfileSettings({ profile, currentUserId, driver, onSaved }: { profile:
       let insertedDriverId: string | null = null
       if (payload.role === 'driver' && !driver) {
         const parts = payload.full_name.split(/\s+/); const first_name = parts.shift() || payload.full_name; const last_name = parts.join(' ') || 'Driver'
-        const { data: createdDriver, error: driverError } = await supabase.from('drivers').insert({ user_id: profile.id, first_name, last_name, phone: payload.phone, status: 'active' }).select('id').single()
+        const { data: createdDriver, error: driverError } = await supabase.from('drivers').insert({ user_id: profile.id, first_name, last_name, phone: payload.phone, status: 'active', location_id: profile.location_id }).select('id').single()
         if (driverError) throw driverError
         insertedDriverId = createdDriver.id
       }
@@ -132,7 +132,7 @@ function DriverSettings({ profile, driver, onSaved }: { profile: Profile; driver
   const [form, setForm] = useState({ firstName: driver?.first_name ?? profile.full_name?.split(/\s+/)[0] ?? '', lastName: driver?.last_name ?? profile.full_name?.split(/\s+/).slice(1).join(' ') ?? '', phone: driver?.phone ?? profile.phone ?? '', license: driver?.license_number ?? '', expiry: driver?.license_expiry ?? '', hireDate: driver?.hire_date ?? '', status: driver?.status ?? 'active' })
   useEffect(() => { if (driver) setForm({ firstName: driver.first_name, lastName: driver.last_name, phone: driver.phone ?? '', license: driver.license_number ?? '', expiry: driver.license_expiry ?? '', hireDate: driver.hire_date ?? '', status: driver.status }) }, [driver])
   const set = (key: keyof typeof form, value: string) => setForm((current) => ({ ...current, [key]: value }))
-  const save = useMutation({ mutationFn: async () => { if (!form.firstName.trim() || !form.lastName.trim()) throw new Error('First and last name are required.'); const payload = { user_id: profile.id, first_name: form.firstName.trim(), last_name: form.lastName.trim(), phone: form.phone.trim() || null, license_number: form.license.trim() || null, license_expiry: form.expiry || null, hire_date: form.hireDate || null, status: form.status }; const result = driver ? await supabase.from('drivers').update(payload).eq('id', driver.id) : await supabase.from('drivers').insert(payload); if (result.error) throw result.error }, onSuccess: onSaved })
+  const save = useMutation({ mutationFn: async () => { if (!form.firstName.trim() || !form.lastName.trim()) throw new Error('First and last name are required.'); const payload = { user_id: profile.id, first_name: form.firstName.trim(), last_name: form.lastName.trim(), phone: form.phone.trim() || null, license_number: form.license.trim() || null, license_expiry: form.expiry || null, hire_date: form.hireDate || null, status: form.status, location_id: profile.location_id }; const result = driver ? await supabase.from('drivers').update(payload).eq('id', driver.id) : await supabase.from('drivers').insert(payload); if (result.error) throw result.error }, onSuccess: onSaved })
   const input = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
   return <section className="bg-white border border-slate-200 rounded-2xl p-5"><div className="flex items-center gap-2 mb-5"><Truck size={18} className="text-emerald-600" /><h2 className="font-semibold text-lg">Driver settings</h2></div><div className="grid sm:grid-cols-2 gap-4"><Field label="First name"><input className={input} value={form.firstName} onChange={(e) => set('firstName', e.target.value)} /></Field><Field label="Last name"><input className={input} value={form.lastName} onChange={(e) => set('lastName', e.target.value)} /></Field><Field label="Driver phone"><input className={input} value={form.phone} onChange={(e) => set('phone', e.target.value)} /></Field><Field label="Dispatch status"><select className={input} value={form.status} onChange={(e) => set('status', e.target.value)}><option value="active">Active</option><option value="on_leave">On leave</option><option value="inactive">Inactive</option></select></Field><Field label="License number"><input className={input} value={form.license} onChange={(e) => set('license', e.target.value)} /></Field><Field label="License expiry"><input type="date" className={input} value={form.expiry} onChange={(e) => set('expiry', e.target.value)} /></Field><Field label="Hire date"><input type="date" className={input} value={form.hireDate} onChange={(e) => set('hireDate', e.target.value)} /></Field></div>{save.error && <div className="text-sm text-red-600 mt-3">{(save.error as Error).message}</div>}<div className="flex justify-end mt-5"><button onClick={() => save.mutate()} disabled={save.isPending} className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 text-sm disabled:opacity-50"><Save size={15} /> {save.isPending ? 'Saving…' : 'Save driver settings'}</button></div></section>
 }

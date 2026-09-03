@@ -31,8 +31,12 @@ export function Field({ label, children }: { label: string; children: ReactNode 
 export function CustomerSection({ o }: { o: OrderDetail }) {
   const c = o.customer
   const address = addressOf(o)
+  const pickup = o.pickup_location
+  const pickupAddress = pickup
+    ? [pickup.address_line1, pickup.address_line2, pickup.address_city, pickup.address_state, pickup.address_zip].filter(Boolean).join(', ')
+    : null
   return (
-    <Section title="Customer & service address">
+    <Section title="Customer & fulfillment">
       <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-1.5 text-sm">
         <div className="font-medium">{c?.full_name ?? 'Customer'}</div>
         {c?.phone && (
@@ -46,7 +50,13 @@ export function CustomerSection({ o }: { o: OrderDetail }) {
         )}
         <div className="flex items-start gap-2 text-slate-600 pt-1 border-t border-slate-100">
           <MapPin size={14} className="mt-0.5 shrink-0" />
-          {address ? <span>{address}</span> : <span className="text-slate-400">No service address on this order</span>}
+          {o.fulfillment_method === 'pickup' && pickup ? (
+            <span><span className="font-medium">Pickup at {pickup.name}</span><br />{pickupAddress}</span>
+          ) : address ? (
+            <span><span className="font-medium">Delivery</span><br />{address}</span>
+          ) : (
+            <span className="text-slate-400">No fulfillment address on this order</span>
+          )}
         </div>
       </div>
     </Section>

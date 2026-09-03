@@ -11,6 +11,7 @@ import UnpaidRow from './orders/UnpaidRow'
 import OrderDetailPanel from './orders/OrderDetailPanel'
 import { useSchedulePickup } from './orders/useSchedulePickup'
 import { useSelectedOrder } from './orders/useSelectedOrder'
+import { useLocationScope } from '../contexts/LocationContext'
 
 /** Confirmed / in-progress work — excludes inbox and unpaid checkouts; cancelled has its own tab. */
 const WORK_TABS = ['all', 'open', 'scheduled', 'pickup_scheduled', 'closed', 'cancelled'] as const
@@ -18,6 +19,7 @@ type Tab = (typeof WORK_TABS)[number] | 'unpaid'
 const OPEN_RENTAL_STATUSES = new Set(['open', 'active', 'overdue'])
 
 export default function Orders() {
+  const { selectedLocationId } = useLocationScope()
   const [tab, setTab] = useState<Tab>('open')
   const [actionMsg, setActionMsg] = useState('')
   const [selected, setSelected] = useSelectedOrder()
@@ -27,34 +29,36 @@ export default function Orders() {
   const schedulePickup = useSchedulePickup(setActionMsg)
 
   const work = useQuery({
-    queryKey: ['orders'],
+    queryKey: ['orders', selectedLocationId],
     staleTime: 0,
     refetchInterval: 15_000,
     refetchIntervalInBackground: true,
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('rental_orders')
         .select(ORDER_LIST_SELECT)
         .not('status', 'in', '(requested,pending_payment)')
         .order('created_at', { ascending: false })
-        .overrideTypes<Order[], { merge: false }>()
+      if (selectedLocationId) query = query.eq('location_id', selectedLocationId)
+      const { data, error } = await query.overrideTypes<Order[], { merge: false }>()
       if (error) throw error
       return data
     },
   })
 
   const unpaid = useQuery({
-    queryKey: ['pending_payments'],
+    queryKey: ['pending_payments', selectedLocationId],
     staleTime: 0,
     refetchInterval: 15_000,
     refetchIntervalInBackground: true,
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('rental_orders')
         .select(ORDER_LIST_SELECT)
         .eq('status', 'pending_payment')
         .order('created_at', { ascending: false })
-        .overrideTypes<Order[], { merge: false }>()
+      if (selectedLocationId) query = query.eq('location_id', selectedLocationId)
+      const { data, error } = await query.overrideTypes<Order[], { merge: false }>()
       if (error) throw error
       return data
     },

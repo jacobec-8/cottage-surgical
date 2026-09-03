@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query'
 import { ChevronRight, Search, ShieldCheck, Truck, UserCog, Users } from 'lucide-react'
 import { authEmailToUsername } from '../lib/staffLogin'
 import { supabase } from '../lib/supabase'
+import { useLocationScope } from '../contexts/LocationContext'
 
 type Profile = {
   id: string
@@ -15,21 +16,26 @@ type Profile = {
   role: 'admin' | 'staff' | 'driver'
   is_active: boolean
   created_at: string
+  location_id: string | null
+  location: { name: string } | null
 }
 
 export default function StaffDirectory() {
+  const { selectedLocationId } = useLocationScope()
   const [query, setQuery] = useState('')
   const profiles = useQuery({
-    queryKey: ['profiles', 'staff-directory'],
+    queryKey: ['profiles', 'staff-directory', selectedLocationId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let request = supabase
         .from('profiles')
-        .select('id,email,full_name,phone,role,is_active,created_at')
+        .select('id,email,full_name,phone,role,is_active,created_at,location_id,location:pickup_locations(name)')
         .in('role', ['admin', 'staff', 'driver'])
         .order('role')
         .order('full_name')
+      if (selectedLocationId) request = request.or(`location_id.eq.${selectedLocationId},role.eq.admin`)
+      const { data, error } = await request
       if (error) throw error
-      return data as Profile[]
+      return data as unknown as Profile[]
     },
   })
 
@@ -70,7 +76,7 @@ export default function StaffDirectory() {
             <Avatar name={profile.full_name || authEmailToUsername(profile.email)} role={profile.role} />
             <div className="flex-1 min-w-0">
               <div className="font-medium text-slate-900 truncate">{profile.full_name || 'Unnamed user'}</div>
-              <div className="text-sm text-slate-500 truncate">{authEmailToUsername(profile.email)}{profile.phone ? ` · ${profile.phone}` : ''}</div>
+              <div className="text-sm text-slate-500 truncate">{authEmailToUsername(profile.email)}{profile.location?.name ? ` · ${profile.location.name}` : ''}{profile.phone ? ` · ${profile.phone}` : ''}</div>
             </div>
             <span className={`text-xs rounded-full px-2.5 py-1 capitalize ${profile.role === 'admin' ? 'bg-blue-100 text-blue-700' : profile.role === 'driver' ? 'bg-emerald-100 text-emerald-700' : 'bg-violet-100 text-violet-700'}`}>{profile.role}</span>
             <span className={`text-xs rounded-full px-2.5 py-1 ${profile.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>{profile.is_active ? 'Active' : 'Inactive'}</span>

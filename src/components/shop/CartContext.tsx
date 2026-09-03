@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { SHOP_PURCHASES_ENABLED } from '../../lib/shopFlags'
+import type { PickupLocation } from '../../lib/shop'
 
 export type CartMode = 'rent' | 'purchase'
 export type CartItem = {
@@ -11,7 +12,13 @@ export type CartItem = {
   category: string
   mode: CartMode
   price: number
+  pickup_price: number | null
+  delivery_price: number | null
   qty: number
+  pickup_enabled: boolean
+  delivery_enabled: boolean
+  same_day_pickup: boolean
+  pickup_locations: PickupLocation[]
 }
 
 type Ctx = {
@@ -48,6 +55,12 @@ function sanitizeCart(raw: unknown): CartItem[] {
       ...item,
       image_url: typeof item.image_url === 'string' ? item.image_url : null,
       qty: Math.min(Math.max(1, Number(item.qty) || 1), 20),
+      pickup_enabled: item.pickup_enabled === true,
+      delivery_enabled: item.delivery_enabled !== false,
+      same_day_pickup: item.same_day_pickup === true,
+      pickup_locations: Array.isArray(item.pickup_locations) ? item.pickup_locations : [],
+      pickup_price: typeof item.pickup_price === 'number' ? item.pickup_price : item.price,
+      delivery_price: typeof item.delivery_price === 'number' ? item.delivery_price : item.price,
     }))
 }
 

@@ -7,6 +7,7 @@ import { Plus, Truck, AlertTriangle, ChevronRight } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { authEmailToUsername } from '../lib/staffLogin'
 import { supabase } from '../lib/supabase'
+import { useLocationScope } from '../contexts/LocationContext'
 
 type Driver = {
   id: string
@@ -20,6 +21,7 @@ type DriverLogin = { id: string; email: string; full_name: string | null }
 
 export default function Drivers() {
   const { profile } = useAuth()
+  const { selectedLocationId } = useLocationScope()
   const qc = useQueryClient()
   const [adding, setAdding] = useState(false)
   const [f, setF] = useState({ first_name: '', last_name: '', phone: '' })
@@ -29,12 +31,14 @@ export default function Drivers() {
     // Distinct key from the dispatch pickers (['drivers','active']) so this
     // full-roster query doesn't share their cache and leak inactive drivers /
     // blank columns between pages. invalidate(['drivers']) still refreshes both.
-    queryKey: ['drivers', 'all'],
+    queryKey: ['drivers', 'all', selectedLocationId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('drivers')
         .select('id,first_name,last_name,phone,status,user_id')
         .order('first_name')
+      if (selectedLocationId) query = query.eq('location_id', selectedLocationId)
+      const { data, error } = await query
       if (error) throw error
       return data as Driver[]
     },
@@ -66,6 +70,7 @@ export default function Drivers() {
         last_name: f.last_name.trim(),
         phone: f.phone.trim() || null,
         status: 'active',
+        location_id: selectedLocationId,
       })
       if (error) throw error
     },

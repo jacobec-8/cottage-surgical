@@ -6,9 +6,10 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import {
   LayoutDashboard, PlusCircle, Users, Package, CreditCard, Truck,
-  LogOut, Shield, ChevronRight, MapPin, Phone, Mail, Inbox, UserCog, ClipboardList, LockKeyhole, UsersRound, Menu, X,
+  LogOut, Shield, ChevronRight, MapPin, Phone, Mail, Inbox, UserCog, ClipboardList, LockKeyhole, UsersRound, Menu, X, Building2,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { useLocationScope } from '../contexts/LocationContext'
 import { supabase } from '../lib/supabase'
 import type { StaffModule } from '../lib/staffModules'
 import { useStaffModuleAccess } from '../lib/useStaffModuleAccess'
@@ -29,10 +30,13 @@ const NAV = [
   { to: '/drivers', label: 'Drivers', icon: UserCog, roles: STAFF, module: 'drivers' },
   { to: '/staff', label: 'Staff & Users', icon: UsersRound, roles: ['admin'], adminOnly: true },
   { to: '/staff-access', label: 'Staff Access', icon: LockKeyhole, roles: ['admin'], adminOnly: true },
+  { to: '/locations', label: 'Locations', icon: Building2, roles: ['admin'], adminOnly: true },
 ]
 
 export default function Layout({ children }: { children: ReactNode }) {
   const { profile, signOut } = useAuth()
+  const locationScope = useLocationScope()
+  const { selectedLocationId, selectedLocation } = locationScope
   const isDriver = profile?.role === 'driver'
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const access = useStaffModuleAccess()
@@ -51,16 +55,20 @@ export default function Layout({ children }: { children: ReactNode }) {
   // Live work-queue counts, auto-refreshed so approving a request updates the
   // Orders + Delivery badges (and screens) without a manual refresh.
   const { data: counts } = useQuery({
-    queryKey: ['nav_counts'],
+    queryKey: ['nav_counts', selectedLocationId],
     staleTime: 0, // badge catch-up on tab return after short background
     refetchInterval: 20_000,
     refetchIntervalInBackground: true,
     queryFn: async () => {
-      const [req, ord, del] = await Promise.all([
-        supabase.from('rental_orders').select('*', { count: 'exact', head: true }).eq('status', 'requested'),
-        supabase.from('rental_orders').select('*', { count: 'exact', head: true }).eq('status', 'open'),
-        supabase.from('deliveries').select('*', { count: 'exact', head: true }).not('status', 'in', '(completed,cancelled)'),
-      ])
+      let reqQuery = supabase.from('rental_orders').select('*', { count: 'exact', head: true }).eq('status', 'requested')
+      let ordQuery = supabase.from('rental_orders').select('*', { count: 'exact', head: true }).eq('status', 'open')
+      let delQuery = supabase.from('deliveries').select('*', { count: 'exact', head: true }).not('status', 'in', '(completed,cancelled)')
+      if (selectedLocationId) {
+        reqQuery = reqQuery.eq('location_id', selectedLocationId)
+        ordQuery = ordQuery.eq('location_id', selectedLocationId)
+        delQuery = delQuery.eq('location_id', selectedLocationId)
+      }
+      const [req, ord, del] = await Promise.all([reqQuery, ordQuery, delQuery])
       return { requests: req.count ?? 0, orders: ord.count ?? 0, deliveries: del.count ?? 0 } as Record<string, number>
     },
   })
@@ -76,6 +84,9 @@ export default function Layout({ children }: { children: ReactNode }) {
     },
   })
   const name = profile?.full_name || profile?.email || 'User'
+  const businessName = selectedLocation?.business?.name ?? 'Cottage Surgical'
+  const contactPhone = selectedLocation?.business?.settings?.phone ?? selectedLocation?.phone ?? '516-367-9030 ext 4'
+  const contactEmail = selectedLocation?.business?.settings?.email ?? 'info@cottagepharmacy.com'
   const initials = name.split(' ').map((s) => s[0]).slice(0, 2).join('').toUpperCase()
   const visibleNav = NAV.filter((n) => {
     if (!n.roles.includes(profile?.role || '')) return false
@@ -122,7 +133,7 @@ export default function Layout({ children }: { children: ReactNode }) {
             <Shield size={18} />
           </div>
           <div>
-            <div className="font-semibold text-slate-900 leading-tight">Cottage Surgical</div>
+            <div className="font-semibold text-slate-900 leading-tight">{businessName}</div>
             <div className="text-[11px] text-slate-500">DME Rental Management System</div>
           </div>
         </div>
@@ -148,7 +159,7 @@ export default function Layout({ children }: { children: ReactNode }) {
                 <Shield size={18} />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="truncate font-semibold leading-tight text-slate-900">Cottage Surgical</div>
+                <div className="truncate font-semibold leading-tight text-slate-900">{businessName}</div>
                 <div className="text-[11px] text-slate-500">DME Rental Management System</div>
               </div>
               <button
@@ -186,15 +197,33 @@ export default function Layout({ children }: { children: ReactNode }) {
                 <Shield size={18} />
               </div>
               <div className="hidden min-w-0 min-[375px]:block">
-                <div className="truncate text-sm font-semibold leading-tight text-slate-900">Cottage Surgical</div>
+                <div className="truncate text-sm font-semibold leading-tight text-slate-900">{businessName}</div>
                 <div className="text-[11px] capitalize leading-tight text-slate-500">{isDriver ? 'Driver route' : `${profile?.role || 'Staff'} workspace`}</div>
               </div>
             </div>
           </div>
           <div className="hidden xl:flex items-center gap-5 text-xs text-slate-500">
-            <span className="flex items-center gap-1.5"><MapPin size={13} /> 8285 Jericho Tpke, Woodbury NY</span>
-            <span className="flex items-center gap-1.5"><Phone size={13} /> 516-367-9030 ext 4</span>
-            <span className="flex items-center gap-1.5"><Mail size={13} /> info@cottagepharmacy.com</span>
+            <span className="flex items-center gap-1.5"><MapPin size={13} /> {selectedLocation ? `${selectedLocation.address_line1}, ${selectedLocation.address_city} ${selectedLocation.address_state} ${selectedLocation.address_zip}` : 'All store locations'}</span>
+            <span className="flex items-center gap-1.5"><Phone size={13} /> {contactPhone}</span>
+            <span className="flex items-center gap-1.5"><Mail size={13} /> {contactEmail}</span>
+          </div>
+          <div className="min-w-0 flex-1 sm:max-w-xs lg:flex-none">
+            {profile?.role === 'admin' ? (
+              <label className="block">
+                <span className="sr-only">Store selector</span>
+                <select
+                  aria-label="Store selector"
+                  value={selectedLocationId ?? 'all'}
+                  onChange={(event) => locationScope.setSelectedLocationId(event.target.value === 'all' ? null : event.target.value)}
+                  className="min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="all">All stores</option>
+                  {locationScope.locations.map((location) => <option key={location.id} value={location.id}>{location.name} · {location.address_city}</option>)}
+                </select>
+              </label>
+            ) : selectedLocation ? (
+              <div className="truncate rounded-lg bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700"><Building2 size={14} className="mr-1.5 inline" />{selectedLocation.name}</div>
+            ) : null}
           </div>
           <NotificationsBell />
           <div className="ml-auto flex items-center gap-1 sm:gap-3 lg:ml-0">

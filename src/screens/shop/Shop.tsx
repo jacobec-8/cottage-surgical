@@ -56,7 +56,7 @@ export default function Shop({ initialProducts }: { initialProducts?: Product[] 
         .from('equipment_items').select(PRODUCT_FIELDS)
         .eq('is_active', true).order('category').order('name')
       if (error) throw error
-      return data as Product[]
+      return data as unknown as Product[]
     },
     initialData: initialProducts,
     // Treat the server snapshot as stale so the original mount-time browser
@@ -69,7 +69,7 @@ export default function Shop({ initialProducts }: { initialProducts?: Product[] 
     SHOP_PURCHASES_ENABLED && products.some((p) => p.is_purchasable && p.sale_price != null)
   const categories = useMemo(() => Array.from(new Set(products.map((p) => p.category).filter(Boolean))), [products])
   const filtered = products.filter((p) => {
-    if (mode === 'rent' && !(p.is_rentable && p.monthly_rental_price != null)) return false
+    if (mode === 'rent' && !(p.is_rentable && ((p.pickup_enabled && p.pickup_rental_price != null) || (p.delivery_enabled && p.delivery_rental_price != null)))) return false
     if (mode === 'purchase' && !(SHOP_PURCHASES_ENABLED && p.is_purchasable && p.sale_price != null)) return false
     if (cat !== 'all' && p.category !== cat) return false
     if (query && !`${p.name} ${p.category} ${p.description ?? ''}`.toLowerCase().includes(query.toLowerCase())) return false

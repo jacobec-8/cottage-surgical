@@ -11,8 +11,10 @@ import { lineShortage, requestShortages, shortageMessage, type RequestLine, type
 import RequestActions from './requests/RequestActions'
 import OrderDetailPanel from './orders/OrderDetailPanel'
 import { useSelectedOrder } from './orders/useSelectedOrder'
+import { useLocationScope } from '../contexts/LocationContext'
 
 export default function Requests() {
+  const { selectedLocationId } = useLocationScope()
   const qc = useQueryClient()
   const [actErr, setActErr] = useState('')
   const [note, setNote] = useState('')
@@ -22,22 +24,35 @@ export default function Requests() {
   useStripeReconcile()
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['requests'],
+    queryKey: ['requests', selectedLocationId],
     staleTime: 0, // focus refetch after short background (adversarial M1)
     refetchInterval: 15_000, // keep the inbox live so new storefront requests appear on their own
     refetchIntervalInBackground: true,
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('rental_orders')
         .select(
-          'id,order_no,order_type,status,payment_status,payment_preference,created_at,address_line1,address_city,address_state,address_zip,special_notes,' +
+          'id,order_no,order_type,status,payment_status,payment_preference,created_at,location_id,address_line1,address_city,address_state,address_zip,special_notes,' +
             'customer:customers(full_name,phone,email),' +
-            'rental_line_items(quantity,equipment:equipment_items(id,name,quantity_on_hand,is_serialized))',
+            'rental_line_items(quantity,equipment:equipment_items(id,name,quantity_on_hand,is_serialized,location_inventory:equipment_location_inventory(location_id,quantity_on_hand)))',
         )
         .eq('status', 'requested')
         .order('created_at', { ascending: false })
+      if (selectedLocationId) query = query.eq('location_id', selectedLocationId)
+      const { data, error } = await query
       if (error) throw error
-      return data as any[]
+      return (data ?? []).map((order: any) => ({
+        ...order,
+        rental_line_items: (order.rental_line_items ?? []).map((line: any) => ({
+          ...line,
+          equipment: line.equipment ? {
+            ...line.equipment,
+            quantity_on_hand: (line.equipment.location_inventory ?? []).find(
+              (entry: any) => entry.location_id === order.location_id,
+            )?.quantity_on_hand ?? 0,
+          } : null,
+        })),
+      }))
     },
   })
 

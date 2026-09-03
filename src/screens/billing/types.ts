@@ -16,6 +16,7 @@ export type BillingOrder = {
   start_date: string | null
   end_date: string | null
   deposit_amount: number | null
+  location_id?: string | null
   rental_line_items: { quantity: number; equipment: { name: string } | null }[]
   deliveries: BillingLeg[]
   deposits: { amount: number; status: string }[]
@@ -36,7 +37,7 @@ export type Charge = {
 export const CHARGE_SELECT =
   'id,amount,status,billing_start,billing_end,next_due_date,last_billed_on,' +
   'customer:customers(full_name,phone),' +
-  'order:rental_orders(id,order_no,status,order_type,start_date,end_date,deposit_amount,' +
+  'order:rental_orders!inner(id,order_no,status,order_type,start_date,end_date,deposit_amount,location_id,' +
   'rental_line_items(quantity,equipment:equipment_items(name)),' +
   'deliveries(id,leg_type,status,scheduled_date,completed_at),' +
   'deposits(amount,status))'

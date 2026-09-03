@@ -10,6 +10,7 @@ import { invalidateDispatch, invalidateOrderWorkflow } from '../lib/workflowKeys
 import { useDriverStopContacts, type StopContact } from '../lib/useDriverStopContacts'
 import OrderDetailPanel from './orders/OrderDetailPanel'
 import { useSelectedOrder } from './orders/useSelectedOrder'
+import { useLocationScope } from '../contexts/LocationContext'
 
 type Photo = { storage_path: string; captured_at: string; notes: string | null }
 type Deliv = {
@@ -41,6 +42,7 @@ const SELECT =
 
 export default function Delivery() {
   const { profile } = useAuth()
+  const { selectedLocationId } = useLocationScope()
   const isDriver = profile?.role === 'driver'
   const [view, setView] = useState<'active' | 'completed'>('active')
   // Staff: click a stop to open the order panel (?order=<id>) with that leg highlighted.
@@ -59,25 +61,28 @@ export default function Delivery() {
   const contacts = useDriverStopContacts(isDriver)
 
   const drivers = useQuery({
-    queryKey: ['drivers', 'active'],
+    queryKey: ['drivers', 'active', selectedLocationId],
     enabled: !isDriver,
     queryFn: async () => {
-      const { data } = await supabase
+      let query = supabase
         .from('drivers')
         .select('id,first_name,last_name,user_id')
         .eq('status', 'active')
         .order('first_name')
+      if (selectedLocationId) query = query.eq('location_id', selectedLocationId)
+      const { data } = await query
       return (data ?? []) as { id: string; first_name: string; last_name: string; user_id: string | null }[]
     },
   })
   const { data, isLoading, error } = useQuery({
-    queryKey: ['deliveries', view],
+    queryKey: ['deliveries', view, selectedLocationId],
     refetchOnMount: 'always',        // never open the board on a stale cached list
     staleTime: 0,                    // this board must reflect reality, not the 30s default
     refetchInterval: 20_000,         // fallback poll behind the realtime subscription…
     refetchIntervalInBackground: true, // …that keeps ticking even in a background tab
     queryFn: async () => {
       let q = supabase.from('deliveries').select(SELECT)
+      if (selectedLocationId) q = q.eq('location_id', selectedLocationId)
       q = view === 'active'
         ? q.not('status', 'in', '(completed,cancelled)').order('scheduled_date', { nullsFirst: true })
         : q.eq('status', 'completed').order('completed_at', { ascending: false })

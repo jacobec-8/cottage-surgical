@@ -59,7 +59,7 @@ export const getPublicCatalog = cache(async (): Promise<Product[]> => {
     throw new Error('Unable to load the public equipment catalog.', { cause: error })
   }
 
-  return (data ?? []) as Product[]
+  return (data ?? []) as unknown as Product[]
 })
 
 export const getPublicProduct = cache(async (handle: string): Promise<PublicProductLookup> => {
@@ -79,7 +79,7 @@ export const getPublicProduct = cache(async (handle: string): Promise<PublicProd
   if (byHandle.error) {
     return unavailableProduct(byHandle.error)
   }
-  if (byHandle.data) return { status: 'found', product: byHandle.data as Product }
+  if (byHandle.data) return { status: 'found', product: byHandle.data as unknown as Product }
 
   // equipment_items.id is UUID-backed. Avoid sending an invalid UUID literal
   // to Postgres for an ordinary, missing Shopify handle.
@@ -97,6 +97,6 @@ export const getPublicProduct = cache(async (handle: string): Promise<PublicProd
   }
 
   return byId.data
-    ? { status: 'found', product: byId.data as Product }
+    ? { status: 'found', product: byId.data as unknown as Product }
     : { status: 'not-found' }
 })

@@ -1,13 +1,24 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useQueryClient } from '@tanstack/react-query'
 import { Search, Plus, Minus, Trash2, CheckCircle } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { invalidateOrderWorkflow } from '../lib/workflowKeys'
+import { useLocationScope } from '../contexts/LocationContext'
 
-type Item = { id: string; name: string; category: string; monthly_rental_price: number | null; sale_price: number | null; is_rentable: boolean; is_purchasable: boolean }
+type Item = {
+  id: string
+  name: string
+  category: string
+  delivery_rental_price: number | null
+  sale_price: number | null
+  is_rentable: boolean
+  is_purchasable: boolean
+  delivery_enabled: boolean
+  location_inventory: { location_id: string; quantity_on_hand: number }[]
+}
 type CartLine = { item_id: string; name: string; qty: number; rate: number | null }
 
 const orderErrorMessage = (reason?: string) => {
@@ -23,6 +34,7 @@ const orderErrorMessage = (reason?: string) => {
 
 export default function NewOrder() {
   const qc = useQueryClient()
+  const { selectedLocationId, selectedLocation, isAllLocations } = useLocationScope()
   const [mode, setMode] = useState<'rental' | 'purchase'>('rental')
 
   // customer
@@ -40,36 +52,48 @@ export default function NewOrder() {
   const [err, setErr] = useState('')
   const [result, setResult] = useState<{ order_no: number; unallocated: number } | null>(null)
 
+  useEffect(() => {
+    setCart([])
+    setCust(null)
+    setCustSearch('')
+    setDeliv((current) => ({ ...current, driver: '' }))
+  }, [selectedLocationId])
+
   const customers = useQuery({
-    queryKey: ['cust_search', custSearch],
-    enabled: custMode === 'existing' && custSearch.length >= 2,
+    queryKey: ['cust_search', custSearch, selectedLocationId],
+    enabled: Boolean(selectedLocationId) && custMode === 'existing' && custSearch.length >= 2,
     queryFn: async () => {
-      const { data } = await supabase.from('customers').select('id,full_name,phone').ilike('full_name', `%${custSearch}%`).limit(8)
+      const { data } = await supabase.from('customers').select('id,full_name,phone')
+        .eq('location_id', selectedLocationId!).ilike('full_name', `%${custSearch}%`).limit(8)
       return (data ?? []) as any[]
     },
   })
   const items = useQuery({
-    queryKey: ['neworder_items'],
+    queryKey: ['neworder_items', selectedLocationId],
+    enabled: Boolean(selectedLocationId),
     queryFn: async () => {
       const { data, error } = await supabase.from('equipment_items')
-        .select('id,name,category,monthly_rental_price,sale_price,is_rentable,is_purchasable').eq('is_active', true).order('name')
+        .select('id,name,category,delivery_rental_price,sale_price,is_rentable,is_purchasable,delivery_enabled,location_inventory:equipment_location_inventory!inner(location_id,quantity_on_hand)')
+        .eq('is_active', true).eq('location_inventory.location_id', selectedLocationId!).order('name')
       if (error) throw error
-      return data as Item[]
+      return data as unknown as Item[]
     },
   })
   const drivers = useQuery({
-    queryKey: ['drivers', 'active'],
+    queryKey: ['drivers', 'active', selectedLocationId],
+    enabled: Boolean(selectedLocationId),
     queryFn: async () => {
-      const { data } = await supabase.from('drivers').select('id,first_name,last_name').eq('status', 'active').order('first_name')
+      const { data } = await supabase.from('drivers').select('id,first_name,last_name')
+        .eq('status', 'active').eq('location_id', selectedLocationId!).order('first_name')
       return (data ?? []) as any[]
     },
   })
 
-  const rateFor = (it: Item) => (mode === 'rental' ? it.monthly_rental_price : it.sale_price)
+  const rateFor = (it: Item) => (mode === 'rental' ? it.delivery_rental_price : it.sale_price)
   const filteredItems = useMemo(
     () => (items.data ?? []).filter((it) => {
       const eligible = mode === 'rental'
-        ? it.is_rentable && it.monthly_rental_price != null
+        ? it.is_rentable && it.delivery_enabled && it.delivery_rental_price != null
         : it.is_purchasable && it.sale_price != null
       return eligible && it.name.toLowerCase().includes(itemSearch.toLowerCase())
     }),
@@ -92,6 +116,7 @@ export default function NewOrder() {
   const create = async () => {
     setBusy(true); setErr(''); setResult(null)
     try {
+      if (!selectedLocationId) throw new Error('Select a store before creating an order.')
       if (cart.length === 0) throw new Error('Add at least one item.')
       // Existing vs new customer — the new customer is created INSIDE the RPC
       // (one transaction), so a failed order can never leave an orphan customer
@@ -113,7 +138,7 @@ export default function NewOrder() {
         p_customer_id: customerId,
         p_order_type: mode,
         p_items: cart.map((l) => ({ item_id: l.item_id, quantity: l.qty })),
-        p_delivery: { scheduled_date: deliv.date || null, window_start: deliv.ws || null, window_end: deliv.we || null, driver_id: deliv.driver || null, notes: deliv.notes || null },
+        p_delivery: { location_id: selectedLocationId, scheduled_date: deliv.date || null, window_start: deliv.ws || null, window_end: deliv.we || null, driver_id: deliv.driver || null, notes: deliv.notes || null },
         p_deposit: mode === 'rental' && deliv.deposit ? Math.max(0, Number(deliv.deposit)) : null,
         p_new_customer: newCustomer,
       })
@@ -159,8 +184,10 @@ export default function NewOrder() {
     <div className="max-w-3xl space-y-4">
       <div>
         <h1 className="text-2xl font-semibold mb-1">New Order</h1>
-        <p className="text-slate-500 text-sm">Build a rental or purchase, reserve equipment, and schedule delivery.</p>
+        <p className="text-slate-500 text-sm">Build a rental or purchase from {selectedLocation?.name ?? 'a selected store'}, reserve its equipment, and schedule delivery.</p>
       </div>
+
+      {isAllLocations && <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">Select a store from the header before creating an order.</div>}
 
       <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1">
         {(['rental', 'purchase'] as const).map((m) => (
@@ -282,7 +309,7 @@ export default function NewOrder() {
 
       {err && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{err}</div>}
       <div className="flex justify-end">
-        <button onClick={create} disabled={busy} className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-6 py-2.5 text-sm font-medium disabled:opacity-50">
+        <button onClick={create} disabled={busy || !selectedLocationId} className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-6 py-2.5 text-sm font-medium disabled:opacity-50">
           {busy ? 'Creating…' : `Create ${mode} order`}
         </button>
       </div>

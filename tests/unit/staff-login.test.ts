@@ -23,6 +23,11 @@ test('rejects email addresses and unknown usernames', () => {
   assert.equal(usernameToAuthEmail(''), null)
 })
 
+test('maps a dynamically-created location username to the internal auth domain', () => {
+  assert.equal(usernameToAuthEmail('arlo-drugs'), 'arlo-drugs@staff-login.cottagesurgical.invalid')
+  assert.equal(usernameToAuthEmail('brooklyn'), 'brooklyn@staff-login.cottagesurgical.invalid')
+})
+
 test('allows the real admin email', () => {
   assert.equal(usernameToAuthEmail(' JACOB.CHANDRAN@GMAIL.COM '), 'jacob.chandran@gmail.com')
 })

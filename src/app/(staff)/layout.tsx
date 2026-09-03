@@ -23,7 +23,7 @@ export default async function StaffLayout({ children }: { children: ReactNode })
 
   const { data: profileData } = await supabase
     .from('profiles')
-    .select('id,email,full_name,role,is_active')
+    .select('id,email,full_name,role,is_active,location_id')
     .eq('id', userId)
     .maybeSingle()
 

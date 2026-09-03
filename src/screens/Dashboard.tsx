@@ -11,6 +11,7 @@ import {
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { statusClass, statusLabel } from '../lib/status'
+import { useLocationScope } from '../contexts/LocationContext'
 
 const MODULES = [
   { to: '/customers', icon: Users, title: 'Customers', desc: 'Directory with rental history and payment methods on file' },
@@ -22,6 +23,7 @@ const MODULES = [
 
 export default function Dashboard() {
   const { profile } = useAuth()
+  const { selectedLocationId, selectedLocation } = useLocationScope()
   const qc = useQueryClient()
   const router = useRouter()
   const [tab, setTab] = useState<'overview' | 'rentals'>('overview')
@@ -61,17 +63,19 @@ export default function Dashboard() {
   })
 
   const rentals = useQuery({
-    queryKey: ['rentals'],
+    queryKey: ['rentals', selectedLocationId],
     refetchInterval: 30_000, // fallback behind app realtime
     enabled: profile?.role !== 'driver',
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('rental_orders')
         .select('id,status,monthly_rate,start_date,address_line1,address_city,address_state,address_zip,customer:customers(full_name),rental_line_items(count)')
         // Hide unpaid checkouts and cancelled/inbox rows from rentals overview
         // (NULL start_date was sorting abandoned pending_payment to the top).
         .not('status', 'in', '(requested,cancelled,pending_payment)')
         .order('start_date', { ascending: false })
+      if (selectedLocationId) query = query.eq('location_id', selectedLocationId)
+      const { data, error } = await query
       if (error) throw error
       return data as any[]
     },
@@ -80,11 +84,18 @@ export default function Dashboard() {
   const count = rentals.data?.length ?? 0
   const items = (r: any) => r.rental_line_items?.[0]?.count ?? 0
 
+  const scopedRows = rentals.data ?? []
+  const scoped = selectedLocationId ? {
+    active_rentals: scopedRows.filter((row) => ['open', 'active', 'delivered'].includes(row.status)).length,
+    overdue_rentals: scopedRows.filter((row) => row.status === 'overdue').length,
+    scheduled_rentals: scopedRows.filter((row) => row.status === 'scheduled').length,
+    active_monthly_rate: scopedRows.filter((row) => !['closed', 'cancelled'].includes(row.status)).reduce((sum, row) => sum + Number(row.monthly_rate ?? 0), 0),
+  } : stats.data
   const tiles = [
-    { label: 'Open Rentals', value: stats.data?.active_rentals ?? 0, icon: CheckCircle, color: 'text-emerald-600 bg-emerald-50' },
-    { label: 'Overdue', value: stats.data?.overdue_rentals ?? 0, icon: AlertCircle, color: 'text-red-600 bg-red-50' },
-    { label: 'Scheduled', value: stats.data?.scheduled_rentals ?? 0, icon: CalendarClock, color: 'text-blue-600 bg-blue-50' },
-    { label: 'Monthly Rev', value: `$${Number(stats.data?.active_monthly_rate ?? 0).toLocaleString()}`, icon: DollarSign, color: 'text-violet-600 bg-violet-50' },
+    { label: 'Open Rentals', value: scoped?.active_rentals ?? 0, icon: CheckCircle, color: 'text-emerald-600 bg-emerald-50' },
+    { label: 'Overdue', value: scoped?.overdue_rentals ?? 0, icon: AlertCircle, color: 'text-red-600 bg-red-50' },
+    { label: 'Scheduled', value: scoped?.scheduled_rentals ?? 0, icon: CalendarClock, color: 'text-blue-600 bg-blue-50' },
+    { label: 'Monthly Rev', value: `$${Number(scoped?.active_monthly_rate ?? 0).toLocaleString()}`, icon: DollarSign, color: 'text-violet-600 bg-violet-50' },
   ]
 
   // Drivers don't get the admin dashboard — their home is My Deliveries.
@@ -92,7 +103,7 @@ export default function Dashboard() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold mb-4">{profile?.role === 'staff' ? 'Staff' : 'Admin'} Dashboard</h1>
+      <h1 className="text-2xl font-semibold mb-4">{profile?.role === 'staff' ? 'Staff' : 'Admin'} Dashboard{selectedLocation ? ` · ${selectedLocation.name}` : ''}</h1>
 
       <div className="flex gap-6 border-b border-slate-200 mb-6">
         <button

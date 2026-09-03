@@ -12,6 +12,7 @@ import BillingCard from './billing/BillingCard'
 import OrderDetailPanel from './orders/OrderDetailPanel'
 import { useSelectedOrder } from './orders/useSelectedOrder'
 import { fmtDate } from './orders/format'
+import { useLocationScope } from '../contexts/LocationContext'
 
 const TABS: { id: BillingTab; label: string }[] = [
   { id: 'attention', label: 'Needs attention' },
@@ -34,6 +35,7 @@ function rank(c: Charge, today: string): number {
 }
 
 export default function Billing() {
+  const { selectedLocationId } = useLocationScope()
   const today = todayISO()
   const [tab, setTab] = useState<BillingTab>('attention')
   const [msg, setMsg] = useState('')
@@ -43,15 +45,16 @@ export default function Billing() {
   const setDueDate = useSetDueDate(setMsg)
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['recurring_charges'],
+    queryKey: ['recurring_charges', selectedLocationId],
     staleTime: 0,
     refetchInterval: 30_000, // fallback behind recurring_charges realtime
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('recurring_charges')
         .select(CHARGE_SELECT)
         .order('next_due_date', { nullsFirst: false })
-        .overrideTypes<Charge[], { merge: false }>()
+      if (selectedLocationId) query = query.eq('order.location_id', selectedLocationId)
+      const { data, error } = await query.overrideTypes<Charge[], { merge: false }>()
       if (error) throw error
       return data
     },

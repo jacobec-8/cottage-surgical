@@ -3,9 +3,9 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
-import { Check, Truck, Plus, Minus, ArrowLeft } from 'lucide-react'
+import { Check, Truck, Plus, Minus, ArrowLeft, MapPin, Wrench, Zap } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { PRODUCT_FIELDS, type Product } from '../../lib/shop'
+import { PRODUCT_FIELDS, productPickupLocations, type Product } from '../../lib/shop'
 import { SHOP_PURCHASES_ENABLED } from '../../lib/shopFlags'
 import ShopHeader from '../../components/shop/ShopHeader'
 import ShopFooter from '../../components/shop/ShopFooter'
@@ -31,21 +31,32 @@ export default function ProductPage({
           .eq('id', handle).eq('is_active', true).maybeSingle()
         data = r.data
       }
-      return (data as Product) ?? null
+      return (data as unknown as Product) ?? null
     },
     initialData: initialProduct,
     // Preserve the original browser verification fetch after hydration.
     initialDataUpdatedAt: initialProduct ? 0 : undefined,
   })
 
-  const rentable = !!(p && p.is_rentable && p.monthly_rental_price != null)
+  const rentable = !!(p && p.is_rentable && (
+    (p.pickup_enabled && p.pickup_rental_price != null)
+    || (p.delivery_enabled && p.delivery_rental_price != null)
+  ))
   const purchasable = !!(SHOP_PURCHASES_ENABLED && p && p.is_purchasable && p.sale_price != null)
   const addToCart = (mode: 'rent' | 'purchase') => {
     if (!p) return
     if (mode === 'purchase' && !SHOP_PURCHASES_ENABLED) return
-    const price = mode === 'rent' ? Number(p.monthly_rental_price) : Number(p.sale_price)
+    const price = mode === 'rent' ? Number(p.delivery_rental_price ?? p.pickup_rental_price) : Number(p.sale_price)
     const n = Math.min(Math.max(1, qty), 20)
-    for (let i = 0; i < n; i++) add({ id: p.id, name: p.name, image_url: p.image_url, category: p.category, mode, price })
+    const fulfillment = {
+      pickup_enabled: p.pickup_enabled,
+      delivery_enabled: p.delivery_enabled,
+      same_day_pickup: p.same_day_pickup,
+      pickup_locations: productPickupLocations(p),
+      pickup_price: mode === 'rent' ? p.pickup_rental_price : null,
+      delivery_price: mode === 'rent' ? p.delivery_rental_price : null,
+    }
+    for (let i = 0; i < n; i++) add({ id: p.id, name: p.name, image_url: p.image_url, category: p.category, mode, price, ...fulfillment })
   }
 
   return (
@@ -70,13 +81,17 @@ export default function ProductPage({
               <h1 className="font-serif font-bold text-navy text-3xl mt-3">{p.name}</h1>
               {p.description && <p className="text-slate-600 mt-3">{p.description}</p>}
 
-              <div className="flex items-center gap-4 text-sm text-emerald-600 mt-4">
-                <span className="inline-flex items-center gap-1.5"><Check size={15} /> No assembly required</span>
-                <span className="inline-flex items-center gap-1.5"><Truck size={15} /> Same-day available</span>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-emerald-600 mt-4">
+                {p.installation_required
+                  ? <span className="inline-flex items-center gap-1.5"><Wrench size={15} /> Staff installation required</span>
+                  : <span className="inline-flex items-center gap-1.5"><Check size={15} /> No assembly required</span>}
+                {p.pickup_enabled && <span className="inline-flex items-center gap-1.5"><MapPin size={15} /> In-store pickup</span>}
+                {p.delivery_enabled && <span className="inline-flex items-center gap-1.5"><Truck size={15} /> Delivery</span>}
+                {p.pickup_enabled && p.same_day_pickup && <span className="inline-flex items-center gap-1.5"><Zap size={15} /> Same-day pickup</span>}
               </div>
 
               <div className="flex items-baseline gap-4 mt-6">
-                {rentable && <div className="text-3xl font-bold text-navy">${Number(p.monthly_rental_price).toFixed(0)}<span className="text-base font-medium text-slate-500">/mo</span></div>}
+                {rentable && <div className="space-y-1">{p.pickup_enabled && p.pickup_rental_price != null && <div className="text-3xl font-bold text-navy">${Number(p.pickup_rental_price).toFixed(0)}<span className="text-base font-medium text-slate-500">/mo pickup</span></div>}{p.delivery_enabled && p.delivery_rental_price != null && <div className="text-base font-medium text-slate-600">${Number(p.delivery_rental_price).toFixed(0)}/mo with delivery + return pickup</div>}</div>}
                 {purchasable && <div className="text-lg text-terracotta font-semibold">${Number(p.sale_price).toFixed(0)} to buy</div>}
                 {!rentable && !purchasable && <div className="text-slate-500">Call for pricing</div>}
               </div>
