@@ -58,7 +58,11 @@ export default function BillingCard({ c, today, selected, onOpen, onRecordPaymen
   const deposit = depositHeld(c)
   const items = itemsLabel(c)
   const orderId = c.order?.id
+  // Once a payment advances the charge into a future billing period, showing
+  // the same action immediately makes the payment look unsaved. Offer it again
+  // only when the next payment is unset, approaching, due, or overdue.
   const canPay = c.status === 'current' || c.status === 'overdue'
+  const paymentCanBeRecorded = canPay && ['no_due_date', 'due_soon', 'due_today', 'overdue'].includes(p.kind)
   const attention = p.kind === 'overdue' || r.kind === 'return_overdue'
 
   const open = () => { if (orderId) onOpen(orderId) }
@@ -119,15 +123,17 @@ export default function BillingCard({ c, today, selected, onOpen, onRecordPaymen
         <div className="font-semibold text-sm">{fmtMoney(c.amount)}/mo</div>
         {canPay && !editDue && (
           <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => onRecordPayment(c.id)}
-              disabled={busy}
-              className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-2.5 py-1 disabled:opacity-50"
-              title="Record a payment received today (advances next due by a month)"
-            >
-              Record payment
-            </button>
+            {paymentCanBeRecorded && (
+              <button
+                type="button"
+                onClick={() => onRecordPayment(c.id)}
+                disabled={busy}
+                className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-2.5 py-1 disabled:opacity-50"
+                title="Record a payment received today (advances next due by a month)"
+              >
+                Record payment
+              </button>
+            )}
             <button
               type="button"
               onClick={() => { setDueDraft(c.next_due_date ?? ''); setEditDue(true) }}

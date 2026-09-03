@@ -3,10 +3,11 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Search, Pencil, Trash2, X, ChevronDown, ChevronRight, ImagePlus, MapPin, Truck, Zap } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, X, ChevronDown, ChevronRight, ImagePlus, MapPin, Truck, Zap, Building2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { fulfillmentLabel } from '../lib/fulfillment'
 import { useLocationScope } from '../contexts/LocationContext'
+import { useAuth } from '../contexts/AuthContext'
 
 type Item = {
   id: string
@@ -36,7 +37,8 @@ const SELECT = 'id,name,description,category,sku,monthly_rental_price,pickup_ren
 
 export default function Inventory() {
   const qc = useQueryClient()
-  const { selectedLocationId, selectedLocation, isAllLocations } = useLocationScope()
+  const { profile } = useAuth()
+  const { locations, selectedLocationId, selectedLocation, setSelectedLocationId, isAllLocations } = useLocationScope()
   const [q, setQ] = useState('')
   const [editing, setEditing] = useState<Partial<Item> | null>(null) // null=closed, {} = new
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -59,9 +61,13 @@ export default function Inventory() {
     onError: (e) => alert(`Couldn’t remove item: ${(e as Error).message}`),
   })
 
-  const filtered = (data ?? []).filter((it) =>
-    [it.name, it.description, it.sku].filter(Boolean).join(' ').toLowerCase().includes(q.toLowerCase()),
-  )
+  const filtered = (data ?? []).filter((it) => {
+    const matchesStore = !selectedLocationId
+      || it.location_inventory?.some((entry) => entry.location_id === selectedLocationId)
+    const matchesSearch = [it.name, it.description, it.sku]
+      .filter(Boolean).join(' ').toLowerCase().includes(q.toLowerCase())
+    return matchesStore && matchesSearch
+  })
 
   return (
     <div>
@@ -79,14 +85,31 @@ export default function Inventory() {
         Manage rental inventory, pricing, and stock. Returned units become available when the rental closes.
       </p>
 
-      <div className="relative mb-4">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Search inventory..."
-          className="w-full border border-slate-300 rounded-lg pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
+      <div className={`mb-4 grid gap-3 ${profile?.role === 'admin' ? 'sm:grid-cols-[minmax(0,1fr)_minmax(15rem,20rem)]' : ''}`}>
+        <div className="relative">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search inventory..."
+            className="w-full border border-slate-300 rounded-lg pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        {profile?.role === 'admin' && (
+          <label className="relative block">
+            <span className="sr-only">Filter inventory by store</span>
+            <Building2 size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <select
+              aria-label="Filter inventory by store"
+              value={selectedLocationId ?? 'all'}
+              onChange={(event) => setSelectedLocationId(event.target.value === 'all' ? null : event.target.value)}
+              className="w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-9 pr-8 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all">All stores</option>
+              {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
+            </select>
+          </label>
+        )}
       </div>
 
       {isLoading && <div className="text-slate-500">Loading…</div>}
@@ -168,6 +191,12 @@ export default function Inventory() {
           )
         })}
       </div>
+
+      {!isLoading && !error && filtered.length === 0 && (
+        <div className="rounded-xl border border-slate-200 bg-white py-10 text-center text-sm text-slate-500">
+          No inventory matches this store and search.
+        </div>
+      )}
 
       {editing && <ItemModal item={editing} onClose={() => setEditing(null)} />}
     </div>

@@ -32,7 +32,10 @@ export default function StaffDirectory() {
         .in('role', ['admin', 'staff', 'driver'])
         .order('role')
         .order('full_name')
-      if (selectedLocationId) request = request.or(`location_id.eq.${selectedLocationId},role.eq.admin`)
+      // Location-scoped admins belong to their assigned store just like staff and
+      // drivers. Only global admins (without a location) remain visible in every
+      // store view.
+      if (selectedLocationId) request = request.or(`location_id.eq.${selectedLocationId},location_id.is.null`)
       const { data, error } = await request
       if (error) throw error
       return data as unknown as Profile[]
