@@ -1,8 +1,9 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Building2, MapPin, Pencil, Plus, Save, Store, Trash2, Users } from 'lucide-react'
+import { Building2, ChevronRight, MapPin, Plus, Save, Store, Trash2, Users } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
 type LocationUser = {
@@ -32,7 +33,6 @@ type Location = {
   fulfillment_mode: 'pickup_and_delivery' | 'pickup_only'
   partner_type: 'owned' | 'partner'
   is_active: boolean
-  business: { id: string; name: string } | null
   users: LocationUser[]
 }
 
@@ -48,25 +48,24 @@ type LocationForm = {
   users: UserDraft[]
   fulfillmentMode: 'pickup_and_delivery' | 'pickup_only'
   partnerType: 'owned' | 'partner'
-  active: boolean
 }
 
 const EMPTY: LocationForm = {
   shopName: '', line1: '', line2: '', city: '', state: 'NY', zip: '',
   phone: '', instructions: '', users: [], fulfillmentMode: 'pickup_and_delivery',
-  partnerType: 'owned', active: true,
+  partnerType: 'owned',
 }
 
 export default function Locations() {
   const qc = useQueryClient()
-  const [editing, setEditing] = useState<Location | 'new' | null>(null)
+  const [adding, setAdding] = useState(false)
   const [form, setForm] = useState(EMPTY)
   const locations = useQuery({
     queryKey: ['locations_manager'],
     queryFn: async () => {
       const { data, error } = await supabase.from('pickup_locations').select(
         'id,name,address_line1,address_line2,address_city,address_state,address_zip,phone,instructions,' +
-        'fulfillment_mode,partner_type,is_active,business:businesses(id,name),' +
+        'fulfillment_mode,partner_type,is_active,' +
         'users:profiles!profiles_location_id_fkey(id,email,role,is_active)',
       ).order('name')
       if (error) throw error
@@ -74,18 +73,8 @@ export default function Locations() {
     },
   })
 
-  const startNew = () => { setEditing('new'); setForm(EMPTY) }
-  const startEdit = (location: Location) => {
-    setEditing(location)
-    setForm({
-      ...EMPTY, shopName: location.name,
-      line1: location.address_line1, line2: location.address_line2 ?? '', city: location.address_city,
-      state: location.address_state, zip: location.address_zip, phone: location.phone ?? '',
-      instructions: location.instructions ?? '', fulfillmentMode: location.fulfillment_mode,
-      partnerType: location.partner_type, active: location.is_active,
-    })
-  }
-  const close = () => { setEditing(null); setForm(EMPTY) }
+  const startNew = () => { setAdding(true); setForm(EMPTY) }
+  const close = () => { setAdding(false); setForm(EMPTY) }
   const set = <K extends keyof typeof form>(key: K, value: typeof form[K]) => setForm((current) => ({ ...current, [key]: value }))
   const addUser = () => set('users', [...form.users, { id: crypto.randomUUID(), role: 'staff', username: '', password: '' }])
   const updateUser = <K extends keyof UserDraft>(id: string, key: K, value: UserDraft[K]) => {
@@ -98,40 +87,25 @@ export default function Locations() {
       if (!form.shopName.trim() || !form.line1.trim() || !form.city.trim() || !form.zip.trim()) {
         throw new Error('Shop name, street, city, and ZIP are required.')
       }
-      if (editing === 'new') {
-        if (form.users.some((user) => !user.username.trim() || !user.password)) {
-          throw new Error('Enter a username and password for each added user, or remove the incomplete user.')
+      if (form.users.some((user) => !user.username.trim() || !user.password)) {
+        throw new Error('Enter a username and password for each added user, or remove the incomplete user.')
+      }
+      const { data, error } = await supabase.rpc('create_business_location_with_users', {
+        p_shop_name: form.shopName.trim(),
+        p_address: { line1: form.line1, line2: form.line2, city: form.city, state: form.state, zip: form.zip, phone: form.phone, instructions: form.instructions },
+        p_fulfillment_mode: form.fulfillmentMode, p_partner_type: form.partnerType,
+        p_users: form.users.map((user) => ({ role: user.role, username: user.username.trim().toLowerCase(), password: user.password })),
+      })
+      if (error) throw error
+      if (!data?.ok) {
+        const reasons: Record<string, string> = {
+          username_taken: `Username “${data?.username ?? ''}” is already in use.`,
+          invalid_username: 'Use 3–63 lowercase letters, numbers, or hyphens for every username.',
+          incomplete_credentials: 'Enter a password for every added user.',
+          invalid_role: 'Choose a valid user type.',
+          too_many_users: 'Create no more than 20 users at one time.',
         }
-        const { data, error } = await supabase.rpc('create_business_location_with_users', {
-          p_shop_name: form.shopName.trim(),
-          p_address: { line1: form.line1, line2: form.line2, city: form.city, state: form.state, zip: form.zip, phone: form.phone, instructions: form.instructions },
-          p_fulfillment_mode: form.fulfillmentMode, p_partner_type: form.partnerType,
-          p_users: form.users.map((user) => ({ role: user.role, username: user.username.trim().toLowerCase(), password: user.password })),
-        })
-        if (error) throw error
-        if (!data?.ok) {
-          const reasons: Record<string, string> = {
-            username_taken: `Username “${data?.username ?? ''}” is already in use.`,
-            invalid_username: 'Use 3–63 lowercase letters, numbers, or hyphens for every username.',
-            incomplete_credentials: 'Enter a password for every added user.',
-            invalid_role: 'Choose a valid user type.',
-            too_many_users: 'Create no more than 20 users at one time.',
-          }
-          throw new Error(reasons[data?.reason] ?? `Couldn’t create location (${data?.reason ?? 'unknown error'}).`)
-        }
-      } else if (editing) {
-        const { error } = await supabase.from('pickup_locations').update({
-          name: form.shopName.trim(), address_line1: form.line1.trim(), address_line2: form.line2.trim() || null,
-          address_city: form.city.trim(), address_state: form.state.trim().toUpperCase(), address_zip: form.zip.trim(),
-          phone: form.phone.trim() || null, instructions: form.instructions.trim() || null,
-          fulfillment_mode: form.fulfillmentMode, partner_type: form.partnerType,
-          is_active: form.active,
-        }).eq('id', editing.id)
-        if (error) throw error
-        if (editing.business) {
-          const { error: businessError } = await supabase.from('businesses').update({ name: form.shopName.trim() }).eq('id', editing.business.id)
-          if (businessError) throw businessError
-        }
+        throw new Error(reasons[data?.reason] ?? `Couldn’t create location (${data?.reason ?? 'unknown error'}).`)
       }
     },
     onSuccess: () => { close(); qc.invalidateQueries({ queryKey: ['locations_manager'] }); qc.invalidateQueries({ queryKey: ['staff_locations'] }) },
@@ -147,18 +121,18 @@ export default function Locations() {
       {locations.error && <div className="text-sm text-red-600">Couldn’t load locations.</div>}
       <div className="grid gap-4 lg:grid-cols-2">
         {(locations.data ?? []).map((location) => (
-          <article key={location.id} className={`rounded-2xl border border-slate-200 bg-white p-5 ${location.is_active ? '' : 'opacity-60'}`}>
-            <div className="flex items-start justify-between gap-3"><h2 className="text-lg font-semibold">{location.name}</h2><button onClick={() => startEdit(location)} className="grid h-10 w-10 place-items-center rounded-lg text-blue-600 hover:bg-blue-50" aria-label={`Edit ${location.name}`}><Pencil size={16} /></button></div>
+          <Link key={location.id} href={`/locations/${location.id}`} className={`group rounded-2xl border border-slate-200 bg-white p-5 transition hover:border-blue-300 hover:shadow-sm ${location.is_active ? '' : 'opacity-60'}`}>
+            <div className="flex items-start justify-between gap-3"><h2 className="text-lg font-semibold">{location.name}</h2><span className="grid h-10 w-10 place-items-center rounded-lg text-blue-600 group-hover:bg-blue-50" aria-hidden="true"><ChevronRight size={18} /></span></div>
             <div className="mt-3 flex items-start gap-2 text-sm text-slate-600"><MapPin size={15} className="mt-0.5 shrink-0" /><span>{location.address_line1}{location.address_line2 ? `, ${location.address_line2}` : ''}<br />{location.address_city}, {location.address_state} {location.address_zip}</span></div>
             <div className="mt-4 flex flex-wrap gap-2 text-xs"><Pill icon={Store}>{location.fulfillment_mode === 'pickup_only' ? 'Pickup only location' : 'Pickup + delivery location'}</Pill><Pill icon={Users}>{location.partner_type === 'partner' ? 'Partner pickup store' : 'Owned store'}</Pill><Pill icon={Users}>{location.users.length === 1 ? '1 user' : `${location.users.length} users`}</Pill></div>
-          </article>
+          </Link>
         ))}
       </div>
 
-      {editing && (
+      {adding && (
         <div className="fixed inset-0 z-40 grid items-start justify-items-center overflow-y-auto bg-slate-950/40 p-4 sm:items-center" onClick={close}>
           <div className="max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
-            <h2 className="mb-5 text-xl font-semibold">{editing === 'new' ? 'Add shop' : 'Edit shop'}</h2>
+            <h2 className="mb-5 text-xl font-semibold">Add shop</h2>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2"><Input label="Shop name" value={form.shopName} onChange={(value) => set('shopName', value)} /></div>
               <div className="sm:col-span-2"><Input label="Street address" value={form.line1} onChange={(value) => set('line1', value)} /></div>
@@ -169,8 +143,7 @@ export default function Locations() {
               <label><span className="mb-1 block text-xs font-medium text-slate-500">Location capability</span><select value={form.fulfillmentMode} onChange={(event) => set('fulfillmentMode', event.target.value as typeof form.fulfillmentMode)} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"><option value="pickup_and_delivery">Pickup and delivery</option><option value="pickup_only">Pickup only</option></select></label>
               <label><span className="mb-1 block text-xs font-medium text-slate-500">Store relationship</span><select value={form.partnerType} onChange={(event) => set('partnerType', event.target.value as typeof form.partnerType)} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"><option value="owned">Owned store</option><option value="partner">Partner pickup store</option></select></label>
               <div className="sm:col-span-2"><Input label="Notes" value={form.instructions} onChange={(value) => set('instructions', value)} /></div>
-              {editing === 'new' && (
-                <section className="sm:col-span-2 rounded-xl border border-slate-200 p-4">
+              <section className="sm:col-span-2 rounded-xl border border-slate-200 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <h3 className="font-medium text-slate-900">Users <span className="font-normal text-slate-400">(optional)</span></h3>
@@ -189,12 +162,10 @@ export default function Locations() {
                       </div>
                     ))}
                   </div>
-                </section>
-              )}
-              {editing !== 'new' && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.active} onChange={(event) => set('active', event.target.checked)} /> Active location</label>}
+              </section>
             </div>
             {save.error && <div className="mt-4 text-sm text-red-600">{(save.error as Error).message}</div>}
-            <div className="mt-6 flex justify-end gap-2"><button onClick={close} className="rounded-lg px-4 py-2 text-sm text-slate-600 hover:bg-slate-100">Cancel</button><button onClick={() => save.mutate()} disabled={save.isPending} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"><Save size={15} /> {save.isPending ? 'Saving…' : editing === 'new' ? form.users.length ? `Create shop + ${form.users.length} ${form.users.length === 1 ? 'user' : 'users'}` : 'Create shop' : 'Save changes'}</button></div>
+            <div className="mt-6 flex justify-end gap-2"><button onClick={close} className="rounded-lg px-4 py-2 text-sm text-slate-600 hover:bg-slate-100">Cancel</button><button onClick={() => save.mutate()} disabled={save.isPending} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"><Save size={15} /> {save.isPending ? 'Saving…' : form.users.length ? `Create shop + ${form.users.length} ${form.users.length === 1 ? 'user' : 'users'}` : 'Create shop'}</button></div>
           </div>
         </div>
       )}
