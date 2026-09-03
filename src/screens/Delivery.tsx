@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Camera, ChevronRight, Truck } from 'lucide-react'
+import { Camera, ChevronRight, Store, Truck } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { statusClass, statusLabel } from '../lib/status'
@@ -27,6 +27,7 @@ type Deliv = {
   address_state: string | null
   address_zip: string | null
   driver_id: string | null
+  requires_driver: boolean
   order: {
     id: string
     order_no: number
@@ -39,7 +40,7 @@ type Deliv = {
 }
 
 const SELECT =
-  'id,leg_type,status,scheduled_date,window_start,window_end,completed_at,address_line1,address_city,address_state,address_zip,driver_id,' +
+  'id,leg_type,status,scheduled_date,window_start,window_end,completed_at,address_line1,address_city,address_state,address_zip,driver_id,requires_driver,' +
   'order:rental_orders(id,order_no,payment_status,payment_preference,customer:customers(full_name),rental_line_items(quantity,equipment:equipment_items(name))),' +
   'delivery_photos(storage_path,captured_at,notes)'
 
@@ -48,6 +49,7 @@ export default function Delivery() {
   const { selectedLocationId } = useLocationScope()
   const isDriver = profile?.role === 'driver'
   const [view, setView] = useState<'active' | 'completed'>('active')
+  const [stopKind, setStopKind] = useState<'all' | 'delivery' | 'pickup'>('all')
   // Staff: click a stop to open the order panel (?order=<id>) with that leg highlighted.
   const [selected, setSelected] = useSelectedOrder()
   const [focusDelivery, setFocusDelivery] = useState<string | null>(null)
@@ -78,7 +80,7 @@ export default function Delivery() {
     },
   })
   const { data, isLoading, error } = useQuery({
-    queryKey: ['deliveries', view, selectedLocationId],
+    queryKey: ['deliveries', view, stopKind, selectedLocationId],
     refetchOnMount: 'always',        // never open the board on a stale cached list
     staleTime: 0,                    // this board must reflect reality, not the 30s default
     refetchInterval: 20_000,         // fallback poll behind the realtime subscription…
@@ -86,6 +88,7 @@ export default function Delivery() {
     queryFn: async () => {
       let q = supabase.from('deliveries').select(SELECT)
       if (selectedLocationId) q = q.eq('location_id', selectedLocationId)
+      if (!isDriver && stopKind !== 'all') q = q.eq('leg_type', stopKind)
       q = view === 'active'
         ? q.not('status', 'in', '(completed,cancelled)').order('scheduled_date', { nullsFirst: true })
         : q.eq('status', 'completed').order('completed_at', { ascending: false })
@@ -101,7 +104,7 @@ export default function Delivery() {
       <p className="mb-5 max-w-2xl text-sm leading-6 text-slate-500">
         {isDriver
           ? 'Your assigned stops. Start when you arrive, then take a photo to complete the stop.'
-          : 'Assign drivers and windows, or step in to run a stop. Drivers complete stops with a photo; you can override. Click a stop for the full order.'}
+          : 'Schedule in-store pickups, or assign drivers and windows to delivery and return stops. Click a stop for the full order.'}
       </p>
 
       <div className={`${isDriver ? 'grid w-full grid-cols-2 sm:inline-grid sm:w-auto' : 'inline-flex'} mb-5 rounded-xl border border-slate-200 bg-white p-1`}>
@@ -113,6 +116,17 @@ export default function Delivery() {
         ))}
       </div>
 
+      {!isDriver && (
+        <div className="mb-5 flex flex-wrap gap-2" aria-label="Fulfillment type">
+          {(['all', 'delivery', 'pickup'] as const).map((kind) => (
+            <button key={kind} onClick={() => setStopKind(kind)}
+              className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${stopKind === kind ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}>
+              {kind === 'all' ? 'All' : kind === 'delivery' ? 'Deliveries' : 'Pickups'}
+            </button>
+          ))}
+        </div>
+      )}
+
       {isLoading && <div className="text-slate-500">Loading…</div>}
       {error && <div className="text-red-600 text-sm">Couldn’t load deliveries. Please try again.</div>}
       {isDriver && contacts.error && (
@@ -122,7 +136,7 @@ export default function Delivery() {
         <div className="rounded-xl border border-dashed border-slate-300 bg-white px-5 py-12 text-center">
           <TruckEmptyState />
           <div className="mt-3 font-medium text-slate-700">
-            {view === 'active' ? 'No open stops' : 'No completed deliveries'}
+            {view === 'active' ? 'No open stops' : 'No completed stops'}
           </div>
           <div className="mt-1 text-sm text-slate-500">
             {view === 'active' ? 'New assignments will appear here.' : 'Completed stops will be saved here.'}
@@ -201,6 +215,7 @@ function DeliveryRow({
   onOpen?: OpenStop
   selected: boolean
 }) {
+  const isStorePickup = d.leg_type === 'pickup' && !d.requires_driver
   const card = clickableCard(d, onOpen, selected)
   const qc = useQueryClient()
   const [driver, setDriver] = useState(d.driver_id ?? '')
@@ -219,7 +234,7 @@ function DeliveryRow({
     mutationFn: async () => {
       // Status is normalized server-side (driver_id set → scheduled; cleared → pending).
       const patch = {
-        driver_id: driver || null,
+        driver_id: isStorePickup ? null : driver || null,
         scheduled_date: date || null,
         window_start: ws || null,
         window_end: we || null,
@@ -278,6 +293,17 @@ function DeliveryRow({
     onError: (e) => setMsg((e as Error).message),
   })
 
+  const completeStorePickup = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.rpc('complete_store_pickup', { p_delivery_id: d.id })
+      if (error) throw error
+      if (!data?.ok) throw new Error(data?.reason || 'failed')
+    },
+    onMutate: () => setMsg(''),
+    onSuccess: invalidateLifecycle,
+    onError: (e) => setMsg((e as Error).message),
+  })
+
   const inp = 'border border-slate-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 
   return (
@@ -290,8 +316,10 @@ function DeliveryRow({
               <a href={`tel:${contact.phone}`} className="text-xs text-blue-600 hover:underline">{contact.phone}</a>
             )}
             <span className="text-xs text-slate-400">#{d.order?.order_no}</span>
-            {d.leg_type === 'pickup' ? (
-              <span className="text-xs font-semibold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded">PICKUP</span>
+            {isStorePickup ? (
+              <span className="inline-flex items-center gap-1 rounded bg-purple-100 px-1.5 py-0.5 text-xs font-semibold text-purple-700"><Store size={12} /> IN-STORE PICKUP</span>
+            ) : d.leg_type === 'pickup' ? (
+              <span className="text-xs font-semibold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded">RETURN PICKUP</span>
             ) : (
               <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 capitalize">{d.leg_type}</span>
             )}
@@ -341,6 +369,12 @@ function DeliveryRow({
               </button>
             )
           )}
+          {isStorePickup && d.status !== 'completed' && d.status !== 'cancelled' && (
+            <button onClick={() => completeStorePickup.mutate()} disabled={completeStorePickup.isPending}
+              className="min-h-10 rounded-lg bg-purple-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-50">
+              {completeStorePickup.isPending ? 'Saving…' : 'Mark picked up'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -348,18 +382,20 @@ function DeliveryRow({
         msg && <div className="text-xs text-red-600 mt-2">{msg}</div>
       ) : (
         <div className="flex flex-wrap items-end gap-2 mt-3 cursor-default" onClick={stopOpen}>
-          <div>
-            <div className="text-[11px] text-slate-400 mb-0.5">Driver</div>
-            <select value={driver} onChange={(e) => setDriver(e.target.value)} className={inp}>
-              <option value="">Unassigned</option>
-              {drivers.map((dr) => (
-                <option key={dr.id} value={dr.id}>
-                  {dr.first_name} {dr.last_name}{dr.user_id ? '' : ' — no login'}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div><div className="text-[11px] text-slate-400 mb-0.5">Date</div><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inp} /></div>
+          {!isStorePickup && (
+            <div>
+              <div className="text-[11px] text-slate-400 mb-0.5">Driver</div>
+              <select value={driver} onChange={(e) => setDriver(e.target.value)} className={inp}>
+                <option value="">Unassigned</option>
+                {drivers.map((dr) => (
+                  <option key={dr.id} value={dr.id}>
+                    {dr.first_name} {dr.last_name}{dr.user_id ? '' : ' — no login'}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <div><div className="text-[11px] text-slate-400 mb-0.5">{isStorePickup ? 'Pickup date' : 'Date'}</div><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inp} /></div>
           <div><div className="text-[11px] text-slate-400 mb-0.5">From</div><input type="time" value={ws} onChange={(e) => setWs(e.target.value)} className={inp} /></div>
           <div><div className="text-[11px] text-slate-400 mb-0.5">To</div><input type="time" value={we} onChange={(e) => setWe(e.target.value)} className={inp} /></div>
           <button onClick={() => save.mutate()} disabled={save.isPending}
@@ -375,6 +411,7 @@ function DeliveryRow({
 
 function CompletedRow({ d, contact, onOpen, selected }: { d: Deliv; contact?: StopContact; onOpen?: OpenStop; selected: boolean }) {
   const photo = d.delivery_photos?.[0]
+  const isStorePickup = d.leg_type === 'pickup' && !d.requires_driver
   const card = clickableCard(d, onOpen, selected)
   return (
     <div className={`flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-start sm:justify-between ${card.className}`} {...card.props}>
@@ -382,7 +419,7 @@ function CompletedRow({ d, contact, onOpen, selected }: { d: Deliv; contact?: St
         <div className="flex items-center gap-2 flex-wrap">
           <span className="font-medium">{customerLabel(d, contact)}</span>
           <span className="text-xs text-slate-400">#{d.order?.order_no}</span>
-          <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 capitalize">{d.leg_type}</span>
+          <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{isStorePickup ? 'IN-STORE PICKUP' : d.leg_type.toUpperCase()}</span>
           <span className={`text-xs px-2 py-0.5 rounded-full capitalize ${statusClass(d.status)}`}>{statusLabel(d.status)}</span>
           {d.order && <PaymentBadge paymentStatus={d.order.payment_status} paymentPreference={d.order.payment_preference} />}
         </div>
@@ -396,7 +433,7 @@ function CompletedRow({ d, contact, onOpen, selected }: { d: Deliv; contact?: St
         {photo?.notes && <div className="text-sm text-slate-500 mt-1 italic">“{photo.notes}”</div>}
       </div>
       <div className="flex shrink-0 flex-row items-end justify-between gap-2 sm:flex-col sm:justify-start" onClick={stopOpen}>
-        {photo ? <ProofPhoto path={photo.storage_path} /> : <span className="text-xs text-amber-600">no photo</span>}
+        {photo ? <ProofPhoto path={photo.storage_path} /> : !isStorePickup && <span className="text-xs text-amber-600">no photo</span>}
         <DetailsHint show={Boolean(onOpen)} />
       </div>
     </div>

@@ -27,6 +27,7 @@ export type OrderDriver = { first_name: string; last_name: string } | null
 export type OrderDelivery = {
   id: string
   leg_type: 'delivery' | 'pickup' | string
+  requires_driver: boolean
   status: string
   scheduled_date: string | null
   window_start: string | null
@@ -111,11 +112,11 @@ const LINE_SELECT =
   'equipment:equipment_items(name),unit:equipment_units(asset_tag,serial_number))'
 
 const DELIVERY_LIST_SELECT =
-  'deliveries(id,leg_type,status,scheduled_date,window_start,window_end,window_label,' +
+  'deliveries(id,leg_type,requires_driver,status,scheduled_date,window_start,window_end,window_label,' +
   'driver:drivers!deliveries_driver_id_fkey(first_name,last_name))'
 
 const DELIVERY_DETAIL_SELECT =
-  'deliveries(id,leg_type,status,scheduled_date,window_start,window_end,window_label,' +
+  'deliveries(id,leg_type,requires_driver,status,scheduled_date,window_start,window_end,window_label,' +
   'address_line1,address_city,address_state,address_zip,notes,started_at,completed_at,' +
   'driver:drivers!deliveries_driver_id_fkey(first_name,last_name),delivery_photos(storage_path))'
 

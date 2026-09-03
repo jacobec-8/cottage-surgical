@@ -24,22 +24,28 @@ DECLARE
   v_message_text TEXT := left(COALESCE(p_message, ''), 3000);
   v_heading_html TEXT; v_message_html TEXT; v_customer_html TEXT;
   v_items_html TEXT; v_items_text TEXT;
-  v_address_text TEXT; v_address_html TEXT;
+  v_address_text TEXT; v_address_html TEXT; v_address_label TEXT;
   v_start_date DATE; v_end_date DATE;
   v_monthly_rate NUMERIC; v_deposit_amount NUMERIC;
-  v_payment_status TEXT; v_payment_preference TEXT; v_payment_label TEXT;
+  v_payment_status TEXT; v_payment_preference TEXT; v_payment_label TEXT; v_fulfillment TEXT;
   v_details_html TEXT; v_details_text TEXT;
 BEGIN
   SELECT c.email, c.full_name, c.phone, o.order_no, o.start_date, o.end_date,
          o.monthly_rate, o.deposit_amount, o.payment_status, o.payment_preference,
-         concat_ws(', ', NULLIF(btrim(o.address_line1), ''),
-           NULLIF(btrim(o.address_city), ''),
-           NULLIF(btrim(concat_ws(' ', o.address_state, o.address_zip)), ''))
+         o.fulfillment_method,
+         CASE WHEN o.fulfillment_method = 'pickup' THEN
+           concat_ws(', ', NULLIF(btrim(l.address_line1), ''),
+             NULLIF(btrim(l.address_line2), ''), NULLIF(btrim(l.address_city), ''),
+             NULLIF(btrim(concat_ws(' ', l.address_state, l.address_zip)), ''))
+         ELSE concat_ws(', ', NULLIF(btrim(o.address_line1), ''),
+             NULLIF(btrim(o.address_city), ''),
+             NULLIF(btrim(concat_ws(' ', o.address_state, o.address_zip)), '')) END
     INTO v_email, v_customer_name, v_phone, v_no, v_start_date, v_end_date,
          v_monthly_rate, v_deposit_amount, v_payment_status,
-         v_payment_preference, v_address_text
+         v_payment_preference, v_fulfillment, v_address_text
     FROM public.rental_orders o
     JOIN public.customers c ON c.id = o.customer_id
+    LEFT JOIN public.pickup_locations l ON l.id = o.pickup_location_id
    WHERE o.id = p_order_id;
 
   v_email := NULLIF(btrim(v_email), '');
@@ -83,12 +89,13 @@ BEGIN
   v_message_html := replace(public.email_html_escape(v_message_text), E'\n', '<br>');
   v_customer_html := public.email_html_escape(v_customer_name);
   v_address_html := public.email_html_escape(v_address_text);
+  v_address_label := CASE WHEN v_fulfillment = 'pickup' THEN 'Pickup location' ELSE 'Service address' END;
 
   v_details_html := '<div style="background:#eff6ff;border-radius:10px;padding:14px;font-size:14px;line-height:1.65">'
     || '<strong>Order #' || v_no || '</strong>'
     || '<div style="margin-top:8px"><strong>Equipment</strong><br>'
     || COALESCE(v_items_html, 'Equipment details are being prepared.') || '</div>'
-    || '<div style="margin-top:8px"><strong>Service address:</strong> ' || v_address_html || '</div>'
+    || '<div style="margin-top:8px"><strong>' || v_address_label || ':</strong> ' || v_address_html || '</div>'
     || '<div><strong>Contact phone:</strong> ' || public.email_html_escape(v_phone) || '</div>'
     || CASE WHEN v_start_date IS NOT NULL
       THEN '<div><strong>Rental start:</strong> ' || to_char(v_start_date, 'FMMonth FMDD, YYYY') || '</div>' ELSE '' END
@@ -102,7 +109,7 @@ BEGIN
 
   v_details_text := 'Order #' || v_no
     || E'\nEquipment\n' || COALESCE(v_items_text, 'Equipment details are being prepared.')
-    || E'\nService address: ' || v_address_text
+    || E'\n' || v_address_label || ': ' || v_address_text
     || E'\nContact phone: ' || v_phone
     || CASE WHEN v_start_date IS NOT NULL
       THEN E'\nRental start: ' || to_char(v_start_date, 'FMMonth FMDD, YYYY') ELSE '' END
@@ -210,7 +217,10 @@ BEGIN
   END IF;
 
   SELECT order_no INTO v_no FROM public.rental_orders WHERE id = NEW.order_id;
-  v_kind := CASE WHEN NEW.leg_type = 'pickup' THEN 'Return pickup' ELSE 'Delivery' END;
+  v_kind := CASE
+    WHEN NEW.leg_type = 'pickup' AND NOT NEW.requires_driver THEN 'In-store pickup'
+    WHEN NEW.leg_type = 'pickup' THEN 'Return pickup'
+    ELSE 'Delivery' END;
   v_when := to_char(NEW.scheduled_date, 'FMDay, FMMonth FMDD, YYYY')
     || CASE
       WHEN NEW.window_label IS NOT NULL AND btrim(NEW.window_label) <> ''
@@ -278,12 +288,20 @@ BEGIN
     v_event := 'request_accepted';
     v_subject := 'Rental request #' || NEW.order_no || ' approved';
     v_heading := 'Your rental request was approved';
-    v_message := 'Your equipment is reserved. A separate scheduling email will include the delivery date, time window, and location.';
+    v_message := CASE WHEN NEW.fulfillment_method = 'pickup'
+      THEN 'Your equipment is reserved at the pharmacy. Our team will confirm your pickup date and time.'
+      ELSE 'Your equipment is reserved. A separate scheduling email will include the delivery date, time window, and location.' END;
   ELSIF NEW.status = 'active' THEN
     v_event := 'rental_active';
-    v_subject := 'Delivery completed for order #' || NEW.order_no;
-    v_heading := 'Your rental was delivered';
-    v_message := 'Delivery is complete. Your rental period is open.';
+    v_subject := CASE WHEN NEW.fulfillment_method = 'pickup'
+      THEN 'Pickup completed for order #' || NEW.order_no
+      ELSE 'Delivery completed for order #' || NEW.order_no END;
+    v_heading := CASE WHEN NEW.fulfillment_method = 'pickup'
+      THEN 'Your equipment was picked up'
+      ELSE 'Your rental was delivered' END;
+    v_message := CASE WHEN NEW.fulfillment_method = 'pickup'
+      THEN 'Your in-store pickup is complete. Your rental period is open.'
+      ELSE 'Delivery is complete. Your rental period is open.' END;
   ELSIF NEW.status = 'closed' THEN
     v_event := 'order_completed';
     v_subject := 'Rental #' || NEW.order_no || ' closed';
@@ -393,7 +411,10 @@ BEGIN
        AND o.status NOT IN ('cancelled', 'closed')
      ORDER BY d.window_start NULLS LAST, d.created_at
   LOOP
-    v_kind := CASE WHEN v_leg.leg_type = 'pickup' THEN 'return pickup' ELSE 'delivery' END;
+    v_kind := CASE
+      WHEN v_leg.leg_type = 'pickup' AND NOT v_leg.requires_driver THEN 'in-store pickup'
+      WHEN v_leg.leg_type = 'pickup' THEN 'return pickup'
+      ELSE 'delivery' END;
     v_when := CASE
       WHEN v_leg.window_label IS NOT NULL AND btrim(v_leg.window_label) <> ''
         THEN btrim(v_leg.window_label)
@@ -410,8 +431,12 @@ BEGIN
       'Your ' || v_kind || ' is today',
       'Date: ' || to_char(v_leg.scheduled_date, 'FMMonth FMDD, YYYY') || '.'
         || E'\nScheduled window: ' || v_when || '.'
-        || CASE WHEN v_leg.leg_type = 'pickup'
-          THEN E'\nPlease have the rental equipment ready and accessible.' ELSE '' END
+        || CASE
+          WHEN v_leg.leg_type = 'pickup' AND NOT v_leg.requires_driver
+            THEN E'\nPlease bring your order confirmation and a photo ID.'
+          WHEN v_leg.leg_type = 'pickup'
+            THEN E'\nPlease have the rental equipment ready and accessible.'
+          ELSE '' END
     );
     IF v_id IS NOT NULL THEN v_queued := v_queued + 1; END IF;
   END LOOP;

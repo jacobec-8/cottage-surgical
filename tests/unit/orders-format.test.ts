@@ -125,7 +125,7 @@ test('fmtDate renders a short date and tolerates null', () => {
 
 test('windowOf prefers the label, then a start–end range', () => {
   const d = (over: Partial<OrderDelivery>): OrderDelivery => ({
-    id: 'd1', leg_type: 'delivery', status: 'scheduled', scheduled_date: '2026-08-20',
+    id: 'd1', leg_type: 'delivery', requires_driver: true, status: 'scheduled', scheduled_date: '2026-08-20',
     window_start: '09:00:00', window_end: '11:00:00', window_label: null, driver: null, ...over,
   })
   assert.equal(windowOf(d({ window_label: 'Morning' })), 'Morning')
@@ -141,7 +141,7 @@ test('driverName joins first/last and handles missing driver', () => {
 
 test('legSummary describes a leg for the card', () => {
   const d: OrderDelivery = {
-    id: 'd1', leg_type: 'delivery', status: 'scheduled', scheduled_date: '2026-08-20',
+    id: 'd1', leg_type: 'delivery', requires_driver: true, status: 'scheduled', scheduled_date: '2026-08-20',
     window_start: '09:00:00', window_end: '11:00:00', window_label: null,
     driver: { first_name: 'Sam', last_name: 'Lee' },
   }

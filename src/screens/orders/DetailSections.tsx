@@ -122,6 +122,7 @@ export function LinesSection({ o, pendingConfirm = false, released = false }: Li
 }
 
 function LegCard({ d, orderAddress, highlight }: { d: OrderDelivery; orderAddress: string; highlight: boolean }) {
+  const isStorePickup = d.leg_type === 'pickup' && !d.requires_driver
   const legAddress = addressOf({
     address_line1: d.address_line1 ?? null, address_city: d.address_city ?? null,
     address_state: d.address_state ?? null, address_zip: d.address_zip ?? null,
@@ -131,7 +132,7 @@ function LegCard({ d, orderAddress, highlight }: { d: OrderDelivery; orderAddres
   return (
     <div className={`rounded-lg border bg-white p-3 text-sm ${highlight ? 'border-blue-400 ring-2 ring-blue-100' : 'border-slate-200'}`}>
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="font-medium capitalize">{d.leg_type}</span>
+        <span className="font-medium capitalize">{isStorePickup ? 'In-store pickup' : d.leg_type === 'pickup' ? 'Return pickup' : 'Delivery'}</span>
         {highlight && <span className="text-[11px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700">this stop</span>}
         <span className={`text-xs px-2 py-0.5 rounded-full capitalize ${statusClass(d.status)}`}>{statusLabel(d.status)}</span>
         {photos > 0 && (
@@ -140,7 +141,7 @@ function LegCard({ d, orderAddress, highlight }: { d: OrderDelivery; orderAddres
       </div>
       <div className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-1">
         <Field label="When">{when}</Field>
-        <Field label="Driver">{driverName(d.driver) ?? <span className="text-amber-700">Unassigned</span>}</Field>
+        {!isStorePickup && <Field label="Driver">{driverName(d.driver) ?? <span className="text-amber-700">Unassigned</span>}</Field>}
         {d.started_at && <Field label="Started">{fmtDateTime(d.started_at)}</Field>}
         {d.completed_at && <Field label="Completed">{fmtDateTime(d.completed_at)}</Field>}
       </div>
