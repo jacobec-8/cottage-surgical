@@ -251,7 +251,7 @@ test('cart quantity persists across reload and items can be removed', async ({ p
     .toBe(0)
 })
 
-test('a repeated rental submission resolves as already received', async ({ page }) => {
+test('double-clicking rental submit sends one request', async ({ page }) => {
   await mockCatalogReads(page)
   let submissions = 0
   await page.route('**/rest/v1/rpc/submit_rental_request', async (route) => {
@@ -260,7 +260,7 @@ test('a repeated rental submission resolves as already received', async ({ page 
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ ok: false, reason: 'rate_limited' }),
+      body: JSON.stringify({ ok: true, order_no: 4321 }),
       headers: { 'access-control-allow-origin': '*' },
     })
   })
@@ -282,7 +282,7 @@ test('a repeated rental submission resolves as already received', async ({ page 
 
   await drawer.getByRole('button', { name: 'Submit Request' }).dblclick()
 
-  await expect(drawer.getByText('Request already received', { exact: true })).toBeVisible()
+  await expect(drawer.getByText('Request received: #4321', { exact: true })).toBeVisible()
   await expect(drawer).not.toContainText('please wait a moment before sending the rest')
   expect(submissions).toBe(1)
 })

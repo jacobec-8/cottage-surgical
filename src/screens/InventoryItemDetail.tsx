@@ -1,11 +1,11 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, Boxes, CheckCircle2, ClipboardList, History, MessageSquarePlus,
-  Package, Pencil, Save, Tag, X,
+  ImagePlus, Package, Pencil, Plus, Save, Tag, X,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
@@ -153,7 +153,7 @@ export default function InventoryItemDetail({ itemId }: { itemId: string }) {
   const product = item.data
   const tabs: { key: Tab; label: string; count?: number }[] = [
     { key: 'overview', label: 'Overview' },
-    { key: 'units', label: 'Units', count: counts.total },
+    ...(product.is_serialized ? [{ key: 'units' as const, label: 'Units', count: counts.total }] : []),
     { key: 'rentals', label: 'Out for rent', count: rentals.data?.length ?? 0 },
     { key: 'notes', label: 'Notes', count: notes.data?.length ?? 0 },
   ]
@@ -219,7 +219,7 @@ export default function InventoryItemDetail({ itemId }: { itemId: string }) {
           </div>
         </div>
       ) : tab === 'units' ? (
-        <UnitsTable units={units.data ?? []} loading={units.isLoading} />
+        <UnitsTable itemId={itemId} units={units.data ?? []} loading={units.isLoading} />
       ) : tab === 'rentals' ? (
         <RentalCard assignments={rentals.data ?? []} loading={rentals.isLoading} full />
       ) : (
@@ -274,8 +274,154 @@ function RentalCard({ assignments, loading, full = false }: { assignments: Renta
   )
 }
 
-function UnitsTable({ units, loading }: { units: Unit[]; loading: boolean }) {
-  return <section className="bg-white border border-slate-200 rounded-2xl p-5"><h2 className="font-semibold text-lg mb-4">Serialized units</h2>{loading ? <div className="text-sm text-slate-500">Loading units…</div> : units.length === 0 ? <div className="text-sm text-slate-500">This product has no serialized units.</div> : <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="text-left text-xs text-slate-400 uppercase border-b"><th className="py-3">Asset</th><th>Status</th><th>Acquired</th><th>Condition notes</th></tr></thead><tbody>{units.map((unit) => <tr key={unit.id} className="border-b border-slate-100 last:border-0"><td className="py-3 font-medium">{unit.asset_tag || unit.serial_number || unit.id.slice(0, 8)}</td><td><span className="capitalize text-xs rounded-full bg-slate-100 px-2 py-1">{unit.status}</span></td><td>{unit.acquired_on || '—'}</td><td className="text-slate-500">{unit.condition_notes || '—'}</td></tr>)}</tbody></table></div>}</section>
+type UnitForm = {
+  assetTag: string
+  serialNumber: string
+  status: 'available' | 'retired'
+  acquiredOn: string
+  conditionNotes: string
+}
+
+const EMPTY_UNIT: UnitForm = {
+  assetTag: '',
+  serialNumber: '',
+  status: 'available',
+  acquiredOn: '',
+  conditionNotes: '',
+}
+
+function UnitsTable({ itemId, units, loading }: { itemId: string; units: Unit[]; loading: boolean }) {
+  const qc = useQueryClient()
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [adding, setAdding] = useState(false)
+  const [form, setForm] = useState<UnitForm>(EMPTY_UNIT)
+
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ['equipment_units', itemId] })
+    qc.invalidateQueries({ queryKey: ['equipment_items'] })
+  }
+  const closeForm = () => {
+    setAdding(false)
+    setEditingId(null)
+    setForm(EMPTY_UNIT)
+  }
+  const startEdit = (unit: Unit) => {
+    setAdding(false)
+    setEditingId(unit.id)
+    setForm({
+      assetTag: unit.asset_tag ?? '',
+      serialNumber: unit.serial_number ?? '',
+      status: unit.status === 'retired' ? 'retired' : 'available',
+      acquiredOn: unit.acquired_on ?? '',
+      conditionNotes: unit.condition_notes ?? '',
+    })
+  }
+
+  const save = useMutation({
+    mutationFn: async () => {
+      const assetTag = form.assetTag.trim().toUpperCase()
+      if (!assetTag) throw new Error('Asset tag is required so this unit can be identified and scanned.')
+      const currentUnit = editingId ? units.find((unit) => unit.id === editingId) : null
+      const workflowStatus = currentUnit && (currentUnit.status === 'reserved' || currentUnit.status === 'rented')
+        ? currentUnit.status
+        : form.status
+      const payload = {
+        asset_tag: assetTag,
+        serial_number: form.serialNumber.trim() || null,
+        acquired_on: form.acquiredOn || null,
+        condition_notes: form.conditionNotes.trim() || null,
+        status: workflowStatus,
+      }
+      const result = editingId
+        ? await supabase.from('equipment_units').update(payload).eq('id', editingId)
+        : await supabase.from('equipment_units').insert({ ...payload, item_id: itemId })
+      if (result.error) {
+        if (result.error.code === '23505') throw new Error('That asset tag is already assigned to another unit.')
+        throw result.error
+      }
+    },
+    onSuccess: () => {
+      closeForm()
+      refresh()
+    },
+  })
+
+  return (
+    <section className="bg-white border border-slate-200 rounded-2xl p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
+        <div>
+          <h2 className="font-semibold text-lg">Serialized units</h2>
+          <p className="text-xs text-slate-500 mt-1">Available units determine the quantity shown in inventory.</p>
+        </div>
+        <button
+          onClick={() => { setEditingId(null); setForm(EMPTY_UNIT); setAdding(true) }}
+          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+        >
+          <Plus size={16} /> Add unit
+        </button>
+      </div>
+
+      {adding && <UnitEditor form={form} setForm={setForm} save={() => save.mutate()} cancel={closeForm} pending={save.isPending} error={save.error as Error | null} />}
+
+      {loading ? (
+        <div className="text-sm text-slate-500">Loading units…</div>
+      ) : units.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">No physical units have been added yet.</div>
+      ) : (
+        <div className="space-y-2">
+          {units.map((unit) => editingId === unit.id ? (
+            <UnitEditor key={unit.id} form={form} setForm={setForm} save={() => save.mutate()} cancel={closeForm} pending={save.isPending} error={save.error as Error | null} statusLocked={unit.status === 'reserved' || unit.status === 'rented'} />
+          ) : (
+            <div key={unit.id} className="grid gap-3 rounded-xl border border-slate-200 p-3 text-sm sm:grid-cols-[minmax(140px,1fr)_110px_120px_minmax(180px,1.5fr)_44px] sm:items-center">
+              <div>
+                <div className="font-medium text-slate-900">{unit.asset_tag || unit.serial_number || unit.id.slice(0, 8)}</div>
+                {unit.serial_number && unit.asset_tag && <div className="text-xs text-slate-400 mt-0.5">Serial {unit.serial_number}</div>}
+              </div>
+              <div><span className={`capitalize text-xs rounded-full px-2 py-1 ${unit.status === 'available' ? 'bg-emerald-100 text-emerald-700' : unit.status === 'rented' || unit.status === 'reserved' ? 'bg-blue-100 text-blue-700' : 'bg-slate-200 text-slate-600'}`}>{unit.status}</span></div>
+              <div className="text-slate-500">{unit.acquired_on || 'No date'}</div>
+              <div className="text-slate-500">{unit.condition_notes || 'No condition notes'}</div>
+              <button onClick={() => startEdit(unit)} aria-label={`Edit unit ${unit.asset_tag || unit.id}`} className="grid h-10 w-10 place-items-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600"><Pencil size={16} /></button>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function UnitEditor({ form, setForm, save, cancel, pending, error, statusLocked = false }: {
+  form: UnitForm
+  setForm: (form: UnitForm) => void
+  save: () => void
+  cancel: () => void
+  pending: boolean
+  error: Error | null
+  statusLocked?: boolean
+}) {
+  const input = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
+  const set = (key: keyof UnitForm, value: string) => setForm({ ...form, [key]: value })
+  return (
+    <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50/40 p-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Field label="Asset tag"><input autoFocus className={input} value={form.assetTag} onChange={(e) => set('assetTag', e.target.value)} placeholder="Example: HB-12" /></Field>
+        <Field label="Serial number"><input className={input} value={form.serialNumber} onChange={(e) => set('serialNumber', e.target.value)} placeholder="Optional" /></Field>
+        <Field label="Acquired date"><input className={input} type="date" value={form.acquiredOn} onChange={(e) => set('acquiredOn', e.target.value)} /></Field>
+        <Field label="Inventory status">
+          <select className={input} value={form.status} disabled={statusLocked} onChange={(e) => set('status', e.target.value)}>
+            <option value="available">Available</option>
+            <option value="retired">Retired</option>
+          </select>
+          {statusLocked && <span className="mt-1 block text-xs text-slate-500">This status is controlled by its active rental.</span>}
+        </Field>
+        <div className="sm:col-span-2 lg:col-span-4"><Field label="Condition notes"><textarea className={input} rows={2} value={form.conditionNotes} onChange={(e) => set('conditionNotes', e.target.value)} placeholder="Optional condition or identifying details" /></Field></div>
+      </div>
+      {error && <div className="mt-3 text-sm text-red-600">{error.message}</div>}
+      <div className="mt-3 flex justify-end gap-2">
+        <button onClick={cancel} className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm text-slate-600 hover:bg-white"><X size={15} /> Cancel</button>
+        <button onClick={save} disabled={pending} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"><Save size={15} /> {pending ? 'Saving…' : 'Save unit'}</button>
+      </div>
+    </div>
+  )
 }
 
 function NoteComposer({ note, setNote, submit, pending, error }: { note: string; setNote: (value: string) => void; submit: () => void; pending: boolean; error: Error | null }) {
@@ -289,10 +435,65 @@ function NotesCard({ notes, loading, limit, onViewAll }: { notes: ItemNote[]; lo
 
 function EditItemForm({ item, onCancel, onSaved }: { item: Item; onCancel: () => void; onSaved: () => void }) {
   const [form, setForm] = useState({ name: item.name, description: item.description ?? '', category: item.category, sku: item.sku ?? '', monthly: item.monthly_rental_price?.toString() ?? '', sale: item.sale_price?.toString() ?? '', quantity: item.quantity_on_hand.toString(), rentable: item.is_rentable, purchasable: item.is_purchasable, active: item.is_active })
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(item.image_url)
+  const [imageError, setImageError] = useState('')
   const set = (key: keyof typeof form, value: string | boolean) => setForm((current) => ({ ...current, [key]: value }))
-  const save = useMutation({ mutationFn: async () => { if (!form.name.trim()) throw new Error('Name is required.'); const payload = { name: form.name.trim(), description: form.description.trim() || null, category: form.category, sku: form.sku.trim() || null, monthly_rental_price: form.monthly === '' ? null : Number(form.monthly), sale_price: form.sale === '' ? null : Number(form.sale), quantity_on_hand: item.is_serialized ? item.quantity_on_hand : Math.max(0, Number(form.quantity) || 0), is_rentable: form.rentable, is_purchasable: form.purchasable, is_active: form.active }; const { error } = await supabase.from('equipment_items').update(payload).eq('id', item.id); if (error) throw error }, onSuccess: onSaved })
+
+  useEffect(() => {
+    if (!imageFile) return
+    const url = URL.createObjectURL(imageFile)
+    setImagePreview(url)
+    return () => URL.revokeObjectURL(url)
+  }, [imageFile])
+
+  const chooseImage = (file?: File) => {
+    if (!file) return
+    setImageError('')
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
+      setImageError('Choose a JPG, PNG, WebP, or GIF image.')
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setImageError('Image must be 5 MB or smaller.')
+      return
+    }
+    setImageFile(file)
+  }
+
+  const save = useMutation({
+    mutationFn: async () => {
+      if (!form.name.trim()) throw new Error('Name is required.')
+      const payload: Record<string, string | number | boolean | null> = {
+        name: form.name.trim(),
+        description: form.description.trim() || null,
+        category: form.category,
+        sku: form.sku.trim() || null,
+        monthly_rental_price: form.monthly === '' ? null : Number(form.monthly),
+        sale_price: form.sale === '' ? null : Number(form.sale),
+        quantity_on_hand: item.is_serialized ? item.quantity_on_hand : Math.max(0, Number(form.quantity) || 0),
+        is_rentable: form.rentable,
+        is_purchasable: form.purchasable,
+        is_active: form.active,
+      }
+      let uploadedPath: string | null = null
+      if (imageFile) {
+        const ext = imageFile.name.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg'
+        uploadedPath = `${crypto.randomUUID()}/catalog.${ext}`
+        const upload = await supabase.storage.from('equipment-images').upload(uploadedPath, imageFile, { cacheControl: '3600', contentType: imageFile.type, upsert: false })
+        if (upload.error) throw upload.error
+        payload.image_url = supabase.storage.from('equipment-images').getPublicUrl(uploadedPath).data.publicUrl
+      }
+      const { error } = await supabase.from('equipment_items').update(payload).eq('id', item.id)
+      if (error) {
+        if (uploadedPath) await supabase.storage.from('equipment-images').remove([uploadedPath])
+        throw error
+      }
+    },
+    onSuccess: onSaved,
+  })
   const input = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
-  return <section className="bg-white border border-slate-200 rounded-2xl p-6"><h2 className="text-lg font-semibold mb-5">Edit product</h2><div className="grid md:grid-cols-2 gap-4"><Field label="Product name"><input className={input} value={form.name} onChange={(e) => set('name', e.target.value)} /></Field><Field label="SKU"><input className={input} value={form.sku} onChange={(e) => set('sku', e.target.value)} /></Field><Field label="Category"><select className={input} value={form.category} onChange={(e) => set('category', e.target.value)}>{CATEGORIES.map((category) => <option key={category}>{category}</option>)}</select></Field><Field label="Quantity on hand"><input className={input} type="number" min="0" disabled={item.is_serialized} value={form.quantity} onChange={(e) => set('quantity', e.target.value)} /><div className="text-xs text-slate-400 mt-1">{item.is_serialized ? 'Calculated from available serialized units.' : 'Editable for bulk stock.'}</div></Field><Field label="Monthly rental price"><input className={input} type="number" min="0" step="0.01" value={form.monthly} onChange={(e) => set('monthly', e.target.value)} /></Field><Field label="Sale price"><input className={input} type="number" min="0" step="0.01" value={form.sale} onChange={(e) => set('sale', e.target.value)} /></Field><div className="md:col-span-2"><Field label="Description"><textarea className={input} rows={3} value={form.description} onChange={(e) => set('description', e.target.value)} /></Field></div><div className="md:col-span-2 flex flex-wrap gap-5">{([['rentable','Rentable'],['purchasable','Purchasable'],['active','Active']] as const).map(([key,label]) => <label key={key} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form[key]} onChange={(e) => set(key, e.target.checked)} /> {label}</label>)}</div></div>{save.error && <div className="text-sm text-red-600 mt-4">{(save.error as Error).message}</div>}<div className="flex justify-end gap-2 mt-6"><button onClick={onCancel} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">Cancel</button><button onClick={() => save.mutate()} disabled={save.isPending} className="inline-flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50"><Save size={15} /> {save.isPending ? 'Saving…' : 'Save changes'}</button></div></section>
+  return <section className="bg-white border border-slate-200 rounded-2xl p-6"><h2 className="text-lg font-semibold mb-5">Edit product</h2><div className="grid md:grid-cols-2 gap-4"><div className="md:col-span-2"><Field label="Product image"><label className="flex cursor-pointer items-center gap-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-3 hover:border-blue-400">{imagePreview ? <img src={imagePreview} alt="Product preview" className="h-24 w-24 rounded-lg bg-white object-contain" /> : <span className="grid h-24 w-24 place-items-center rounded-lg bg-white text-slate-400"><ImagePlus size={28} /></span>}<span><span className="block text-sm font-medium text-slate-700">{imageFile ? imageFile.name : 'Choose a new product picture'}</span><span className="mt-1 block text-xs text-slate-500">JPG, PNG, WebP, or GIF. Maximum 5 MB.</span></span><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="sr-only" onChange={(e) => chooseImage(e.target.files?.[0])} /></label></Field>{imageError && <div className="mt-2 text-sm text-red-600">{imageError}</div>}</div><Field label="Product name"><input className={input} value={form.name} onChange={(e) => set('name', e.target.value)} /></Field><Field label="SKU"><input className={input} value={form.sku} onChange={(e) => set('sku', e.target.value)} /></Field><Field label="Category"><select className={input} value={form.category} onChange={(e) => set('category', e.target.value)}>{CATEGORIES.map((category) => <option key={category}>{category}</option>)}</select></Field><Field label="Quantity on hand"><input className={input} type="number" min="0" disabled={item.is_serialized} value={form.quantity} onChange={(e) => set('quantity', e.target.value)} /><div className="text-xs text-slate-400 mt-1">{item.is_serialized ? 'Manage stock from the Units tab. Available physical units determine this number.' : 'Editable for bulk stock.'}</div></Field><Field label="Monthly rental price"><input className={input} type="number" min="0" step="0.01" value={form.monthly} onChange={(e) => set('monthly', e.target.value)} /></Field><Field label="Sale price"><input className={input} type="number" min="0" step="0.01" value={form.sale} onChange={(e) => set('sale', e.target.value)} /></Field><div className="md:col-span-2"><Field label="Description"><textarea className={input} rows={3} value={form.description} onChange={(e) => set('description', e.target.value)} /></Field></div><div className="md:col-span-2 flex flex-wrap gap-5">{([['rentable','Rentable'],['purchasable','Purchasable'],['active','Active']] as const).map(([key,label]) => <label key={key} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form[key]} onChange={(e) => set(key, e.target.checked)} /> {label}</label>)}</div></div>{save.error && <div className="text-sm text-red-600 mt-4">{(save.error as Error).message}</div>}<div className="flex justify-end gap-2 mt-6"><button onClick={onCancel} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">Cancel</button><button onClick={() => save.mutate()} disabled={save.isPending || Boolean(imageError)} className="inline-flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50"><Save size={15} /> {save.isPending ? 'Saving…' : 'Save changes'}</button></div></section>
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {

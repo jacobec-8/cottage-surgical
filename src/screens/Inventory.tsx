@@ -16,11 +16,12 @@ type Item = {
   sale_price: number | null
   quantity_on_hand: number
   image_url: string | null
+  is_serialized: boolean
   is_active: boolean
 }
 
 const CATEGORIES = ['mobility', 'seating', 'bedroom', 'respiratory']
-const SELECT = 'id,name,description,category,sku,monthly_rental_price,sale_price,quantity_on_hand,image_url,is_active'
+const SELECT = 'id,name,description,category,sku,monthly_rental_price,sale_price,quantity_on_hand,image_url,is_serialized,is_active'
 
 export default function Inventory() {
   const qc = useQueryClient()
@@ -205,6 +206,7 @@ function ItemModal({ item, onClose }: { item: Partial<Item>; onClose: () => void
     monthly_rental_price: item.monthly_rental_price?.toString() ?? '',
     sale_price: item.sale_price?.toString() ?? '',
     quantity_on_hand: item.quantity_on_hand?.toString() ?? '0',
+    is_serialized: item.is_serialized ?? true,
     is_active: item.is_active ?? true,
   })
   const [imageFile, setImageFile] = useState<File | null>(null)
@@ -243,7 +245,8 @@ function ItemModal({ item, onClose }: { item: Partial<Item>; onClose: () => void
         sku: f.sku.trim() || null,
         monthly_rental_price: f.monthly_rental_price === '' ? null : Number(f.monthly_rental_price),
         sale_price: f.sale_price === '' ? null : Number(f.sale_price),
-        quantity_on_hand: Number(f.quantity_on_hand) || 0,
+        quantity_on_hand: f.is_serialized ? 0 : Math.max(0, Number(f.quantity_on_hand) || 0),
+        is_serialized: f.is_serialized,
         is_active: f.is_active,
       }
       if (!payload.name) throw new Error('Name is required')
@@ -348,11 +351,17 @@ function ItemModal({ item, onClose }: { item: Partial<Item>; onClose: () => void
             </div>
             <div>
               <label className="block text-xs text-slate-500 mb-1">Qty on hand</label>
-              <input value={f.quantity_on_hand} onChange={set('quantity_on_hand')} type="number" className={inp} />
+              <input value={f.quantity_on_hand} onChange={set('quantity_on_hand')} type="number" min="0" disabled={f.is_serialized} className={inp} />
+              <div className="mt-1 text-xs text-slate-400">{f.is_serialized ? 'Add physical units after creating the item.' : 'Enter the available bulk quantity.'}</div>
             </div>
-            <label className="flex items-center gap-2 text-sm mt-6">
+            <div className="space-y-3 sm:mt-6">
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={f.is_serialized} onChange={set('is_serialized')} disabled={!isNew} /> Track individual units
+              </label>
+              <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={f.is_active} onChange={set('is_active')} /> Active (shown in store)
-            </label>
+              </label>
+            </div>
           </div>
           {err && <div className="text-sm text-red-600">{err}</div>}
           <div className="flex justify-end gap-2 pt-2">

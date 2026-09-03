@@ -8,7 +8,6 @@ import { dispatchCustomerEmails } from '../../lib/customerEmails'
 import { useCart } from './CartContext'
 
 const REASONS: Record<string, string> = {
-  rate_limited: 'A request was recently submitted with this contact information. Please wait two minutes and try again, or call us if you need help.',
   missing_name: 'Please enter your name.',
   invalid_item: 'One of your items isn’t available right now. Please remove it and try again.',
   no_items: 'Your cart is empty.',
@@ -73,14 +72,7 @@ export default function CartDrawer() {
             p_customer: customer, p_address: address, p_notes: form.notes || null,
           })
           if (error) throw new Error('Something went wrong. Please try again or call us.')
-          if (!data?.ok) {
-            if (data?.reason === 'rate_limited') {
-              clear()
-              setDone([])
-              return
-            }
-            throw new Error(REASONS[data?.reason] || 'We couldn’t submit your rental request. Please call us.')
-          }
+          if (!data?.ok) throw new Error(REASONS[data?.reason] || 'We couldn’t submit your rental request. Please call us.')
           rentNo = data.order_no
           void dispatchCustomerEmails()
         }
@@ -132,14 +124,8 @@ export default function CartDrawer() {
           <div className="flex-1 grid place-items-center p-8 text-center">
             <div>
               <CheckCircle className="mx-auto text-emerald-600 mb-3" size={42} />
-              <div className="font-semibold text-navy text-lg">
-                {done.length ? `Request received: ${done.map((n) => `#${n}`).join(' & ')}` : 'Request already received'}
-              </div>
-              <p className="text-slate-500 text-sm mt-2">
-                {done.length
-                  ? 'Pay in store selected. Our team will review availability and contact you to confirm delivery.'
-                  : 'We already have a recent request with this contact information. Our team will review it and contact you.'}
-              </p>
+              <div className="font-semibold text-navy text-lg">Request received: {done.map((n) => `#${n}`).join(' & ')}</div>
+              <p className="text-slate-500 text-sm mt-2">Pay in store selected. Our team will review availability and contact you to confirm delivery.</p>
               <button onClick={() => { setDone(null); setCheckout(false); close() }} className="mt-5 bg-navy text-white rounded-lg px-6 py-2.5 text-sm font-semibold">Done</button>
             </div>
           </div>
