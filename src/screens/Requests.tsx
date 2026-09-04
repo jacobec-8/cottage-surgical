@@ -3,7 +3,7 @@
 import { useCallback, useState, type KeyboardEvent } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
-import { AlertTriangle, ChevronRight } from 'lucide-react'
+import { AlertTriangle, Building2, ChevronRight, MapPin, Store, Truck } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { invalidateOrderWorkflow } from '../lib/workflowKeys'
 import { useStripeReconcile } from '../lib/useStripeReconcile'
@@ -33,7 +33,9 @@ export default function Requests() {
       let query = supabase
         .from('rental_orders')
         .select(
-          'id,order_no,order_type,status,payment_status,payment_preference,created_at,location_id,address_line1,address_city,address_state,address_zip,special_notes,' +
+          'id,order_no,order_type,status,payment_status,payment_preference,created_at,location_id,fulfillment_method,address_line1,address_city,address_state,address_zip,special_notes,' +
+            'location:pickup_locations!rental_orders_location_id_fkey(name),' +
+            'pickup_location:pickup_locations!rental_orders_pickup_location_id_fkey(name,address_line1,address_line2,address_city,address_state,address_zip),' +
             'customer:customers(full_name,phone,email),' +
             'rental_line_items(quantity,equipment:equipment_items(id,name,quantity_on_hand,is_serialized,location_inventory:equipment_location_inventory(location_id,quantity_on_hand)))',
         )
@@ -80,15 +82,20 @@ export default function Requests() {
     },
     onMutate: () => { setActErr(''); setNote('') },
     onError: (e) => setActErr((e as Error).message || 'Action failed. Please try again.'),
-    onSuccess: (res) => {
+    onSuccess: (res, variables) => {
       // Confirm touches orders, deliveries, billing, stock, and badges.
       // (Previously invalidated orphan 'requests_count' instead of 'nav_counts'.)
       invalidateOrderWorkflow(qc)
       if (res) {
+        const handled = data?.find((request) => request.id === variables.id)
+        const isPickup = handled?.fulfillment_method === 'pickup'
+        const pickupName = handled?.pickup_location?.name || handled?.location?.name || 'the selected pharmacy'
         setNote(
           res.unallocated > 0
             ? `Confirmed — moved to Orders. ${res.unallocated} item(s) had no unit in stock; allocate them once stock is available.`
-            : 'Confirmed — equipment reserved and a delivery queued. Find it under Orders and assign a driver on the Delivery board.',
+            : isPickup
+              ? `Pickup approved — prepare the equipment at ${pickupName}. No driver assignment is needed.`
+              : 'Delivery approved — equipment reserved. Assign a driver and delivery time on the Delivery & Pickup board.',
         )
       }
     },
@@ -109,7 +116,7 @@ export default function Requests() {
     <div>
       <h1 className="text-2xl font-semibold mb-1">Requests</h1>
       <p className="text-slate-500 text-sm mb-6">
-        Rental &amp; purchase requests from the storefront. <strong>Confirm</strong> reserves the equipment and queues a delivery (then assign a driver on the Delivery board); <strong>Decline</strong> cancels it.
+        Rental &amp; purchase requests from the storefront. <strong>Approve</strong> reserves the equipment and creates the correct in-store pickup or delivery task; <strong>Decline</strong> cancels it.
         Requests can only be confirmed once every item is in stock — add units in Inventory first. Click a request for full details.
       </p>
       {isLoading && <div className="text-slate-500">Loading…</div>}
@@ -122,6 +129,8 @@ export default function Requests() {
         {data?.map((r) => {
           const { lines, shortages, blocked, busy } = rowState(r)
           const isSel = selected === r.id
+          const isPickup = r.fulfillment_method === 'pickup'
+          const fulfillmentLocation = r.pickup_location ?? r.location
           return (
           <div
             key={r.id}
@@ -147,14 +156,28 @@ export default function Requests() {
                     {r.order_type}
                   </span>
                   <span className="text-xs text-slate-400">#{r.order_no}</span>
+                  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${isPickup ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                    {isPickup ? <Store size={12} /> : <Truck size={12} />}
+                    {isPickup ? 'IN-STORE PICKUP' : 'DELIVERY'}
+                  </span>
+                  {r.location?.name && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600"><Building2 size={11} /> {r.location.name}</span>
+                  )}
                   <PaymentBadge paymentStatus={r.payment_status} paymentPreference={r.payment_preference} />
                 </div>
                 <div className="text-sm text-slate-500 mt-1">
                   {[r.customer?.phone, r.customer?.email].filter(Boolean).join(' · ')}
                 </div>
-                <div className="text-sm text-slate-500">
-                  {[r.address_line1, r.address_city, r.address_state, r.address_zip].filter(Boolean).join(', ')}
-                </div>
+                {isPickup ? (
+                  <div className="mt-1 flex items-start gap-1 text-sm text-purple-700">
+                    <MapPin size={14} className="mt-0.5 shrink-0" />
+                    <span><strong>Prepare at {fulfillmentLocation?.name ?? 'selected pharmacy'}</strong>{r.pickup_location ? ` · ${[r.pickup_location.address_line1, r.pickup_location.address_city, r.pickup_location.address_state, r.pickup_location.address_zip].filter(Boolean).join(', ')}` : ''} · No driver needed</span>
+                  </div>
+                ) : (
+                  <div className="text-sm text-slate-500">
+                    {[r.address_line1, r.address_city, r.address_state, r.address_zip].filter(Boolean).join(', ')}
+                  </div>
+                )}
                 <div className="mt-2 flex flex-wrap gap-1">
                   {lines.map((li, i) => {
                     const short = lineShortage(li)
@@ -194,6 +217,7 @@ export default function Requests() {
                   onDecline={() => act.mutate({ id: r.id, action: 'decline' })}
                   busy={busy}
                   blocked={blocked}
+                  fulfillmentMethod={r.fulfillment_method}
                 />
                 <span className="inline-flex items-center gap-0.5 text-xs text-slate-400 group-hover:text-blue-600">
                   Details <ChevronRight size={14} />
@@ -218,6 +242,7 @@ export default function Requests() {
                   onDecline={() => act.mutate({ id: selectedRow.id, action: 'decline' })}
                   busy={rowState(selectedRow).busy}
                   blocked={rowState(selectedRow).blocked}
+                  fulfillmentMethod={selectedRow.fulfillment_method}
                 />
               )}
               {selectedRow && rowState(selectedRow).blocked && (

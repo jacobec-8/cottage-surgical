@@ -10,22 +10,24 @@ type Props = {
   blocked: boolean
   /** Row layout (inside a clickable card) vs inline layout (panel header). */
   layout?: 'column' | 'row'
+  fulfillmentMethod?: string | null
 }
 
 /** Confirm / Decline pair shared by the Requests card and the detail panel. */
-export default function RequestActions({ onConfirm, onDecline, busy, blocked, layout = 'column' }: Props) {
+export default function RequestActions({ onConfirm, onDecline, busy, blocked, layout = 'column', fulfillmentMethod }: Props) {
   // Stop propagation so clicks don't also open the card's detail panel.
   const run = (fn: () => void) => (e: MouseEvent) => { e.stopPropagation(); fn() }
+  const isPickup = fulfillmentMethod === 'pickup'
   return (
     <div className={`flex gap-2 shrink-0 ${layout === 'column' ? 'flex-col' : 'flex-row items-center'}`}>
       <button
         type="button"
         onClick={run(onConfirm)}
         disabled={busy || blocked}
-        title={blocked ? 'Out of stock — add units in Inventory first' : 'Reserve equipment and queue a delivery'}
+        title={blocked ? 'Out of stock — add units in Inventory first' : isPickup ? 'Reserve equipment and create an in-store pickup task' : 'Reserve equipment and queue a delivery'}
         className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        <Check size={15} /> Confirm
+        <Check size={15} /> {isPickup ? 'Approve pickup' : fulfillmentMethod === 'delivery' ? 'Approve delivery' : 'Confirm'}
       </button>
       <button
         type="button"

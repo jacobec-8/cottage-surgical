@@ -12,6 +12,7 @@ import { supabase } from '../lib/supabase'
 import { statusLabel } from '../lib/status'
 import { fulfillmentLabel } from '../lib/fulfillment'
 import { useLocationScope } from '../contexts/LocationContext'
+import StockStatusBadges from '../components/StockStatusBadges'
 
 type Item = {
   id: string
@@ -392,7 +393,7 @@ function PickupLocationsTab({ item, locations, assignments, loading }: {
           <h2 className="flex items-center gap-2 text-lg font-semibold"><MapPin size={19} className="text-blue-600" /> Locations</h2>
           <p className="mt-1 text-sm text-slate-500">
             {profile?.role === 'admin'
-              ? 'Assign this item to every shop or selected shops. Selected pickup-enabled locations appear at checkout; stock is checked when staff confirms the request.'
+              ? 'Assign this item to every shop or selected shops. A pickup-enabled location appears at checkout only while its quantity is above zero.'
               : 'Assign this item to your store. New locations and store logins are created by an admin.'}
           </p>
         </div>
@@ -425,6 +426,7 @@ function PickupLocationsTab({ item, locations, assignments, loading }: {
                     <span className="block font-medium text-slate-900">{location.name} <span className="text-xs font-normal text-slate-400">· {location.business?.name}</span> {!location.is_active && <span className="text-xs font-normal text-slate-500">(inactive)</span>}</span>
                     <span className="mt-0.5 block text-sm text-slate-600">{location.address_line1}{location.address_line2 ? `, ${location.address_line2}` : ''}<br />{location.address_city}, {location.address_state} {location.address_zip}</span>
                     <span className="mt-1 block text-xs text-slate-500">{location.partner_type === 'partner' ? 'Partner pickup shop' : 'Owned store'} · {location.fulfillment_mode === 'pickup_only' ? 'Pickup only location' : 'Pickup and delivery'}</span>
+                    {inventory && <span className="mt-2 block"><StockStatusBadges quantity={inventory.quantity_on_hand} pickupEligible={item.pickup_enabled} pickupEnabled={inventory.pickup_enabled} locationActive={location.is_active} /></span>}
                   </span>
                 </label>
                 {inventory && canManage && <LocationInventoryEditor item={item} inventory={inventory} onSaved={refresh} />}

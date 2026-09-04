@@ -8,6 +8,7 @@ import { supabase } from '../lib/supabase'
 import { fulfillmentLabel } from '../lib/fulfillment'
 import { useLocationScope } from '../contexts/LocationContext'
 import { useAuth } from '../contexts/AuthContext'
+import StockStatusBadges, { LOW_STOCK_THRESHOLD } from '../components/StockStatusBadges'
 
 type Item = {
   id: string
@@ -29,11 +30,11 @@ type Item = {
   delivery_enabled: boolean
   same_day_pickup: boolean
   installation_required: boolean
-  location_inventory: { location_id: string; quantity_on_hand: number }[]
+  location_inventory: { location_id: string; quantity_on_hand: number; pickup_enabled: boolean }[]
 }
 
 const CATEGORIES = ['mobility', 'seating', 'bedroom', 'respiratory']
-const SELECT = 'id,name,description,category,sku,monthly_rental_price,pickup_rental_price,delivery_rental_price,sale_price,quantity_on_hand,image_url,is_serialized,is_active,is_rentable,is_purchasable,pickup_enabled,delivery_enabled,same_day_pickup,installation_required,location_inventory:equipment_location_inventory(location_id,quantity_on_hand)'
+const SELECT = 'id,name,description,category,sku,monthly_rental_price,pickup_rental_price,delivery_rental_price,sale_price,quantity_on_hand,image_url,is_serialized,is_active,is_rentable,is_purchasable,pickup_enabled,delivery_enabled,same_day_pickup,installation_required,location_inventory:equipment_location_inventory(location_id,quantity_on_hand,pickup_enabled)'
 
 export default function Inventory() {
   const qc = useQueryClient()
@@ -118,9 +119,17 @@ export default function Inventory() {
       <div className="space-y-3">
         {filtered.map((it) => {
           const open = expandedId === it.id
+          const scopedInventory = selectedLocationId
+            ? it.location_inventory?.find((entry) => entry.location_id === selectedLocationId)
+            : null
           const scopedStock = selectedLocationId
-            ? it.location_inventory?.find((entry) => entry.location_id === selectedLocationId)?.quantity_on_hand ?? 0
+            ? scopedInventory?.quantity_on_hand ?? 0
             : (it.location_inventory ?? []).reduce((sum, entry) => sum + entry.quantity_on_hand, 0)
+          const outOfStockStores = (it.location_inventory ?? []).filter((entry) => entry.quantity_on_hand <= 0).length
+          const lowStockStores = (it.location_inventory ?? []).filter((entry) => entry.quantity_on_hand > 0 && entry.quantity_on_hand <= LOW_STOCK_THRESHOLD).length
+          const hiddenPickupStores = it.pickup_enabled
+            ? (it.location_inventory ?? []).filter((entry) => entry.quantity_on_hand <= 0 || !entry.pickup_enabled).length
+            : 0
           return (
             <div
               key={it.id}
@@ -157,6 +166,15 @@ export default function Inventory() {
                       </span>
                       {it.same_day_pickup && it.pickup_enabled && <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-700"><Zap size={11} /> Same-day pickup</span>}
                       {it.is_rentable && !it.is_purchasable && <span className="rounded-full bg-violet-50 px-2 py-1 text-[11px] font-medium text-violet-700">Rent only</span>}
+                      {selectedLocationId ? (
+                        <StockStatusBadges quantity={scopedStock} pickupEligible={it.pickup_enabled} pickupEnabled={scopedInventory?.pickup_enabled ?? false} />
+                      ) : (
+                        <>
+                          {outOfStockStores > 0 && <span className="rounded-full bg-red-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-red-700">{outOfStockStores} {outOfStockStores === 1 ? 'store' : 'stores'} out of stock</span>}
+                          {lowStockStores > 0 && <span className="rounded-full bg-amber-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-800">{lowStockStores} low stock</span>}
+                          {hiddenPickupStores > 0 && <span className="rounded-full bg-slate-200 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-700">{hiddenPickupStores} hidden from pickup</span>}
+                        </>
+                      )}
                     </div>
                     {it.sku && <div className="mt-1 text-xs text-slate-400">SN: {it.sku}</div>}
                   </div>
