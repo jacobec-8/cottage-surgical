@@ -114,7 +114,7 @@ export default function Requests() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold mb-1">Requests</h1>
+      <h2 className="sr-only">Requests</h2>
       <p className="text-slate-500 text-sm mb-6">
         Rental &amp; purchase requests from the storefront. <strong>Approve</strong> reserves the equipment and creates the correct in-store pickup or delivery task; <strong>Decline</strong> cancels it.
         Requests can only be confirmed once every item is in stock — add units in Inventory first. Click a request for full details.
