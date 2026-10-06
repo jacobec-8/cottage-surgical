@@ -15,24 +15,22 @@ import type { StaffModule } from '../lib/staffModules'
 import { useStaffModuleAccess } from '../lib/useStaffModuleAccess'
 import NotificationsBell from './NotificationsBell'
 import { dispatchCustomerEmails } from '../lib/customerEmails'
+import { getVisibleWorkspaces, matchesWorkspaceTab } from '../lib/workspaceNavigation'
 
 const STAFF = ['admin', 'staff']
 const ALL = ['admin', 'staff', 'driver']
-const ORDER_TABS = [
-  { to: '/orders', label: 'Orders', icon: ClipboardList, module: 'orders', badge: 'orders' },
-  { to: '/requests', label: 'Requests', icon: Inbox, module: 'requests', badge: 'requests' },
-  { to: '/new-order', label: 'New Order', icon: PlusCircle, module: 'new_order', badge: null },
-] as const
+const TAB_ICONS = {
+  '/orders': ClipboardList, '/requests': Inbox, '/new-order': PlusCircle,
+  '/delivery': Truck, '/drivers': UserCog, '/staff': UsersRound, '/staff-access': LockKeyhole,
+}
 const NAV = [
   { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true, roles: STAFF, module: 'dashboard' },
-  { to: '/orders', label: 'Orders', icon: ClipboardList, roles: STAFF },
+  { to: '/orders', label: 'Orders', icon: ClipboardList, roles: STAFF, workspace: 'orders' },
   { to: '/customers', label: 'Customers', icon: Users, roles: STAFF, module: 'customers' },
   { to: '/inventory', label: 'Inventory', icon: Package, roles: STAFF, module: 'inventory' },
   { to: '/billing', label: 'Billing', icon: CreditCard, roles: STAFF, module: 'billing' },
-  { to: '/delivery', label: 'Delivery & Pickup', icon: Truck, roles: ALL, badge: 'deliveries', module: 'delivery' },
-  { to: '/drivers', label: 'Drivers', icon: UserCog, roles: STAFF, module: 'drivers' },
-  { to: '/staff', label: 'Staff & Users', icon: UsersRound, roles: ['admin'], adminOnly: true },
-  { to: '/staff-access', label: 'Staff Access', icon: LockKeyhole, roles: ['admin'], adminOnly: true },
+  { to: '/delivery', label: 'Delivery & Pickup', icon: Truck, roles: ALL, workspace: 'delivery' },
+  { to: '/staff', label: 'Staff', icon: UsersRound, roles: ['admin'], workspace: 'staff' },
   { to: '/locations', label: 'Locations', icon: Building2, roles: ['admin'], adminOnly: true },
 ]
 
@@ -91,28 +89,23 @@ export default function Layout({ children }: { children: ReactNode }) {
   const contactPhone = selectedLocation?.business?.settings?.phone ?? selectedLocation?.phone ?? '516-367-9030 ext 4'
   const contactEmail = selectedLocation?.business?.settings?.email ?? 'info@cottagepharmacy.com'
   const initials = name.split(' ').map((s) => s[0]).slice(0, 2).join('').toUpperCase()
-  const orderTabs = STAFF.includes(profile?.role || '')
-    ? ORDER_TABS.filter((tab) => access.canAccess(tab.module))
-    : []
-  const isOrderWorkspace = orderTabs.some((tab) => pathname === tab.to)
-  const orderCount = orderTabs.reduce((total, tab) => total + (tab.badge ? counts?.[tab.badge] ?? 0 : 0), 0)
+  const workspaces = getVisibleWorkspaces(profile?.role, access.canAccess)
+  const activeWorkspace = workspaces.find((workspace) => workspace.tabs.some((tab) => matchesWorkspaceTab(pathname, tab.to)))
   const visibleNav = NAV.filter((n) => {
     if (!n.roles.includes(profile?.role || '')) return false
     if ('adminOnly' in n && n.adminOnly && profile?.role !== 'admin') return false
-    if (n.to === '/orders') return orderTabs.length > 0
+    if (n.workspace) return workspaces.some((workspace) => workspace.id === n.workspace)
     const moduleKey = 'module' in n ? n.module as StaffModule : null
     return !moduleKey || access.canAccess(moduleKey)
   })
   const navLinks = visibleNav.map((n) => {
     const Icon = n.icon
-    const isOrders = n.to === '/orders'
-    // A staff member may have Requests or New Order access without Orders access.
-    const href = isOrders ? orderTabs[0].to : n.to
-    const isActive = isOrders
-      ? isOrderWorkspace
+    const workspace = workspaces.find((workspace) => workspace.id === n.workspace)
+    const href = workspace?.tabs[0].to ?? n.to
+    const isActive = workspace
+      ? workspace.id === activeWorkspace?.id
       : n.end ? pathname === n.to : pathname === n.to || pathname.startsWith(`${n.to}/`)
-    const badge = (n as { badge?: string }).badge
-    const count = isOrders ? orderCount : badge ? counts?.[badge] ?? 0 : 0
+    const count = workspace?.tabs.reduce((total, tab) => total + (tab.badge ? counts?.[tab.badge] ?? 0 : 0), 0) ?? 0
     return (
       <Link
         key={n.to}
@@ -261,13 +254,15 @@ export default function Layout({ children }: { children: ReactNode }) {
           </div>
         </header>
         <main className="flex-1 overflow-x-hidden p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:p-6 lg:p-8">
-          {isOrderWorkspace && (
+          {activeWorkspace && !isDriver && (
             <div className="mb-6">
-              <h1 className="mb-4 text-2xl font-semibold">Orders</h1>
-              <nav aria-label="Order pages" className="flex gap-4 overflow-x-auto border-b border-slate-200 sm:gap-6">
-                {orderTabs.map((tab) => {
-                  const active = pathname === tab.to
-                  const Icon = tab.icon
+              {activeWorkspace.tabs.some((tab) => pathname === tab.to) && (
+                <h1 className="mb-4 text-2xl font-semibold">{activeWorkspace.label}</h1>
+              )}
+              <nav aria-label={`${activeWorkspace.label} pages`} className="flex gap-4 overflow-x-auto border-b border-slate-200 sm:gap-6">
+                {activeWorkspace.tabs.map((tab) => {
+                  const active = matchesWorkspaceTab(pathname, tab.to)
+                  const Icon = TAB_ICONS[tab.to as keyof typeof TAB_ICONS]
                   const count = tab.badge ? counts?.[tab.badge] ?? 0 : 0
                   return (
                     <Link

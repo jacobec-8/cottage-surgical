@@ -1,7 +1,7 @@
 'use client'
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { LockKeyhole, LockOpen, ShieldCheck } from 'lucide-react'
+import { LockKeyhole, LockOpen } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 import { STAFF_MODULES, type StaffModule } from '../lib/staffModules'
@@ -29,10 +29,7 @@ export default function StaffAccess() {
     <div className="max-w-4xl">
       <div className="mb-6 flex flex-col items-start gap-4 sm:flex-row sm:justify-between">
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <ShieldCheck className="text-blue-600" size={24} />
-            <h1 className="text-2xl font-semibold">Staff Access</h1>
-          </div>
+          <h2 className="sr-only">Staff Access</h2>
           <p className="text-sm text-slate-500">
             Choose which operational modules store staff can use. Admin access and the driver app are unaffected.
           </p>

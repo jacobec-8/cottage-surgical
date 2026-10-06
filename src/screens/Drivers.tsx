@@ -116,8 +116,8 @@ export default function Drivers() {
 
   return (
     <div className="max-w-2xl">
-      <div className="flex items-start justify-between mb-1">
-        <h1 className="text-2xl font-semibold">Drivers</h1>
+      <div className="flex items-start justify-end mb-1">
+        <h2 className="sr-only">Drivers</h2>
         <button
           onClick={() => setAdding((v) => !v)}
           className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-3 py-2 text-sm"
