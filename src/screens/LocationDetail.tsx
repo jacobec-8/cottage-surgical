@@ -10,6 +10,7 @@ import {
 import { authEmailToUsername } from '../lib/staffLogin'
 import { supabase } from '../lib/supabase'
 import StockStatusBadges from '../components/StockStatusBadges'
+import BusinessContact from '../components/BusinessContact'
 
 type UserRole = 'admin' | 'staff' | 'driver'
 type LocationUser = {
@@ -114,11 +115,6 @@ export default function LocationDetail({ locationId }: { locationId: string }) {
         is_active: form.active,
       }).eq('id', locationId)
       if (error) throw error
-      if (location.data?.business) {
-        const { error: businessError } = await supabase.from('businesses')
-          .update({ name: form.name.trim() }).eq('id', location.data.business.id)
-        if (businessError) throw businessError
-      }
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['location_detail', locationId] })
@@ -178,10 +174,12 @@ export default function LocationDetail({ locationId }: { locationId: string }) {
       <Link href="/locations" className="mb-5 inline-flex items-center gap-2 text-sm text-slate-500 hover:text-blue-600"><ArrowLeft size={16} /> All pharmacies</Link>
       <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <div className="flex items-center gap-3"><div className="grid h-12 w-12 place-items-center rounded-xl bg-blue-100 text-blue-700"><Building2 size={24} /></div><div><h1 className="text-3xl font-semibold text-slate-900">{location.data.name}</h1><p className="mt-1 text-sm text-slate-500">Pharmacy details, users, and location inventory</p></div></div>
+          <div className="flex items-center gap-3"><div className="grid h-12 w-12 place-items-center rounded-xl bg-blue-100 text-blue-700"><Building2 size={24} /></div><div><h1 className="text-3xl font-semibold text-slate-900">{location.data.name}</h1><p className="mt-1 text-sm text-slate-500">{location.data.business?.name} · Details, users, and location inventory</p></div></div>
         </div>
         <div className="flex flex-wrap gap-2 text-xs"><Badge>{location.data.fulfillment_mode === 'pickup_only' ? 'Pickup only' : 'Pickup + delivery'}</Badge><Badge>{location.data.partner_type === 'partner' ? 'Partner store' : 'Owned store'}</Badge><Badge tone={location.data.is_active ? 'green' : 'gray'}>{location.data.is_active ? 'Active' : 'Inactive'}</Badge></div>
       </header>
+
+      {location.data.business && <BusinessContact businessId={location.data.business.id} businessName={location.data.business.name} />}
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(340px,0.85fr)]">
         <section className="rounded-2xl border border-slate-200 bg-white p-5">
