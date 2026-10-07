@@ -15,21 +15,22 @@ import type { StaffModule } from '../lib/staffModules'
 import { useStaffModuleAccess } from '../lib/useStaffModuleAccess'
 import NotificationsBell from './NotificationsBell'
 import { dispatchCustomerEmails } from '../lib/customerEmails'
+import { getVisibleWorkspaces, matchesWorkspaceTab } from '../lib/workspaceNavigation'
 
 const STAFF = ['admin', 'staff']
 const ALL = ['admin', 'staff', 'driver']
+const TAB_ICONS = {
+  '/orders': ClipboardList, '/requests': Inbox, '/new-order': PlusCircle,
+  '/delivery': Truck, '/drivers': UserCog, '/staff': UsersRound, '/staff-access': LockKeyhole,
+}
 const NAV = [
   { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true, roles: STAFF, module: 'dashboard' },
-  { to: '/requests', label: 'Requests', icon: Inbox, roles: STAFF, badge: 'requests', module: 'requests' },
-  { to: '/orders', label: 'Orders', icon: ClipboardList, roles: STAFF, badge: 'orders', module: 'orders' },
-  { to: '/new-order', label: 'New Order', icon: PlusCircle, roles: STAFF, module: 'new_order' },
+  { to: '/orders', label: 'Orders', icon: ClipboardList, roles: STAFF, workspace: 'orders' },
   { to: '/customers', label: 'Customers', icon: Users, roles: STAFF, module: 'customers' },
   { to: '/inventory', label: 'Inventory', icon: Package, roles: STAFF, module: 'inventory' },
   { to: '/billing', label: 'Billing', icon: CreditCard, roles: STAFF, module: 'billing' },
-  { to: '/delivery', label: 'Delivery & Pickup', icon: Truck, roles: ALL, badge: 'deliveries', module: 'delivery' },
-  { to: '/drivers', label: 'Drivers', icon: UserCog, roles: STAFF, module: 'drivers' },
-  { to: '/staff', label: 'Staff & Users', icon: UsersRound, roles: ['admin'], adminOnly: true },
-  { to: '/staff-access', label: 'Staff Access', icon: LockKeyhole, roles: ['admin'], adminOnly: true },
+  { to: '/delivery', label: 'Delivery & Pickup', icon: Truck, roles: ALL, workspace: 'delivery' },
+  { to: '/staff', label: 'Staff', icon: UsersRound, roles: ['admin'], workspace: 'staff' },
   { to: '/locations', label: 'Locations', icon: Building2, roles: ['admin'], adminOnly: true },
 ]
 
@@ -88,23 +89,27 @@ export default function Layout({ children }: { children: ReactNode }) {
   const contactPhone = selectedLocation?.business?.settings?.phone ?? selectedLocation?.phone ?? '516-367-9030 ext 4'
   const contactEmail = selectedLocation?.business?.settings?.email ?? 'info@cottagepharmacy.com'
   const initials = name.split(' ').map((s) => s[0]).slice(0, 2).join('').toUpperCase()
+  const workspaces = getVisibleWorkspaces(profile?.role, access.canAccess)
+  const activeWorkspace = workspaces.find((workspace) => workspace.tabs.some((tab) => matchesWorkspaceTab(pathname, tab.to)))
   const visibleNav = NAV.filter((n) => {
     if (!n.roles.includes(profile?.role || '')) return false
     if ('adminOnly' in n && n.adminOnly && profile?.role !== 'admin') return false
+    if (n.workspace) return workspaces.some((workspace) => workspace.id === n.workspace)
     const moduleKey = 'module' in n ? n.module as StaffModule : null
     return !moduleKey || access.canAccess(moduleKey)
   })
   const navLinks = visibleNav.map((n) => {
     const Icon = n.icon
-    const isActive = n.end
-      ? pathname === n.to
-      : pathname === n.to || pathname.startsWith(`${n.to}/`)
-    const badge = (n as { badge?: string }).badge
-    const count = badge ? counts?.[badge] ?? 0 : 0
+    const workspace = workspaces.find((workspace) => workspace.id === n.workspace)
+    const href = workspace?.tabs[0].to ?? n.to
+    const isActive = workspace
+      ? workspace.id === activeWorkspace?.id
+      : n.end ? pathname === n.to : pathname === n.to || pathname.startsWith(`${n.to}/`)
+    const count = workspace?.tabs.reduce((total, tab) => total + (tab.badge ? counts?.[tab.badge] ?? 0 : 0), 0) ?? 0
     return (
       <Link
         key={n.to}
-        href={n.to}
+        href={href}
         aria-current={isActive ? 'page' : undefined}
         className={`flex min-h-11 items-center justify-between rounded-lg px-3 py-2 text-sm ${
           isActive ? 'bg-blue-50 font-medium text-blue-700' : 'text-slate-600 hover:bg-slate-50'
@@ -248,7 +253,37 @@ export default function Layout({ children }: { children: ReactNode }) {
             </button>
           </div>
         </header>
-        <main className="flex-1 overflow-x-hidden p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:p-6 lg:p-8">{children}</main>
+        <main className="flex-1 overflow-x-hidden p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:p-6 lg:p-8">
+          {activeWorkspace && !isDriver && (
+            <div className="mb-6">
+              {activeWorkspace.tabs.some((tab) => pathname === tab.to) && (
+                <h1 className="mb-4 text-2xl font-semibold">{activeWorkspace.label}</h1>
+              )}
+              <nav aria-label={`${activeWorkspace.label} pages`} className="flex gap-4 overflow-x-auto border-b border-slate-200 sm:gap-6">
+                {activeWorkspace.tabs.map((tab) => {
+                  const active = matchesWorkspaceTab(pathname, tab.to)
+                  const Icon = TAB_ICONS[tab.to as keyof typeof TAB_ICONS]
+                  const count = tab.badge ? counts?.[tab.badge] ?? 0 : 0
+                  return (
+                    <Link
+                      key={tab.to}
+                      href={tab.to}
+                      aria-current={active ? 'page' : undefined}
+                      className={`flex min-h-11 shrink-0 items-center gap-2 border-b-2 px-1 pb-3 text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-blue-600 ${
+                        active ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-900'
+                      }`}
+                    >
+                      <Icon size={16} aria-hidden="true" />
+                      {tab.label}
+                      {count > 0 && <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700">{count}</span>}
+                    </Link>
+                  )
+                })}
+              </nav>
+            </div>
+          )}
+          {children}
+        </main>
       </div>
     </div>
   )

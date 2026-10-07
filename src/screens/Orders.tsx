@@ -96,7 +96,7 @@ export default function Orders() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold mb-1">Orders</h1>
+      <h2 className="sr-only">Orders</h2>
       <p className="text-slate-500 text-sm mb-5">
         Open includes approved rentals awaiting delivery and rentals currently out. The status changes from Approved to Open after delivery.
         Use Schedule pickup to queue a return on the Delivery board. Unpaid checkouts stay under Unpaid.

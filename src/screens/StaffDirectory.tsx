@@ -55,7 +55,7 @@ export default function StaffDirectory() {
     <div className="max-w-5xl">
       <div className="mb-6">
         <div>
-          <h1 className="text-2xl font-semibold">Staff &amp; Users</h1>
+          <h2 className="sr-only">Staff &amp; Users</h2>
           <p className="text-sm text-slate-500 mt-1">Manage store access, driver settings, and internal staff notes.</p>
         </div>
       </div>

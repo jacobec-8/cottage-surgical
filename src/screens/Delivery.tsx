@@ -100,7 +100,9 @@ export default function Delivery() {
 
   return (
     <div className={isDriver ? 'mx-auto w-full max-w-4xl' : ''}>
-      <h1 className="mb-1 text-2xl font-semibold text-slate-950 sm:text-3xl">{isDriver ? 'My Deliveries' : 'Delivery & Pickup'}</h1>
+      {isDriver
+        ? <h1 className="mb-1 text-2xl font-semibold text-slate-950 sm:text-3xl">My Deliveries</h1>
+        : <h2 className="sr-only">Delivery &amp; Pickup</h2>}
       <p className="mb-5 max-w-2xl text-sm leading-6 text-slate-500">
         {isDriver
           ? 'Your assigned stops. Start when you arrive, then take a photo to complete the stop.'

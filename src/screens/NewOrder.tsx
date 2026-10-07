@@ -183,7 +183,7 @@ export default function NewOrder() {
   return (
     <div className="max-w-3xl space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold mb-1">New Order</h1>
+        <h2 className="sr-only">New Order</h2>
         <p className="text-slate-500 text-sm">Build a rental or purchase from {selectedLocation?.name ?? 'a selected store'}, reserve its equipment, and schedule delivery.</p>
       </div>
 
