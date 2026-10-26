@@ -260,6 +260,18 @@ check("storefront request still submits (store assigned after creation)", bool(r
 r, e = call(None, "SET CONSTRAINTS ALL IMMEDIATE")
 check("every legitimate write in this run satisfies the link rules", e is None, e)
 
+# ── Guest-visible policies must only call functions guests can execute (081) ──
+bad = q("""
+  WITH pol AS (SELECT schemaname||'.'||tablename t, policyname, coalesce(qual,'')||' '||coalesce(with_check,'') expr
+                 FROM pg_policies WHERE roles && '{public,anon}'::name[])
+  SELECT DISTINCT pol.t, pol.policyname, p.proname
+    FROM pol JOIN pg_proc p ON pol.expr ~ ('\\m' || p.proname || '\\(')
+    JOIN pg_namespace n ON n.oid = p.pronamespace AND n.nspname = 'public'
+   WHERE NOT has_function_privilege('anon', p.oid, 'EXECUTE') AND p.proname NOT LIKE 'rx_companion%%'""")
+check("no guest-applicable policy calls a function guests cannot execute", bad == [], bad)
+r, e = call(None, "SELECT count(*) FROM equipment_items WHERE is_active"); r2, e2 = call(None, "SELECT count(*) FROM pickup_locations WHERE is_active")
+check("guests read the active catalog and open stores", (r or 0) > 0 and (r2 or 0) > 0 and e is None and e2 is None, (r or e, r2 or e2))
+
 # ── single-branch onboarding still works ──
 single = {"business": {"id": q("SELECT business_id::text FROM pickup_locations WHERE id=%s", (LOC["north"],))[0][0]},
           "location": {"name": f"V074 single {tag}", "line1": "3 Elm St", "city": "Melville", "state": "NY", "zip": "11747", "fulfillment_mode": "pickup_only", "partner_type": "owned"}, "stock": [], "team": []}
