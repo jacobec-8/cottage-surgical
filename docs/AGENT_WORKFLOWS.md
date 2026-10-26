@@ -293,7 +293,7 @@ Implementation: [LocationOnboarding.tsx](../src/screens/LocationOnboarding.tsx),
 | Dispatch delivery | Staff assigns driver/date/time on **Delivery & Pickup → Save**. | Correct assigned driver with a login, saved date/time, scheduled state. Reassigning clears the previous driver's active stop; an en-route stop returns to scheduled and the new driver starts it (064). |
 | Driver stop | Driver: **Start stop**, then **Complete + photo** when the real stop is complete. Staff has **Complete (override)** for an en-route stop. | Completion, proof photo (or intentional override), order/unit state. Do not fabricate handoff evidence. Outbound stops with unallocated serialized lines are refused; a photo path must be an uploaded image under that stop's `delivery-photos/{delivery_id}/` folder (063). |
 | Customer collects at store | Staff: **Mark picked up**, no driver or photo required. | Rental becomes `active` (displayed **Open**); units rented; billing starts. Purchase closes instead. |
-| Record monthly payment | **Billing → Record payment** after money is actually received. | Last-paid date, next due advanced one month, and order payment badge. This records payment; it does not charge a card. Each submission names the due date on screen, so a double-click, retry or concurrent duplicate is refused as already recorded; recording another month after the refresh advances again (064). |
+| Record monthly payment | **Billing → Record payment** after money is actually received. | Last-paid date, next due advanced one month, and order payment badge. This records payment and queues a customer receipt (071); it does not charge a card. Each submission names the due date on screen, so a double-click, retry or concurrent duplicate is refused as already recorded; recording another month after the refresh advances again (064). |
 | Set order payment badge | Order detail **Payment** selection calls `set_order_payment_state`. | Persisted badge and correct payment method. A manually set **Paid Online** badge is not independent proof of Stripe settlement. |
 | Return pickup | **Schedule pickup**, then dispatch/start/complete the return stop. Own-store staff and admins can schedule; another store's staff is refused; a repeat returns the existing stop. A rental with no home address (e.g. collected in store) asks for the collection address first; never substitute the store's address. If the customer brings it back to the store, use Close out instead. A driver cannot start a stop with no address (068). | Order closed, billing ended, equipment released. Current implementation makes returned units immediately available. |
 | Cancel before handoff | **Cancel order**, reason, confirm; Requests **Decline** invokes the same cancellation RPC with a fixed reason. | Cancelled order, released reservations, cancelled stops, ended billing. A paid order with a Stripe session attempts a full refund first and fails cancellation if refunding fails. |
@@ -304,7 +304,57 @@ Recurring rental billing currently tracks amounts and due dates; it is not an
 implemented Stripe subscription collection system. Request/fulfillment changes
 can trigger customer emails; treat these as part of the operation's effects.
 The email outbox/Resend integration and scheduled reminders exist in migrations;
-provider delivery was not tested in this study.
+the original October 6 study did not test provider delivery. On October 26,
+live COS-only QA verified the configured Resend sender and BC's read-only Gmail
+inbox access. The email regression evidence is under
+`docs/qa/runs/2026-10-26-email-pass/` and `2026-10-26-email-fix/`.
+
+Customer email behavior (070–073):
+
+- Staff order confirmations are generated at transaction commit, after equipment,
+  allocation and the final monthly rate are saved. Unallocated orders say the
+  team is still confirming availability. The storefront receipt workflow remains.
+- Each accepted **Record payment** operation saves an immutable
+  `rental_payment_receipts` record and queues a receipt with amount, paid date,
+  offline payment method and next due date. It does not charge a card. Preserve
+  `p_expected_due` on retries: a second request for that due period is rejected.
+  An intentionally recorded next period creates its own receipt. The original
+  order's first-month payment preference does not describe the new payment.
+- Changing an open appointment's address or date/window sends updated details.
+  An unchanged save does not repeat the email; correcting back to an earlier
+  address does notify. Completed/cancelled stops do not send scheduling updates.
+- The existing ten-minute scheduler now includes rental-payment and expected
+  return reminders **3 days before**, **on the date**, and **7 days overdue**.
+  It uses the America/New_York calendar and queues these reminders from 8 AM to
+  before 8 PM. Each stage is deduplicated for the charge/order and due date.
+  Only active rentals qualify. An actual driver return leg takes over expected
+  return reminders; an initial in-store collection does not count as a return.
+  An expected return email explicitly says it is not a booked pickup.
+- Pending billing/return reminders are rechecked before sending. Payments,
+  extensions, closed/cancelled rentals, ended charges and an elapsed reminder
+  day invalidate stale messages; they become `skipped` without a provider call.
+- Resend quota/rate-limit responses retain pending mail without consuming the
+  five-attempt retry budget. The account-wide dispatcher backs off to midnight
+  UTC for a daily quota, six hours for a monthly quota, and one minute for a
+  request-rate limit. If the account is upgraded during a backoff, verify the
+  new usage/limit first, then clear `customer_email_transport_state.blocked_until`
+  with the backend operator connection. Staff/anonymous sessions cannot edit
+  this state. Provider limits are separate from successful workflow commits.
+- Customer email bodies and payment receipts are visible only to active staff
+  at the parent order's store, or global admins. Drivers and anonymous users
+  cannot read them. Reminder generation and its clock parameter are private.
+
+Verification: `npm run test:sql` creates and removes a disposable PostgreSQL
+cluster using a private Unix socket, with an inert sender. Install PostgreSQL
+server tools and Python `psycopg2`; set `PG_BINDIR` if needed. It tests role/store
+boundaries, transactional confirmations and receipts, replay/concurrency,
+address edits, calendar/DST behavior, stale suppression and concurrent dispatch.
+It never uses `DB_CONNECTION`, Vault secrets, a live provider or production
+fixtures. CI runs the same SQL tests separately. For live verification, use only
+explicitly approved recipients and record exact fixture IDs. The global flush
+must be deferred when any queued recipient/order is outside the approved run.
+Deploy only the targeted migration filenames; do not replay older migrations
+or backfill historical receipts/emails.
 
 Core status meanings:
 
