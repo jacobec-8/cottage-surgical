@@ -228,7 +228,7 @@ function PanelBody({ o, onClose, actions, focusDeliveryId }: BodyProps) {
         <CustomerSection o={o} />
         <LinesSection o={o} pendingConfirm={isRequest} released={o.status === 'cancelled'} canAllocate={backofficeLinks && !isRequest && !isClosed} />
         <DeliveriesSection o={o} focusDeliveryId={focusDeliveryId} showBoardLink={backofficeLinks} />
-        <BillingSection o={o} showBillingLink={backofficeLinks} />
+        <BillingSection o={o} showBillingLink={backofficeLinks} canSettleDeposits={backofficeLinks} />
 
         {o.special_notes && (
           <Section title="Notes">

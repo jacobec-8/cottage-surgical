@@ -7,6 +7,7 @@ import { statusClass, statusLabel } from '../../lib/status'
 import type { Deposit, OrderDelivery, OrderDetail, OrderLine, RecurringCharge } from './types'
 import { addressOf, driverName, fmtDate, fmtDateTime, fmtMoney, lineStatus, unitLabel, windowOf } from './format'
 import { useAllocateLine } from './useAllocateLine'
+import { useSettleDeposit, type DepositOutcome } from './useSettleDeposit'
 
 export function Section({ title, children, aside }: { title: string; children: ReactNode; aside?: ReactNode }) {
   return (
@@ -204,9 +205,20 @@ function pill(status: string) {
   return `text-xs px-2 py-0.5 rounded-full capitalize ${CHARGE_CLS[status] ?? 'bg-slate-100 text-slate-600'}`
 }
 
-export function BillingSection({ o, showBillingLink = true }: { o: OrderDetail; showBillingLink?: boolean }) {
+type BillingProps = { o: OrderDetail; showBillingLink?: boolean; canSettleDeposits?: boolean }
+
+/** `canSettleDeposits`: staff may record a held deposit as refunded or forfeited (ODD-006). */
+export function BillingSection({ o, showBillingLink = true, canSettleDeposits = false }: BillingProps) {
   const charges: RecurringCharge[] = o.recurring_charges ?? []
   const deposits: Deposit[] = o.deposits ?? []
+  const [depositMsg, setDepositMsg] = useState('')
+  const settle = useSettleDeposit(setDepositMsg)
+  const record = (depositId: string, outcome: DepositOutcome, amount: number) => {
+    const verb = outcome === 'refunded' ? 'refunded to the customer' : 'kept (forfeited)'
+    if (window.confirm(`Record the ${fmtMoney(amount)} deposit as ${verb}? This records it only; it doesn’t move money.`)) {
+      settle.mutate({ depositId, outcome })
+    }
+  }
   if (charges.length === 0 && deposits.length === 0 && o.deposit_amount == null) return null
   return (
     <Section
@@ -234,13 +246,22 @@ export function BillingSection({ o, showBillingLink = true }: { o: OrderDetail; 
               <div>Deposit · {fmtMoney(d.amount)}</div>
               <div className="text-xs text-slate-500">Held {fmtDate(d.held_at)}</div>
             </div>
-            <span className={pill(d.status)}>{statusLabel(d.status)}</span>
+            <div className="flex items-center gap-2">
+              {canSettleDeposits && (d.status === 'held' || d.status === 'pending_refund') && (
+                <>
+                  <button type="button" disabled={settle.isPending} onClick={() => record(d.id, 'refunded', d.amount)} className="text-xs text-blue-600 hover:underline disabled:opacity-50">Mark refunded</button>
+                  <button type="button" disabled={settle.isPending} onClick={() => record(d.id, 'forfeited', d.amount)} className="text-xs text-slate-600 hover:underline disabled:opacity-50">Mark forfeited</button>
+                </>
+              )}
+              <span className={pill(d.status)}>{statusLabel(d.status)}</span>
+            </div>
           </div>
         ))}
         {deposits.length === 0 && o.deposit_amount != null && (
           <div className="px-3 py-2 text-slate-600">Deposit on order · {fmtMoney(o.deposit_amount)}</div>
         )}
       </div>
+      {depositMsg && <p className="mt-1.5 text-xs text-slate-600">{depositMsg}</p>}
     </Section>
   )
 }
