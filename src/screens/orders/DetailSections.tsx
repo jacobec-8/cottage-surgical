@@ -1,11 +1,12 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { Camera, Mail, MapPin, Phone } from 'lucide-react'
 import { statusClass, statusLabel } from '../../lib/status'
 import type { Deposit, OrderDelivery, OrderDetail, OrderLine, RecurringCharge } from './types'
 import { addressOf, driverName, fmtDate, fmtDateTime, fmtMoney, lineStatus, unitLabel, windowOf } from './format'
+import { useAllocateLine } from './useAllocateLine'
 
 export function Section({ title, children, aside }: { title: string; children: ReactNode; aside?: ReactNode }) {
   return (
@@ -71,15 +72,18 @@ const LINE_STATUS_CLS: Record<string, string> = {
   released: 'bg-slate-100 text-slate-500',
 }
 
-type LinesProps = { o: OrderDetail; pendingConfirm?: boolean; released?: boolean }
+type LinesProps = { o: OrderDetail; pendingConfirm?: boolean; released?: boolean; canAllocate?: boolean }
 
 /**
  * `pendingConfirm`: request not yet confirmed — units are reserved on Confirm, so no line is "unallocated" yet.
  * `released`: order was cancelled — its units went back to stock rather than being returned.
+ * `canAllocate`: staff may give unallocated lines a unit (fulfillment is blocked until they do).
  */
-export function LinesSection({ o, pendingConfirm = false, released = false }: LinesProps) {
+export function LinesSection({ o, pendingConfirm = false, released = false, canAllocate = false }: LinesProps) {
   const lines: OrderLine[] = o.rental_line_items
   const isRental = o.order_type === 'rental'
+  const [allocMsg, setAllocMsg] = useState('')
+  const allocate = useAllocateLine(setAllocMsg)
   return (
     <Section title={`Equipment (${lines.length})`}>
       <div className="rounded-lg border border-slate-200 bg-white overflow-x-auto">
@@ -110,6 +114,16 @@ export function LinesSection({ o, pendingConfirm = false, released = false }: Li
                   <td className="px-3 py-2 text-right whitespace-nowrap">{fmtMoney(price)}{isRental && price != null ? '/mo' : ''}</td>
                   <td className="px-3 py-2">
                     <span className={`text-xs px-2 py-0.5 rounded-full capitalize ${LINE_STATUS_CLS[st]}`}>{st}</span>
+                    {canAllocate && st === 'unallocated' && li.id && (
+                      <button
+                        type="button"
+                        onClick={() => allocate.mutate(li.id!)}
+                        disabled={allocate.isPending}
+                        className="ml-2 text-xs text-blue-600 hover:underline disabled:opacity-50"
+                      >
+                        {allocate.isPending && allocate.variables === li.id ? 'Allocating…' : 'Allocate unit'}
+                      </button>
+                    )}
                   </td>
                 </tr>
               )
@@ -117,6 +131,7 @@ export function LinesSection({ o, pendingConfirm = false, released = false }: Li
           </tbody>
         </table>
       </div>
+      {allocMsg && <p className="mt-1.5 text-xs text-slate-600">{allocMsg}</p>}
     </Section>
   )
 }

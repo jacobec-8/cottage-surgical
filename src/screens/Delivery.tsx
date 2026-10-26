@@ -14,6 +14,24 @@ import { useLocationScope } from '../contexts/LocationContext'
 import { PaymentBadge } from './orders/badges'
 
 type Photo = { storage_path: string; captured_at: string; notes: string | null }
+
+type LifecycleResult = { ok?: boolean; reason?: string; unallocated?: number } | null
+
+/** Staff-readable text for a refused start/complete RPC. */
+function lifecycleError(data: LifecycleResult): string {
+  switch (data?.reason) {
+    case 'no_driver': return 'Assign a driver and Save before starting.'
+    case 'photo_required': return 'A photo is required to complete.'
+    case 'photo_missing': return 'The proof photo didn’t upload. Take the photo again.'
+    case 'photo_invalid': return 'That photo doesn’t belong to this stop. Take the photo again.'
+    case 'bad_state': return 'This stop isn’t in a state that can be completed.'
+    case 'unallocated': {
+      const n = data.unallocated ?? 0
+      return `${n || 'Some'} item${n === 1 ? ' has' : 's have'} no equipment unit. Staff must allocate units on the order before fulfillment.`
+    }
+    default: return data?.reason || 'failed'
+  }
+}
 type Deliv = {
   id: string
   leg_type: string
@@ -234,6 +252,8 @@ function DeliveryRow({
   const save = useMutation({
     mutationFn: async () => {
       // Status is normalized server-side (driver_id set → scheduled; cleared → pending).
+      // Reassigning an en-route stop sends it back to scheduled for the new driver (064).
+      const handedOff = d.status === 'en_route' && (driver || null) !== d.driver_id
       const patch = {
         driver_id: isStorePickup ? null : driver || null,
         scheduled_date: date || null,
@@ -242,9 +262,13 @@ function DeliveryRow({
       }
       const { error } = await supabase.from('deliveries').update(patch).eq('id', d.id)
       if (error) throw error
+      return handedOff
     },
     onMutate: () => setMsg(''),
-    onSuccess: () => { invalidateSave(); setMsg('Saved') },
+    onSuccess: (handedOff) => {
+      invalidateSave()
+      setMsg(handedOff ? 'Reassigned — the stop is back to scheduled; the new driver must start it.' : 'Saved')
+    },
     onError: (e) => setMsg((e as Error).message),
   })
 
@@ -252,7 +276,7 @@ function DeliveryRow({
     mutationFn: async () => {
       const { data, error } = await supabase.rpc('start_delivery', { p_delivery_id: d.id })
       if (error) throw error
-      if (!data?.ok) throw new Error(data?.reason === 'no_driver' ? 'Assign a driver and Save before starting.' : (data?.reason || 'failed'))
+      if (!data?.ok) throw new Error(lifecycleError(data))
     },
     onMutate: () => setMsg(''),
     onSuccess: invalidateLifecycle,
@@ -269,10 +293,7 @@ function DeliveryRow({
       if (up.error) throw up.error
       const { data, error } = await supabase.rpc('complete_delivery', { p_delivery_id: d.id, p_photo_path: path })
       if (error) throw error
-      if (!data?.ok) throw new Error(
-        data?.reason === 'photo_required' ? 'A photo is required to complete.'
-        : data?.reason === 'bad_state' ? 'This stop isn’t in a state that can be completed.'
-        : (data?.reason || 'failed'))
+      if (!data?.ok) throw new Error(lifecycleError(data))
       invalidateLifecycle()
     } catch (e) {
       setMsg((e as Error).message || 'Couldn’t complete. Please try again.')
@@ -287,7 +308,7 @@ function DeliveryRow({
     mutationFn: async () => {
       const { data, error } = await supabase.rpc('complete_delivery', { p_delivery_id: d.id, p_photo_path: null })
       if (error) throw error
-      if (!data?.ok) throw new Error(data?.reason === 'bad_state' ? 'This stop isn’t in a state that can be completed.' : (data?.reason || 'failed'))
+      if (!data?.ok) throw new Error(lifecycleError(data))
     },
     onMutate: () => setMsg(''),
     onSuccess: invalidateLifecycle,
@@ -298,7 +319,7 @@ function DeliveryRow({
     mutationFn: async () => {
       const { data, error } = await supabase.rpc('complete_store_pickup', { p_delivery_id: d.id })
       if (error) throw error
-      if (!data?.ok) throw new Error(data?.reason || 'failed')
+      if (!data?.ok) throw new Error(lifecycleError(data))
     },
     onMutate: () => setMsg(''),
     onSuccess: invalidateLifecycle,

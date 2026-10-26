@@ -157,7 +157,7 @@ export default function Billing() {
             today={today}
             selected={Boolean(selected && c.order?.id === selected)}
             onOpen={setSelected}
-            onRecordPayment={(chargeId, paidOn) => recordPayment.mutate({ chargeId, paidOn })}
+            onRecordPayment={(chargeId, expectedDue, paidOn) => recordPayment.mutate({ chargeId, expectedDue, paidOn })}
             onSetDueDate={(chargeId, dueOn, status) => setDueDate.mutate({ chargeId, dueOn, today, status })}
             busy={busy}
           />

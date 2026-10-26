@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import Link from 'next/link'
+import { useQuery } from '@tanstack/react-query'
 import { X, ShoppingCart, Trash2, Plus, Minus, CheckCircle, CreditCard, Store, Truck, MapPin, Zap } from 'lucide-react'
 import { dispatchCustomerEmails } from '../../lib/customerEmails'
 import { commonPickupLocations, pickupLocationSelection } from '../../lib/fulfillment'
@@ -33,11 +34,26 @@ export default function CartDrawer() {
 
   const rentItems = items.filter((i) => i.mode === 'rent')
   const buyItems = items.filter((i) => i.mode === 'purchase')
+  // The server charges the chosen store's rental price; quote it with the same
+  // store selection checkout uses (066). Catalog prices show until it loads.
+  const quoteItems = rentItems.map((i) => ({ item_id: i.id, quantity: i.qty }))
+  const quote = useQuery({
+    queryKey: ['storefront_rental_quote', fulfillmentChoice, pickupLocationId, quoteItems],
+    enabled: open && quoteItems.length > 0 && (fulfillmentChoice === 'delivery' || Boolean(pickupLocationId)),
+    queryFn: async () => {
+      const { data, error } = await publicSupabase.rpc('quote_storefront_rentals', {
+        p_items: quoteItems,
+        p_fulfillment: { method: fulfillmentChoice, pickup_location_id: fulfillmentChoice === 'pickup' ? pickupLocationId : null },
+      })
+      if (error) throw error
+      return (data?.ok ? data.prices : {}) as Record<string, number | null>
+    },
+  })
   const effectivePrice = (item: typeof items[number]) => item.mode === 'purchase'
     ? item.price
-    : fulfillmentChoice === 'pickup'
-      ? Number(item.pickup_price ?? item.price)
-      : Number(item.delivery_price ?? item.price)
+    : Number(quote.data?.[item.id] ?? (fulfillmentChoice === 'pickup'
+      ? item.pickup_price ?? item.price
+      : item.delivery_price ?? item.price))
   const rentTotal = rentItems.reduce((s, i) => s + effectivePrice(i) * i.qty, 0)
   const buyTotal = buyItems.reduce((s, i) => s + i.price * i.qty, 0)
   const pickupLocations = commonPickupLocations(items)

@@ -11,7 +11,7 @@ type Props = {
   today: string
   selected: boolean
   onOpen: (orderId: string) => void
-  onRecordPayment: (chargeId: string, paidOn?: string) => void
+  onRecordPayment: (chargeId: string, expectedDue: string | null, paidOn?: string) => void
   onSetDueDate: (chargeId: string, dueOn: string | null, status: string) => void
   busy: boolean
 }
@@ -126,7 +126,7 @@ export default function BillingCard({ c, today, selected, onOpen, onRecordPaymen
             {paymentCanBeRecorded && (
               <button
                 type="button"
-                onClick={() => onRecordPayment(c.id)}
+                onClick={() => onRecordPayment(c.id, c.next_due_date)}
                 disabled={busy}
                 className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-2.5 py-1 disabled:opacity-50"
                 title="Record a payment received today (advances next due by a month)"

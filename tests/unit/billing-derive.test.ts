@@ -80,6 +80,17 @@ test('returnState: returned / due back (scheduled pickup) / overdue return / non
   }), TODAY).kind, 'no_return_scheduled')
 })
 
+test('returnState: completed in-store collection is the handoff, not the return', () => {
+  const collection = { id: 's', leg_type: 'pickup', requires_driver: false, status: 'completed', scheduled_date: '2026-07-01', completed_at: '2026-07-01T10:00:00Z' }
+  assert.equal(returnState(charge({}, { deliveries: [collection] }), TODAY).kind, 'no_return_scheduled')
+  assert.deepEqual(rentalPeriod(charge({}, { deliveries: [collection] })), { start: '2026-07-01', end: null, endIsExpected: false })
+
+  const withReturn = charge({}, {
+    deliveries: [collection, { id: 'r', leg_type: 'pickup', requires_driver: true, status: 'scheduled', scheduled_date: '2026-08-21', completed_at: null }],
+  })
+  assert.equal(returnState(withReturn, TODAY).kind, 'due_back')
+})
+
 test('returnState: not yet delivered → not_started', () => {
   assert.equal(returnState(charge({ status: 'paused' }, { status: 'open', start_date: null, deliveries: [] }), TODAY).kind, 'not_started')
 })

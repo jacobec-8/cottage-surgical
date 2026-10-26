@@ -12,6 +12,7 @@ import { supabase } from '../lib/supabase'
 import { statusLabel } from '../lib/status'
 import { fulfillmentLabel } from '../lib/fulfillment'
 import { useLocationScope } from '../contexts/LocationContext'
+import { bulkCounts } from '../lib/bulkStock'
 import StockStatusBadges from '../components/StockStatusBadges'
 
 type Item = {
@@ -208,6 +209,10 @@ export default function InventoryItemDetail({ itemId }: { itemId: string }) {
   }
 
   const product = item.data
+  // Bulk products have no unit rows; their stock lives on each store's inventory row.
+  const position = !product.is_serialized
+    ? bulkCounts(itemPickupLocations.data ?? [], rentals.data ?? [], selectedLocationId)
+    : counts
   const tabs: { key: Tab; label: string; count?: number }[] = [
     { key: 'overview', label: 'Overview' },
     ...(product.is_serialized ? [{ key: 'units' as const, label: 'Units', count: counts.total }] : []),
@@ -264,10 +269,10 @@ export default function InventoryItemDetail({ itemId }: { itemId: string }) {
             <section className="bg-white border border-slate-200 rounded-2xl p-5">
               <h2 className="font-semibold text-lg mb-4">Inventory position</h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <Metric label="Total units" value={product.is_serialized ? counts.total : product.quantity_on_hand} icon={Boxes} />
-                <Metric label="Available" value={product.is_serialized ? counts.available : product.quantity_on_hand} icon={CheckCircle2} tone="green" />
-                <Metric label="Reserved" value={counts.reserved} icon={Tag} tone="blue" />
-                <Metric label="Rented" value={counts.rented} icon={ClipboardList} tone="violet" />
+                <Metric label="Total units" value={position.total} icon={Boxes} />
+                <Metric label="Available" value={position.available} icon={CheckCircle2} tone="green" />
+                <Metric label="Reserved" value={position.reserved} icon={Tag} tone="blue" />
+                <Metric label="Rented" value={position.rented} icon={ClipboardList} tone="violet" />
               </div>
             </section>
 

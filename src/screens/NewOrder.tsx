@@ -17,8 +17,13 @@ type Item = {
   is_rentable: boolean
   is_purchasable: boolean
   delivery_enabled: boolean
-  location_inventory: { location_id: string; quantity_on_hand: number }[]
+  location_inventory: { location_id: string; quantity_on_hand: number; delivery_rental_price: number | null }[]
 }
+// Mirrors create_staff_order: the selected store's delivery price overrides the catalog.
+const itemRate = (it: Item, mode: 'rental' | 'purchase'): number | null => (mode === 'rental'
+  ? it.location_inventory[0]?.delivery_rental_price ?? it.delivery_rental_price
+  : it.sale_price)
+
 type CartLine = { item_id: string; name: string; qty: number; rate: number | null }
 
 const orderErrorMessage = (reason?: string) => {
@@ -73,7 +78,7 @@ export default function NewOrder() {
     enabled: Boolean(selectedLocationId),
     queryFn: async () => {
       const { data, error } = await supabase.from('equipment_items')
-        .select('id,name,category,delivery_rental_price,sale_price,is_rentable,is_purchasable,delivery_enabled,location_inventory:equipment_location_inventory!inner(location_id,quantity_on_hand)')
+        .select('id,name,category,delivery_rental_price,sale_price,is_rentable,is_purchasable,delivery_enabled,location_inventory:equipment_location_inventory!inner(location_id,quantity_on_hand,delivery_rental_price)')
         .eq('is_active', true).eq('location_inventory.location_id', selectedLocationId!).order('name')
       if (error) throw error
       return data as unknown as Item[]
@@ -89,12 +94,11 @@ export default function NewOrder() {
     },
   })
 
-  const rateFor = (it: Item) => (mode === 'rental' ? it.delivery_rental_price : it.sale_price)
+  const rateFor = (it: Item) => itemRate(it, mode)
   const filteredItems = useMemo(
     () => (items.data ?? []).filter((it) => {
-      const eligible = mode === 'rental'
-        ? it.is_rentable && it.delivery_enabled && it.delivery_rental_price != null
-        : it.is_purchasable && it.sale_price != null
+      const eligible = it.delivery_enabled && itemRate(it, mode) != null
+        && (mode === 'rental' ? it.is_rentable : it.is_purchasable)
       return eligible && it.name.toLowerCase().includes(itemSearch.toLowerCase())
     }),
     [items.data, itemSearch, mode],

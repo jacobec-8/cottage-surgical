@@ -6,6 +6,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../lib/supabase'
 import { invalidateOrderWorkflow } from '../../lib/workflowKeys'
+import { isReturnLeg } from '../../lib/legs'
 import { PICKUP_ELIGIBLE, type OrderDetail } from './types'
 import { ageLabel, amountOf, fmtDate, fmtDateTime, fmtMoney, orderPaymentState, paymentStateLabel, sourceLabel, unallocatedCount, type OrderPaymentState } from './format'
 import { PaymentBadge, SourceBadge, StatusBadge, TypeBadge, UnallocatedBadge } from './badges'
@@ -113,7 +114,7 @@ function PanelBody({ o, onClose, actions, focusDeliveryId }: BodyProps) {
   const verify = useVerifyPayment(o.id, setMsg)
   const closeOrder = useCloseOrder(setMsg)
   const isClosed = o.status === 'cancelled' || o.status === 'closed'
-  const hasOpenPickup = o.deliveries.some((d) => d.leg_type === 'pickup' && d.status !== 'cancelled')
+  const hasOpenPickup = o.deliveries.some((d) => isReturnLeg(d) && d.status !== 'cancelled')
   const canPickup = o.order_type === 'rental' && PICKUP_ELIGIBLE.has(o.status) && !hasOpenPickup
   const canVerify = o.status === 'pending_payment'
   const isRental = o.order_type === 'rental'
@@ -215,7 +216,7 @@ function PanelBody({ o, onClose, actions, focusDeliveryId }: BodyProps) {
         </Section>
 
         <CustomerSection o={o} />
-        <LinesSection o={o} pendingConfirm={isRequest} released={o.status === 'cancelled'} />
+        <LinesSection o={o} pendingConfirm={isRequest} released={o.status === 'cancelled'} canAllocate={backofficeLinks && !isRequest && !isClosed} />
         <DeliveriesSection o={o} focusDeliveryId={focusDeliveryId} showBoardLink={backofficeLinks} />
         <BillingSection o={o} showBillingLink={backofficeLinks} />
 
