@@ -302,7 +302,11 @@ and its step components, [validation/payload](../src/lib/businessOnboarding.ts),
 still works on the same per-branch code), [owner scope](../supabase/migrations/074_business_owner_scope.sql),
 [shared drivers and schedules](../supabase/migrations/075_shared_drivers_dispatch_conflicts.sql),
 [review hardening](../supabase/migrations/078_business_scope_hardening.sql).
-Regression check against a database with 074–078 applied (one transaction, always
+Linked records stay in one store (079): an order's customer, its stops, its
+allocated units and its billing records' customer must match it, on every path;
+moving a customer, order or unit between stores is refused while linked records
+would be left behind. Store logins are owner, staff or driver only (080); create
+platform admins from Staff. Regression check against a database with 074–080 applied (one transaction, always
 rolled back): `VERIFY_DB_URL=... python3 scripts/verify-three-location.py`.
 
 ## 5. Requests, fulfillment, payments, and returns

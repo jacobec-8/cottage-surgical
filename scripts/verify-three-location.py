@@ -17,6 +17,9 @@ dsn = os.environ.get("VERIFY_DB_URL")
 if not dsn:
     sys.exit("Set VERIFY_DB_URL to the target database (all work is rolled back).")
 conn = psycopg2.connect(dsn); cur = conn.cursor(); results = []
+# Optionally try unapplied migrations inside the same rolled-back transaction.
+for path in filter(None, os.environ.get("VERIFY_APPLY_FIRST", "").split(",")):
+    cur.execute(open(path).read())
 
 def check(name, ok, detail=""):
     results.append((name, ok))
@@ -214,8 +217,51 @@ r, e = order(WEST, LOC["west"], WDRV, date="2026-11-08", ws="00:15", we="00:45",
 r, e = call(WEST, "SELECT array_agg(x) FROM public.get_busy_driver_ids('2026-11-07','23:30',NULL) x")
 check("busy lookup sees a stop just after midnight", WDRV in (r or []), r or e)
 
+# ── BIZ-003 forged links (079); deferred checks are forced with SET CONSTRAINTS ──
+NOW = "; SET CONSTRAINTS ALL IMMEDIATE"
+r, e = order(NORTH, LOC["north"], item=BULK); n_order = r["order_id"]
+foreign_cust = q("SELECT id::text FROM customers WHERE location_id=%s LIMIT 1", (LOC_A,))
+if not foreign_cust:
+    order(A_STAFF, LOC_A); foreign_cust = q("SELECT id::text FROM customers WHERE location_id=%s LIMIT 1", (LOC_A,))
+foreign_cust = foreign_cust[0][0]
+r, e = call(NORTH, "UPDATE rental_orders SET customer_id=%s WHERE id=%s" + NOW, (foreign_cust, n_order))
+check("BIZ-003 own order -> another business's customer rejected", e is not None and "location_mismatch" in e, r or e)
+east_cust = q("SELECT customer_id::text FROM rental_orders WHERE location_id=%s LIMIT 1", (LOC["east"],))[0][0]
+r, e = call(OWNER, "UPDATE rental_orders SET customer_id=%s WHERE id=%s" + NOW, (east_cust, n_order))
+check("owner of both branches cannot link a North order to an East customer", e is not None and "location_mismatch" in e, r or e)
+foreign_order = q("SELECT id::text FROM rental_orders WHERE location_id=%s LIMIT 1", (LOC_A,))[0][0]
+r, e = call(NORTH, "INSERT INTO deliveries(order_id, leg_type, location_id, status) VALUES (%s,'delivery',%s,'pending') RETURNING 1", (foreign_order, LOC["north"]))
+check("BIZ-003 own-store stop -> another business's order rejected", e is not None and "location_mismatch" in e, r or e)
+# Deterministic fixtures: a North order holding a North unit, an East unit, a North unit of another product.
+OTHER_SER = q(f"SELECT id::text FROM equipment_items WHERE is_serialized AND id <> %s ORDER BY created_at LIMIT 1", (SER,))[0][0]
+east_unit = q("INSERT INTO equipment_units(item_id, location_id, asset_tag, status) VALUES (%s,%s,%s,'available') RETURNING id::text", (SER, LOC["east"], f"V074-E-{tag}"))[0][0]
+q("INSERT INTO equipment_units(item_id, location_id, asset_tag, status) VALUES (%s,%s,%s,'available')", (SER, LOC["north"], f"V074-N-{tag}"))
+wrong_item = q("INSERT INTO equipment_units(item_id, location_id, asset_tag, status) VALUES (%s,%s,%s,'available') RETURNING id::text", (OTHER_SER, LOC["north"], f"V074-X-{tag}"))[0][0]
+r, e = order(NORTH, LOC["north"])
+north_line, held = q("SELECT id::text, equipment_unit_id::text FROM rental_line_items WHERE order_id=%s", (r["order_id"],))[0]
+check("fixture: the North order holds a North unit", held is not None, r)
+r, e = call(OWNER, "UPDATE rental_line_items SET equipment_unit_id=%s WHERE id=%s RETURNING 1", (east_unit, north_line))
+check("BIZ-003 North line -> East unit rejected (even for the owner)", e is not None and "location_mismatch" in e, r or e)
+r, e = call(NORTH, "UPDATE rental_line_items SET equipment_unit_id=%s WHERE id=%s RETURNING 1", (wrong_item, north_line))
+check("a line cannot hold a unit of a different product", e is not None and "location_mismatch" in e, r or e)
+r, e = call(OWNER, "UPDATE equipment_units SET location_id=%s WHERE id=%s RETURNING 1", (LOC["east"], held))
+check("moving a held unit to another branch rejected", e is not None and "location_mismatch" in e, r or e)
+r, e = call(OWNER, "UPDATE customers SET location_id=%s WHERE id=%s" + NOW, (LOC["north"], east_cust))
+check("moving a customer away from their orders' store rejected", e is not None and "location_mismatch" in e, r or e)
+charge = q("SELECT c.id::text FROM recurring_charges c JOIN rental_orders o ON o.id=c.order_id WHERE o.location_id=%s LIMIT 1", (LOC["north"],))
+if charge:
+    r, e = call(None, "UPDATE recurring_charges SET customer_id=%s WHERE id=%s RETURNING 1", (east_cust, charge[0][0]))
+    check("a charge cannot name a customer other than its order's (any path)", e is not None and "location_mismatch" in e, r or e)
+r, e = call(None, "SET CONSTRAINTS ALL DEFERRED; SELECT public.submit_rental_request_with_fulfillment('rental', %s::jsonb, %s::jsonb, %s::jsonb, NULL, %s::jsonb)",
+            (json.dumps([{"item_id": SER, "quantity": 1}]), json.dumps({"full_name": "V074 Storefront", "phone": "5550100"}),
+             json.dumps({"line1": "5 Shop St", "city": "Melville", "state": "NY", "zip": "11747"}),
+             json.dumps({"method": "delivery", "payment_method": "on_delivery"})))
+check("storefront request still submits (store assigned after creation)", bool(r and r.get("ok")), r or e)
+r, e = call(None, "SET CONSTRAINTS ALL IMMEDIATE")
+check("every legitimate write in this run satisfies the link rules", e is None, e)
+
 # ── single-branch onboarding still works ──
-single = {"business": {"id": payload and LOC and r and q("SELECT business_id::text FROM pickup_locations WHERE id=%s", (LOC["north"],))[0][0]},
+single = {"business": {"id": q("SELECT business_id::text FROM pickup_locations WHERE id=%s", (LOC["north"],))[0][0]},
           "location": {"name": f"V074 single {tag}", "line1": "3 Elm St", "city": "Melville", "state": "NY", "zip": "11747", "fulfillment_mode": "pickup_only", "partner_type": "owned"}, "stock": [], "team": []}
 r, e = call(ADMIN, "SELECT public.onboard_business_location(%s,%s::jsonb)", (str(uuid.uuid4()), json.dumps(single)))
 check("single-branch onboarding (062 RPC) still works", bool(r and r.get("ok") and r.get("location_id")), r or e)
