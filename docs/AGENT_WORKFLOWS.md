@@ -219,7 +219,9 @@ Implementation: [NewOrder.tsx](../src/screens/NewOrder.tsx), latest
   recurring charge amount, and addresses of pending/scheduled stops; understand
   those effects before changing a shared customer address. The deposit field is
   the held deposit: an edit updates the held deposit record, and clearing it
-  is refused while money is held (refund or forfeit through Close out) (068).
+  is refused while money is held. Record the deposit first with **Mark refunded**
+  or **Mark forfeited** under Billing in the order detail (`settle_deposit`,
+  069). That records the outcome only; it does not move money.
   A driver stop with no address can also be filled on the Delivery board.
 - **Billing due date:** use **Billing → Set due date**. This does not schedule
   delivery or return pickup.
@@ -295,7 +297,7 @@ Implementation: [LocationOnboarding.tsx](../src/screens/LocationOnboarding.tsx),
 | Set order payment badge | Order detail **Payment** selection calls `set_order_payment_state`. | Persisted badge and correct payment method. A manually set **Paid Online** badge is not independent proof of Stripe settlement. |
 | Return pickup | **Schedule pickup**, then dispatch/start/complete the return stop. Own-store staff and admins can schedule; another store's staff is refused; a repeat returns the existing stop. A rental with no home address (e.g. collected in store) asks for the collection address first; never substitute the store's address. If the customer brings it back to the store, use Close out instead. A driver cannot start a stop with no address (068). | Order closed, billing ended, equipment released. Current implementation makes returned units immediately available. |
 | Cancel before handoff | **Cancel order**, reason, confirm; Requests **Decline** invokes the same cancellation RPC with a fixed reason. | Cancelled order, released reservations, cancelled stops, ended billing. A paid order with a Stripe session attempts a full refund first and fails cancellation if refunding fails. |
-| Close after handoff | **Close out (mark returned)** with a reason, for an actual return/closeout. | Closed order, released units, ended billing, cancelled open stops. Held deposits remain separate. |
+| Close after handoff | **Close out (mark returned)** with a reason, for an actual return/closeout. | Closed order, released units and bulk stock, ended billing, cancelled open stops. Held deposits remain held until recorded as refunded or forfeited under Billing on the order (069). |
 
 Online rental checkout collects the first month as a one-time Stripe payment.
 Recurring rental billing currently tracks amounts and due dates; it is not an

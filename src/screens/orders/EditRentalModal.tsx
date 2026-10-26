@@ -62,7 +62,7 @@ export default function EditRentalModal({
         p_special_notes: form.notes || null,
       })
       if (error?.message?.includes('deposit_held')) {
-        throw new Error('A deposit is being held for this rental. Refund or forfeit it from Close out before removing it.')
+        throw new Error('A deposit is being held for this rental. Mark it refunded or forfeited under Billing on this order, then remove it here.')
       }
       if (error) throw new Error('Couldn’t save the rental. Please try again.')
       if (!data?.ok) throw new Error(REASONS[data?.reason] || 'Couldn’t save the rental.')
@@ -154,9 +154,10 @@ export default function EditRentalModal({
             </div>
           </fieldset>
 
-          {save.error && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{(save.error as Error).message}</div>}
         </div>
 
+        {/* In the footer so a refusal is always on screen, not below the fold (ODD-006). */}
+        {save.error && <div role="alert" className="border-t border-red-200 bg-red-50 px-5 py-2 text-sm text-red-700">{(save.error as Error).message}</div>}
         <footer className="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">
           <button type="button" onClick={onClose} className="min-h-11 rounded-lg border border-slate-300 px-4 text-sm text-slate-700 hover:bg-white">Cancel</button>
           <button disabled={save.isPending} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">

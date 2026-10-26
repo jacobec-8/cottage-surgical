@@ -15,6 +15,7 @@ type Props = {
 /** What each action will unwind, spelled out before the staff member commits. */
 function effects(o: OrderDetail, kind: CloseKind): string[] {
   const activeUnits = o.rental_line_items.filter((l) => l.is_active && l.equipment_unit_id).length
+  const heldBulk = o.rental_line_items.filter((l) => l.is_active && l.bulk_stock === 'held').reduce((s, l) => s + Math.max(l.quantity ?? 1, 1), 0)
   const openLegs = o.deliveries.filter((d) => ['pending', 'scheduled', 'en_route'].includes(d.status)).length
   const liveCharge = o.recurring_charges?.find((c) => c.status !== 'ended')
   const heldDeposit = (o.deposits ?? []).filter((d) => d.status === 'held').reduce((s, d) => s + Number(d.amount), 0)
@@ -24,10 +25,11 @@ function effects(o: OrderDetail, kind: CloseKind): string[] {
   } else if (activeUnits) {
     out.push(`Return ${activeUnits} unit${activeUnits === 1 ? '' : 's'} to available inventory`)
   }
+  if (heldBulk) out.push(`${kind === 'cancel' ? 'Release' : 'Return'} ${heldBulk} bulk item${heldBulk === 1 ? '' : 's'} to the store's stock`)
   if (openLegs) out.push(`Cancel ${openLegs} open delivery/pickup stop${openLegs === 1 ? '' : 's'} on the Delivery board`)
   if (liveCharge) out.push(`End the ${fmtMoney(liveCharge.amount)}/mo billing (any overdue amount stays on record)`)
   out.push(kind === 'cancel' ? 'Mark the order cancelled' : 'Mark the order closed with today as the return date')
-  if (heldDeposit) out.push(`Leave the ${fmtMoney(heldDeposit)} deposit held — refund or forfeit it separately`)
+  if (heldDeposit) out.push(`Leave the ${fmtMoney(heldDeposit)} deposit held — record it as refunded or forfeited under Billing on this order`)
   return out
 }
 

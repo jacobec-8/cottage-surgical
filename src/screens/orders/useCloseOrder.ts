@@ -16,7 +16,7 @@ const REASONS: Record<string, string> = {
   refund_failed: 'Stripe did not accept the refund. The order was not cancelled; try again or check Stripe.',
 }
 
-type Result = { ok: boolean; reason?: string; units_released?: number; legs_cancelled?: number; refunded?: boolean }
+type Result = { ok: boolean; reason?: string; units_released?: number; bulk_released?: number; legs_cancelled?: number; refunded?: boolean }
 
 /** Cancel (not delivered) or close out (equipment out) an order via the atomic RPCs (038). */
 export function useCloseOrder(onMessage: (msg: string) => void) {
@@ -34,10 +34,12 @@ export function useCloseOrder(onMessage: (msg: string) => void) {
     onSuccess: (r) => {
       invalidateOrderWorkflow(qc)
       qc.invalidateQueries({ queryKey: ['equipment_units'] })
+      const bulk = r.bulk_released ? ` ${r.bulk_released} bulk item(s) back in store stock.` : ''
+      const deposit = ' Any held deposit stays held until you record it under Billing.'
       onMessage(
         r.kind === 'cancel'
-          ? `Order cancelled${r.refunded ? ' and Stripe refund initiated' : ''}. ${r.units_released ?? 0} unit(s) released. ${r.legs_cancelled ?? 0} stop(s) cancelled. Billing ended. The deposit remains held.`
-          : `Order closed. ${r.units_released ?? 0} unit(s) returned to available inventory. Billing ended. The deposit remains held.`,
+          ? `Order cancelled${r.refunded ? ' and Stripe refund initiated' : ''}. ${r.units_released ?? 0} unit(s) released.${bulk} ${r.legs_cancelled ?? 0} stop(s) cancelled. Billing ended.${deposit}`
+          : `Order closed. ${r.units_released ?? 0} unit(s) returned to available inventory.${bulk} Billing ended.${deposit}`,
       )
     },
     onError: (e) => onMessage((e as Error).message),
