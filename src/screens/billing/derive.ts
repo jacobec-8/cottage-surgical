@@ -1,3 +1,4 @@
+import { isReturnLeg } from '../../lib/legs.ts'
 import type { BillingLeg, Charge } from './types'
 
 const DAY_MS = 86_400_000
@@ -44,8 +45,9 @@ export type ReturnState =
   | { kind: 'return_overdue'; days: number; date: string }
   | { kind: 'no_return_scheduled' }
 
+/** Latest live return leg; an in-store collection is the outbound handoff, not a return. */
 function pickupLeg(legs: BillingLeg[]): BillingLeg | undefined {
-  return legs.filter((d) => d.leg_type === 'pickup' && d.status !== 'cancelled').at(-1)
+  return legs.filter((d) => isReturnLeg(d) && d.status !== 'cancelled').at(-1)
 }
 
 /** Where the equipment is: still out (and when it's due back) or returned. */

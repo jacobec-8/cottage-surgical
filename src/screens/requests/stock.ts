@@ -21,7 +21,7 @@ function requestedQty(l: RequestLine): number {
 export function lineShortage(l: RequestLine): Shortage | null {
   const requested = requestedQty(l)
   if (!l.equipment) return { name: UNKNOWN_ITEM, requested, available: 0 }
-  // Bulk supplies have no serialized units to reserve; the RPC doesn't gate them either.
+  // Bulk stock is per store; confirm_rental_request gates it and reports any shortage.
   if (l.equipment.is_serialized === false) return null
   const available = Math.max(l.equipment.quantity_on_hand ?? 0, 0)
   return available >= requested ? null : { name: l.equipment.name, requested, available }

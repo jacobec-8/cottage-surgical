@@ -3,6 +3,7 @@
 export type BillingLeg = {
   id: string
   leg_type: string
+  requires_driver?: boolean
   status: string
   scheduled_date: string | null
   completed_at: string | null
@@ -39,5 +40,5 @@ export const CHARGE_SELECT =
   'customer:customers(full_name,phone),' +
   'order:rental_orders!inner(id,order_no,status,order_type,start_date,end_date,deposit_amount,location_id,' +
   'rental_line_items(quantity,equipment:equipment_items(name)),' +
-  'deliveries(id,leg_type,status,scheduled_date,completed_at),' +
+  'deliveries(id,leg_type,requires_driver,status,scheduled_date,completed_at),' +
   'deposits(amount,status))'

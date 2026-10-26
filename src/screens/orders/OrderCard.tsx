@@ -2,7 +2,8 @@
 
 import type { KeyboardEvent, MouseEvent } from 'react'
 import { ChevronRight, MapPin, Phone, Truck, Undo2 } from 'lucide-react'
-import { PICKUP_ELIGIBLE, type Order } from './types'
+import { isReturnLeg, isStoreCollection } from '../../lib/legs'
+import { PICKUP_ELIGIBLE, type Order, type OrderDelivery } from './types'
 import { addressOf, ageLabel, amountOf, fmtDate, legSummary, lineStatus, unallocatedCount, unitLabel } from './format'
 import { PaymentBadge, SourceBadge, StatusBadge, TypeBadge, UnallocatedBadge } from './badges'
 
@@ -14,9 +15,9 @@ type Props = {
   pickupPending: boolean
 }
 
-/** Latest non-cancelled leg of a type (a cancelled pickup shouldn't hide the button). */
-function activeLeg(o: Order, leg: 'delivery' | 'pickup') {
-  return o.deliveries.filter((d) => d.leg_type === leg && d.status !== 'cancelled').at(-1)
+/** Latest non-cancelled matching leg (a cancelled pickup shouldn't hide the button). */
+function latestLeg(o: Order, match: (d: OrderDelivery) => boolean) {
+  return o.deliveries.filter((d) => match(d) && d.status !== 'cancelled').at(-1)
 }
 
 /** Rich, clickable summary card. Inner buttons stop propagation so they don't open the panel. */
@@ -24,8 +25,9 @@ export default function OrderCard({ o, selected, onOpen, onSchedulePickup, picku
   const cancelled = o.status === 'cancelled'
   const unalloc = cancelled ? 0 : unallocatedCount(o)
   const address = addressOf(o)
-  const delivery = activeLeg(o, 'delivery')
-  const pickup = activeLeg(o, 'pickup')
+  // Outbound is a driver delivery or an in-store collection; pickup is the return.
+  const delivery = latestLeg(o, (d) => !isReturnLeg(d))
+  const pickup = latestLeg(o, isReturnLeg)
   const canPickup = o.order_type === 'rental' && PICKUP_ELIGIBLE.has(o.status) && !pickup
 
   const open = () => onOpen(o.id)
@@ -98,7 +100,7 @@ export default function OrderCard({ o, selected, onOpen, onSchedulePickup, picku
         {(delivery || pickup) && (
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-slate-500">
             {delivery && (
-              <span className="inline-flex items-center gap-1"><Truck size={13} className="text-slate-400" /><span className="text-slate-400">Delivery:</span> {legSummary(delivery)}</span>
+              <span className="inline-flex items-center gap-1"><Truck size={13} className="text-slate-400" /><span className="text-slate-400">{isStoreCollection(delivery) ? 'In-store pickup:' : 'Delivery:'}</span> {legSummary(delivery)}</span>
             )}
             {pickup && (
               <span className="inline-flex items-center gap-1"><Undo2 size={13} className="text-slate-400" /><span className="text-slate-400">Pickup:</span> {legSummary(pickup)}</span>

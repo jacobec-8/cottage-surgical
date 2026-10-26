@@ -8,6 +8,7 @@ type Result = { ok: boolean; delivery_id?: string; already_scheduled?: boolean; 
 function friendlyError(e: unknown): string {
   const raw = (e as Error)?.message ?? ''
   if (/staff only/i.test(raw)) return 'Only staff can schedule pickups.'
+  if (/another store/i.test(raw)) return 'This order belongs to another store.'
   if (/not found/i.test(raw)) return 'Order not found — it may have been removed.'
   if (/pickup requires/i.test(raw)) return 'Pickup can only be scheduled for active, overdue, or delivered rentals.'
   return 'Could not schedule pickup. Please try again.'

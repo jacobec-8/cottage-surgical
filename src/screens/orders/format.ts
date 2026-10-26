@@ -1,3 +1,4 @@
+import { isStoreCollection } from '../../lib/legs.ts'
 import type { Order, OrderDelivery, OrderDriver, OrderLine } from './types'
 
 const SOURCE_LABELS: Record<string, string> = { storefront: 'Web', phone: 'Phone', staff: 'Staff' }
@@ -25,12 +26,12 @@ export function amountOf(o: Pick<Order, 'order_type' | 'monthly_rate' | 'rental_
 export type LineStatus = 'allocated' | 'unallocated' | 'returned'
 
 /**
- * A line is unallocated only if it never got a unit. Returned lines are also
- * inactive but still reference the unit they held.
+ * A line is unallocated only if it never got a unit or bulk stock. Returned
+ * lines are also inactive but still reference the unit or stock they held.
  */
-export function lineStatus(l: Pick<OrderLine, 'is_active' | 'equipment_unit_id'>): LineStatus {
+export function lineStatus(l: Pick<OrderLine, 'is_active' | 'equipment_unit_id' | 'bulk_stock'>): LineStatus {
   if (l.is_active) return 'allocated'
-  return l.equipment_unit_id ? 'returned' : 'unallocated'
+  return l.equipment_unit_id || l.bulk_stock ? 'returned' : 'unallocated'
 }
 
 export function unallocatedCount(o: Pick<Order, 'rental_line_items'>): number {
@@ -98,7 +99,8 @@ export function driverName(d: OrderDriver): string | null {
 export function legSummary(d: OrderDelivery): string {
   const status = (d.status || '').replace(/_/g, ' ')
   const when = d.scheduled_date ? [fmtDate(d.scheduled_date), windowOf(d)].filter(Boolean).join(' ') : null
-  const who = driverName(d.driver) ?? 'unassigned'
+  // In-store collections never have a driver.
+  const who = isStoreCollection(d) ? null : driverName(d.driver) ?? 'unassigned'
   return [status, when, who].filter(Boolean).join(' · ')
 }
 

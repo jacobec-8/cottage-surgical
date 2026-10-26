@@ -96,6 +96,9 @@ test('lineStatus distinguishes allocated / unallocated / returned', () => {
   assert.equal(lineStatus(line()), 'allocated')
   assert.equal(lineStatus(line({ is_active: false, equipment_unit_id: null, unit: null })), 'unallocated')
   assert.equal(lineStatus(line({ is_active: false })), 'returned')
+  // Bulk lines never get a unit; their stock state decides.
+  assert.equal(lineStatus(line({ equipment_unit_id: null, unit: null, bulk_stock: 'held' })), 'allocated')
+  assert.equal(lineStatus(line({ is_active: false, equipment_unit_id: null, unit: null, bulk_stock: 'released' })), 'returned')
 })
 
 test('unitLabel prefers asset tag, then serial, else null', () => {
