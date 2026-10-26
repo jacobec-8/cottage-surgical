@@ -268,10 +268,8 @@ function UnitsPanel({ itemId, locationId }: { itemId: string; locationId: string
   )
 }
 
-function ItemModal({ item, onClose }: { item: Partial<Item>; onClose: () => void }) {
-  const qc = useQueryClient()
-  const isNew = !item.id
-  const [f, setF] = useState({
+function initialForm(item: Partial<Item>) {
+  return {
     name: item.name ?? '',
     description: item.description ?? '',
     category: item.category ?? 'mobility',
@@ -288,9 +286,21 @@ function ItemModal({ item, onClose }: { item: Partial<Item>; onClose: () => void
     delivery_enabled: item.delivery_enabled ?? true,
     same_day_pickup: item.same_day_pickup ?? false,
     installation_required: item.installation_required ?? false,
-  })
+  }
+}
+
+function ItemModal({ item, onClose }: { item: Partial<Item>; onClose: () => void }) {
+  const qc = useQueryClient()
+  const isNew = !item.id
+  const [f, setF] = useState(() => initialForm(item))
+  const [initial] = useState(() => JSON.stringify(initialForm(item)))
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(item.image_url ?? null)
+  // Clicking outside must not silently discard a filled draft (ODD-002).
+  const dismiss = () => {
+    const dirty = JSON.stringify(f) !== initial || imageFile !== null
+    if (!dirty || window.confirm('Discard this item? Your changes will be lost.')) onClose()
+  }
   const [err, setErr] = useState('')
   const set = (k: keyof typeof f) => (e: any) =>
     setF({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value })
@@ -375,7 +385,7 @@ function ItemModal({ item, onClose }: { item: Partial<Item>; onClose: () => void
   const inp = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 
   return (
-    <div className="fixed inset-0 z-30 grid items-start justify-items-center overflow-y-auto bg-black/30 p-4 sm:items-center" onClick={onClose}>
+    <div className="fixed inset-0 z-30 grid items-start justify-items-center overflow-y-auto bg-black/30 p-4 sm:items-center" onClick={dismiss}>
       <div className="max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 shadow-lg sm:p-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold">{isNew ? 'Add Item' : 'Edit Item'}</h3>

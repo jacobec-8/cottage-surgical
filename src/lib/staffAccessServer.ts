@@ -47,5 +47,5 @@ export async function requireAdmin() {
 
   if (!profile?.is_active) redirect('/admin-login')
   if (profile.role === 'driver') redirect('/delivery')
-  if (profile.role !== 'admin') redirect('/access-limited?module=staff_access')
+  if (profile.role !== 'admin') redirect('/access-limited?reason=admin_only')
 }

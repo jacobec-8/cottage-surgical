@@ -106,6 +106,10 @@ export default function LocationDetail({ locationId }: { locationId: string }) {
       if (!form.name.trim() || !form.line1.trim() || !form.city.trim() || !form.zip.trim()) {
         throw new Error('Shop name, street, city, and ZIP are required.')
       }
+      // Same rules as onboarding, so a full address can't be pasted into one field (ODD-004).
+      if (!/^\d{5}(-\d{4})?$/.test(form.zip.trim())) throw new Error('Enter a five-digit ZIP code (or ZIP+4).')
+      if (!/^[A-Za-z]{2}$/.test(form.state.trim())) throw new Error('Enter the two-letter state code.')
+      if (/,/.test(form.line1) && /\d{5}/.test(form.line1)) throw new Error('Enter only the street in Street; put city, state and ZIP in their own fields.')
       const { error } = await supabase.from('pickup_locations').update({
         name: form.name.trim(), address_line1: form.line1.trim(),
         address_line2: form.line2.trim() || null, address_city: form.city.trim(),

@@ -21,6 +21,7 @@ type LifecycleResult = { ok?: boolean; reason?: string; unallocated?: number } |
 function lifecycleError(data: LifecycleResult): string {
   switch (data?.reason) {
     case 'no_driver': return 'Assign a driver and Save before starting.'
+    case 'address_required': return 'This stop has no address. Ask the store to add one before starting.'
     case 'photo_required': return 'A photo is required to complete.'
     case 'photo_missing': return 'The proof photo didn’t upload. Take the photo again.'
     case 'photo_invalid': return 'That photo doesn’t belong to this stop. Take the photo again.'
@@ -236,6 +237,10 @@ function DeliveryRow({
   selected: boolean
 }) {
   const isStorePickup = d.leg_type === 'pickup' && !d.requires_driver
+  // Driver stops need somewhere to go; staff can fill a missing address here (BUG-011).
+  const missingAddress = !isStorePickup && !(d.address_line1?.trim() && d.address_city?.trim())
+  const addressEditable = !isStorePickup && (d.status === 'pending' || d.status === 'scheduled' || (missingAddress && d.status === 'en_route'))
+  const [addr, setAddr] = useState({ line1: d.address_line1 ?? '', city: d.address_city ?? '', state: d.address_state ?? 'NY', zip: d.address_zip ?? '' })
   const card = clickableCard(d, onOpen, selected)
   const qc = useQueryClient()
   const [driver, setDriver] = useState(d.driver_id ?? '')
@@ -254,7 +259,14 @@ function DeliveryRow({
       // Status is normalized server-side (driver_id set → scheduled; cleared → pending).
       // Reassigning an en-route stop sends it back to scheduled for the new driver (064).
       const handedOff = d.status === 'en_route' && (driver || null) !== d.driver_id
+      const addressPatch = addressEditable
+        ? { address_line1: addr.line1.trim() || null, address_city: addr.city.trim() || null, address_state: addr.state.trim().toUpperCase() || 'NY', address_zip: addr.zip.trim() || null }
+        : {}
+      if (!isStorePickup && driver && !(addressEditable ? addr.line1.trim() && addr.city.trim() : !missingAddress)) {
+        throw new Error('Add the street and city before assigning a driver.')
+      }
       const patch = {
+        ...addressPatch,
         driver_id: isStorePickup ? null : driver || null,
         scheduled_date: date || null,
         window_start: appointmentTime || null,
@@ -348,7 +360,11 @@ function DeliveryRow({
             <span className={`text-xs px-2 py-0.5 rounded-full capitalize ${statusClass(d.status)}`}>{statusLabel(d.status)}</span>
             {d.order && <PaymentBadge paymentStatus={d.order.payment_status} paymentPreference={d.order.payment_preference} />}
           </div>
-          <div className="text-sm text-slate-500 mt-0.5">{[d.address_line1, d.address_city, d.address_state, d.address_zip].filter(Boolean).join(', ')}</div>
+          {missingAddress ? (
+            <div className="mt-0.5 text-sm font-medium text-amber-700">No address on file{isDriver ? ' — contact the store before leaving' : ' — add one below before dispatch'}</div>
+          ) : (
+            <div className="text-sm text-slate-500 mt-0.5">{[d.address_line1, d.address_city, d.address_state, d.address_zip].filter(Boolean).join(', ')}</div>
+          )}
           {(d.order?.rental_line_items?.length ?? 0) > 0 && (
             <div className="text-sm text-slate-700 mt-1">
               {d.order!.rental_line_items.map((li) => `${li.quantity > 1 ? li.quantity + '× ' : ''}${li.equipment?.name ?? 'Item'}`).join(', ')}
@@ -370,7 +386,7 @@ function DeliveryRow({
               title={!d.driver_id ? 'Needs a driver first' : undefined}
               className="min-h-11 w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">Start stop</button>
           )}
-          {d.status === 'scheduled' && !isDriver && (
+          {d.status === 'scheduled' && !isDriver && !isStorePickup && (
             <span className="text-xs text-slate-400">waiting for driver to start</span>
           )}
           {d.status === 'en_route' && (
@@ -415,6 +431,14 @@ function DeliveryRow({
                   </option>
                 ))}
               </select>
+            </div>
+          )}
+          {addressEditable && (
+            <div className="flex w-full flex-wrap gap-2">
+              <div className="min-w-48 flex-[2]"><div className="text-[11px] text-slate-400 mb-0.5">Street</div><input value={addr.line1} onChange={(e) => setAddr({ ...addr, line1: e.target.value })} className={`w-full ${inp}`} /></div>
+              <div className="min-w-32 flex-1"><div className="text-[11px] text-slate-400 mb-0.5">City</div><input value={addr.city} onChange={(e) => setAddr({ ...addr, city: e.target.value })} className={`w-full ${inp}`} /></div>
+              <div className="w-16"><div className="text-[11px] text-slate-400 mb-0.5">State</div><input value={addr.state} maxLength={2} onChange={(e) => setAddr({ ...addr, state: e.target.value })} className={`w-full ${inp}`} /></div>
+              <div className="w-24"><div className="text-[11px] text-slate-400 mb-0.5">ZIP</div><input value={addr.zip} inputMode="numeric" onChange={(e) => setAddr({ ...addr, zip: e.target.value })} className={`w-full ${inp}`} /></div>
             </div>
           )}
           <div><div className="text-[11px] text-slate-400 mb-0.5">{isStorePickup ? 'Pickup date' : 'Date'}</div><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inp} /></div>
