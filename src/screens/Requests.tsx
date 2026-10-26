@@ -206,7 +206,7 @@ export default function Requests() {
                     <AlertTriangle size={14} className="mt-0.5 shrink-0" />
                     <span>
                       Can’t confirm yet — {shortages.map((s) => `${s.name}: ${s.requested} requested, ${s.available} available`).join('; ')}.{' '}
-                      <Link href="/inventory" className="underline hover:no-underline">Add units in Inventory</Link>, then confirm.
+                      <Link href="/inventory" className="underline hover:no-underline">Add units or stock in Inventory</Link>, then confirm.
                     </span>
                   </div>
                 )}
@@ -248,7 +248,7 @@ export default function Requests() {
               {selectedRow && rowState(selectedRow).blocked && (
                 <p className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
                   Can’t confirm yet — {rowState(selectedRow).shortages.map((x) => `${x.name}: ${x.requested} requested, ${x.available} available`).join('; ')}.{' '}
-                  <Link href="/inventory" className="underline hover:no-underline">Add units in Inventory</Link>, then confirm.
+                  <Link href="/inventory" className="underline hover:no-underline">Add units or stock in Inventory</Link>, then confirm.
                 </p>
               )}
               {actErr && <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-1.5">{actErr}</p>}
