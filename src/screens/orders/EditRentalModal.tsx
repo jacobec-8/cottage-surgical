@@ -61,6 +61,9 @@ export default function EditRentalModal({
         p_deposit_amount: form.deposit === '' ? null : Number(form.deposit),
         p_special_notes: form.notes || null,
       })
+      if (error?.message?.includes('deposit_held')) {
+        throw new Error('A deposit is being held for this rental. Refund or forfeit it from Close out before removing it.')
+      }
       if (error) throw new Error('Couldn’t save the rental. Please try again.')
       if (!data?.ok) throw new Error(REASONS[data?.reason] || 'Couldn’t save the rental.')
     },
@@ -142,7 +145,7 @@ export default function EditRentalModal({
               <label className="text-xs text-slate-500">Monthly rate ($)
                 <input type="number" min="0" step="0.01" value={form.monthlyRate} onChange={(e) => set('monthlyRate')(e.target.value)} className={`mt-1 ${input}`} />
               </label>
-              <label className="text-xs text-slate-500">Deposit ($)
+              <label className="text-xs text-slate-500">Deposit held ($) — updates the held deposit record
                 <input type="number" min="0" step="0.01" value={form.deposit} onChange={(e) => set('deposit')(e.target.value)} className={`mt-1 ${input}`} />
               </label>
               <label className="text-xs text-slate-500 sm:col-span-2">Internal notes

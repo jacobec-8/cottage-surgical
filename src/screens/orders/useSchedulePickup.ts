@@ -4,12 +4,18 @@ import { invalidateOrderWorkflow } from '../../lib/workflowKeys'
 
 type Result = { ok: boolean; delivery_id?: string; already_scheduled?: boolean; reason?: string }
 
+export type ReturnAddress = { line1: string; city: string; state: string; zip: string }
+type ScheduleArgs = { orderId: string; address?: ReturnAddress }
+
+export const ADDRESS_REQUIRED_MSG = 'This rental has no home address. Enter where the driver should collect it.'
+
 /** schedule_pickup RAISEs rather than returning {ok:false}; translate the known messages. */
 function friendlyError(e: unknown): string {
   const raw = (e as Error)?.message ?? ''
   if (/staff only/i.test(raw)) return 'Only staff can schedule pickups.'
   if (/another store/i.test(raw)) return 'This order belongs to another store.'
   if (/not found/i.test(raw)) return 'Order not found — it may have been removed.'
+  if (raw === ADDRESS_REQUIRED_MSG) return raw
   if (/pickup requires/i.test(raw)) return 'Pickup can only be scheduled for active, overdue, or delivered rentals.'
   return 'Could not schedule pickup. Please try again.'
 }
@@ -18,10 +24,14 @@ function friendlyError(e: unknown): string {
 export function useSchedulePickup(onMessage: (msg: string) => void) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (orderId: string) => {
-      const { data, error } = await supabase.rpc('schedule_pickup', { p_order_id: orderId })
+    mutationFn: async ({ orderId, address }: ScheduleArgs) => {
+      const { data, error } = await supabase.rpc('schedule_pickup', {
+        p_order_id: orderId,
+        ...(address ? { p_address: address } : {}),
+      })
       if (error) throw error
       const res = data as Result | null
+      if (res?.reason === 'address_required') throw new Error(ADDRESS_REQUIRED_MSG)
       if (!res?.ok) throw new Error(res?.reason || 'Could not schedule pickup')
       return res
     },

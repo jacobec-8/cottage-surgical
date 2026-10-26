@@ -13,6 +13,7 @@ import { PaymentBadge, SourceBadge, StatusBadge, TypeBadge, UnallocatedBadge } f
 import { BillingSection, CustomerSection, DeliveriesSection, Field, LinesSection, Section } from './DetailSections'
 import { useOrderDetail } from './useOrderDetail'
 import { useSchedulePickup } from './useSchedulePickup'
+import ReturnAddressForm from './ReturnAddressForm'
 import { useVerifyPayment } from './useVerifyPayment'
 import { useCloseOrder } from './useCloseOrder'
 import CloseOutControls from './CloseOutControls'
@@ -111,6 +112,8 @@ function PanelBody({ o, onClose, actions, focusDeliveryId }: BodyProps) {
   const [msg, setMsg] = useState('')
   const [editing, setEditing] = useState(false)
   const schedulePickup = useSchedulePickup(setMsg)
+  const [askAddress, setAskAddress] = useState(false)
+  const hasAddress = Boolean(o.address_line1?.trim() && o.address_city?.trim())
   const verify = useVerifyPayment(o.id, setMsg)
   const closeOrder = useCloseOrder(setMsg)
   const isClosed = o.status === 'cancelled' || o.status === 'closed'
@@ -161,7 +164,7 @@ function PanelBody({ o, onClose, actions, focusDeliveryId }: BodyProps) {
             {canPickup && (
               <button
                 type="button"
-                onClick={() => schedulePickup.mutate(o.id)}
+                onClick={() => (hasAddress ? schedulePickup.mutate({ orderId: o.id }) : setAskAddress(true))}
                 disabled={schedulePickup.isPending}
                 className="text-sm bg-amber-700 hover:bg-amber-800 text-white rounded-lg px-3 py-1.5 disabled:opacity-50"
               >
@@ -186,6 +189,13 @@ function PanelBody({ o, onClose, actions, focusDeliveryId }: BodyProps) {
             />
           </div>
         )}
+        {canPickup && askAddress && (
+          <ReturnAddressForm
+            busy={schedulePickup.isPending}
+            onCancel={() => setAskAddress(false)}
+            onSubmit={(address) => schedulePickup.mutate({ orderId: o.id, address }, { onSuccess: () => setAskAddress(false) })}
+          />
+        )}
         {msg && <p className="mt-2 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">{msg}</p>}
         {isClosed && (o.closed_reason || o.closed_at) && (
           <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
@@ -209,7 +219,7 @@ function PanelBody({ o, onClose, actions, focusDeliveryId }: BodyProps) {
             <Field label="Source">{sourceLabel(o.source) ?? '—'}</Field>
             {isRental && <Field label="Start (delivery)">{fmtDate(o.start_date)}</Field>}
             {isRental && <Field label="Return">{o.end_date ? fmtDate(o.end_date) : 'Open'}</Field>}
-            {isRental && <Field label="Deposit">{fmtMoney(o.deposit_amount)}</Field>}
+            {isRental && <Field label="Deposit held">{fmtMoney(o.deposit_amount)}</Field>}
             <Field label="Created">{fmtDateTime(o.created_at)}</Field>
             <Field label="Last updated">{fmtDateTime(o.updated_at)}</Field>
           </div>

@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
 import { Check, Truck, Plus, Minus, ArrowLeft, MapPin, Wrench, Zap } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { PRODUCT_FIELDS, productPickupLocations, type Product } from '../../lib/shop'
+import { PRODUCT_FIELDS, productPickupLocations, rentalPriceText, type Product } from '../../lib/shop'
 import { SHOP_PURCHASES_ENABLED } from '../../lib/shopFlags'
 import ShopHeader from '../../components/shop/ShopHeader'
 import ShopFooter from '../../components/shop/ShopFooter'
@@ -43,6 +43,8 @@ export default function ProductPage({
     || (p.delivery_enabled && p.delivery_rental_price != null)
   ))
   const purchasable = !!(SHOP_PURCHASES_ENABLED && p && p.is_purchasable && p.sale_price != null)
+  const pickupPrice = p ? rentalPriceText(p.pickup_price_range, p.pickup_rental_price) : null
+  const deliveryPrice = p ? rentalPriceText(p.delivery_price_range, p.delivery_rental_price) : null
   const addToCart = (mode: 'rent' | 'purchase') => {
     if (!p) return
     if (mode === 'purchase' && !SHOP_PURCHASES_ENABLED) return
@@ -91,7 +93,7 @@ export default function ProductPage({
               </div>
 
               <div className="flex items-baseline gap-4 mt-6">
-                {rentable && <div className="space-y-1">{p.pickup_enabled && p.pickup_rental_price != null && <div className="text-3xl font-bold text-navy">${Number(p.pickup_rental_price).toFixed(0)}<span className="text-base font-medium text-slate-500">/mo pickup</span></div>}{p.delivery_enabled && p.delivery_rental_price != null && <div className="text-base font-medium text-slate-600">${Number(p.delivery_rental_price).toFixed(0)}/mo with delivery + return pickup</div>}</div>}
+                {rentable && <div className="space-y-1">{p.pickup_enabled && pickupPrice && <div className="text-3xl font-bold text-navy">{pickupPrice}<span className="text-base font-medium text-slate-500">/mo pickup</span></div>}{p.delivery_enabled && deliveryPrice && <div className="text-base font-medium text-slate-600">{deliveryPrice}/mo with delivery + return pickup</div>}{pickupPrice?.includes('–') || deliveryPrice?.includes('–') ? <div className="text-xs text-slate-500">Price depends on the store; you’ll see the exact price at checkout.</div> : null}</div>}
                 {purchasable && <div className="text-lg text-terracotta font-semibold">${Number(p.sale_price).toFixed(0)} to buy</div>}
                 {!rentable && !purchasable && <div className="text-slate-500">Call for pricing</div>}
               </div>

@@ -192,8 +192,9 @@ export default function Orders() {
               o={o}
               selected={selected === o.id}
               onOpen={setSelected}
-              onSchedulePickup={(id) => schedulePickup.mutate(id)}
-              pickupPending={schedulePickup.isPending && schedulePickup.variables === o.id}
+              // No home address (e.g. collected in store): the panel asks for one first.
+              onSchedulePickup={(id) => (o.address_line1 ? schedulePickup.mutate({ orderId: id }) : setSelected(id))}
+              pickupPending={schedulePickup.isPending && schedulePickup.variables?.orderId === o.id}
             />
           ),
         )}

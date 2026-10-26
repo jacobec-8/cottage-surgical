@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { Check, MapPin, Truck, Wrench, Zap } from 'lucide-react'
-import { productPickupLocations, type Product } from '../../lib/shop'
+import { productPickupLocations, rentalPriceText, type Product } from '../../lib/shop'
 import { SHOP_PURCHASES_ENABLED } from '../../lib/shopFlags'
 import { useCart } from './CartContext'
 
@@ -13,6 +13,8 @@ export default function ProductCard({ p }: { p: Product }) {
     (p.pickup_enabled && p.pickup_rental_price != null)
     || (p.delivery_enabled && p.delivery_rental_price != null)
   )
+  const pickupPrice = rentalPriceText(p.pickup_price_range, p.pickup_rental_price)
+  const deliveryPrice = rentalPriceText(p.delivery_price_range, p.delivery_rental_price)
   // Purchase stays implemented; hidden until sales launch (shopFlags).
   const purchasable = SHOP_PURCHASES_ENABLED && p.is_purchasable && p.sale_price != null
   const base = {
@@ -63,8 +65,8 @@ export default function ProductCard({ p }: { p: Product }) {
         <div className="mt-3 mb-4">
           {rentable && (
             <div className="space-y-1">
-              {p.pickup_enabled && p.pickup_rental_price != null && <div className="text-lg font-bold leading-none text-navy">${Number(p.pickup_rental_price).toFixed(0)}<span className="text-sm font-medium text-slate-500">/mo pickup</span></div>}
-              {p.delivery_enabled && p.delivery_rental_price != null && <div className="text-sm font-medium text-slate-600">${Number(p.delivery_rental_price).toFixed(0)}/mo delivery + return pickup</div>}
+              {p.pickup_enabled && pickupPrice && <div className="text-lg font-bold leading-none text-navy">{pickupPrice}<span className="text-sm font-medium text-slate-500">/mo pickup</span></div>}
+              {p.delivery_enabled && deliveryPrice && <div className="text-sm font-medium text-slate-600">{deliveryPrice}/mo delivery + return pickup</div>}
             </div>
           )}
           {purchasable && <div className="text-sm text-terracotta font-medium mt-1">${Number(p.sale_price).toFixed(0)} to purchase</div>}

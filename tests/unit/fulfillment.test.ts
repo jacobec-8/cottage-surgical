@@ -41,3 +41,11 @@ test('staff fulfillment labels cover pickup and delivery combinations', () => {
   assert.equal(fulfillmentLabel(item({ pickup_enabled: false })), 'Delivery only')
   assert.equal(fulfillmentLabel(item({ delivery_enabled: false })), 'In-store pickup available')
 })
+
+test('rentalPriceText shows the store price range a customer can be charged', async () => {
+  const { rentalPriceText } = await import('../../src/lib/shop.ts')
+  assert.equal(rentalPriceText({ min: 100, max: 125 }, 100), '$100–125')
+  assert.equal(rentalPriceText({ min: 140, max: 140 }, 100), '$140')
+  assert.equal(rentalPriceText(null, 100), '$100')
+  assert.equal(rentalPriceText(undefined, null), null)
+})
