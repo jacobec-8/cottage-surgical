@@ -7,6 +7,8 @@ import { Search, Plus, Minus, Trash2, CheckCircle } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { invalidateOrderWorkflow } from '../lib/workflowKeys'
 import { useLocationScope } from '../contexts/LocationContext'
+import { DRIVER_BRANCH_FIELDS, driversForBranch, type BranchDriver } from '../lib/driverBranches'
+import { DRIVER_BUSY_MSG, dispatchErrorMessage, windowProblem } from '../lib/dispatchErrors'
 
 type Item = {
   id: string
@@ -33,6 +35,9 @@ const orderErrorMessage = (reason?: string) => {
     case 'invalid_item': return 'One of the items is no longer available for this order type. Remove it and try again.'
     case 'no_items': return 'Add at least one item.'
     case 'forbidden': return 'You don’t have permission to create orders.'
+    case 'invalid_driver': return 'That driver isn’t active or isn’t set up for this store. Choose another driver.'
+    case 'driver_busy': return DRIVER_BUSY_MSG
+    case 'invalid_time': return 'The end time must be after the start time.'
     default: return `Couldn’t create the order (${reason || 'unknown error'}).`
   }
 }
@@ -51,7 +56,7 @@ export default function NewOrder() {
   // cart + delivery
   const [cart, setCart] = useState<CartLine[]>([])
   const [itemSearch, setItemSearch] = useState('')
-  const [deliv, setDeliv] = useState({ date: '', time: '', driver: '', notes: '', deposit: '' })
+  const [deliv, setDeliv] = useState({ date: '', time: '', end: '', driver: '', notes: '', deposit: '' })
 
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -84,13 +89,23 @@ export default function NewOrder() {
       return data as unknown as Item[]
     },
   })
+  // Home and shared drivers for this store (3LOC-002).
   const drivers = useQuery({
-    queryKey: ['drivers', 'active', selectedLocationId],
+    queryKey: ['drivers', 'active', 'branches'],
     enabled: Boolean(selectedLocationId),
     queryFn: async () => {
-      const { data } = await supabase.from('drivers').select('id,first_name,last_name')
-        .eq('status', 'active').eq('location_id', selectedLocationId!).order('first_name')
-      return (data ?? []) as any[]
+      const { data } = await supabase.from('drivers').select(`id,first_name,last_name,${DRIVER_BRANCH_FIELDS}`)
+        .eq('status', 'active').order('first_name')
+      return (data ?? []) as (BranchDriver & { id: string; first_name: string; last_name: string })[]
+    },
+  })
+  const storeDrivers = driversForBranch(drivers.data ?? [], selectedLocationId)
+  const busyDrivers = useQuery({
+    queryKey: ['busy_drivers', deliv.date, deliv.time, deliv.end],
+    enabled: Boolean(deliv.date && deliv.time) && !windowProblem(deliv.time, deliv.end),
+    queryFn: async () => {
+      const { data } = await supabase.rpc('get_busy_driver_ids', { p_date: deliv.date, p_start: deliv.time, p_end: deliv.end || null })
+      return new Set((data ?? []) as string[])
     },
   })
 
@@ -122,6 +137,8 @@ export default function NewOrder() {
     try {
       if (!selectedLocationId) throw new Error('Select a store before creating an order.')
       if (cart.length === 0) throw new Error('Add at least one item.')
+      const timeProblem = windowProblem(deliv.time, deliv.end)
+      if (timeProblem) throw new Error(timeProblem)
       // Existing vs new customer — the new customer is created INSIDE the RPC
       // (one transaction), so a failed order can never leave an orphan customer
       // and a retry can't create a duplicate.
@@ -142,15 +159,15 @@ export default function NewOrder() {
         p_customer_id: customerId,
         p_order_type: mode,
         p_items: cart.map((l) => ({ item_id: l.item_id, quantity: l.qty })),
-        p_delivery: { location_id: selectedLocationId, scheduled_date: deliv.date || null, window_start: deliv.time || null, window_end: null, driver_id: deliv.driver || null, notes: deliv.notes || null },
+        p_delivery: { location_id: selectedLocationId, scheduled_date: deliv.date || null, window_start: deliv.time || null, window_end: deliv.time ? deliv.end || null : null, driver_id: deliv.driver || null, notes: deliv.notes || null },
         p_deposit: mode === 'rental' && deliv.deposit ? Math.max(0, Number(deliv.deposit)) : null,
         p_new_customer: newCustomer,
       })
-      if (error) throw error
+      if (error) throw new Error(dispatchErrorMessage(error, 'Couldn’t create the order. Please try again.'))
       if (!data?.ok) throw new Error(orderErrorMessage(data?.reason))
       setResult({ order_no: data.order_no, unallocated: data.unallocated })
       setCart([]); setCust(null); setNc({ full_name: '', phone: '', email: '', dob: '', coverage: '', line1: '', city: '', state: 'NY', zip: '' })
-      setDeliv({ date: '', time: '', driver: '', notes: '', deposit: '' })
+      setDeliv({ date: '', time: '', end: '', driver: '', notes: '', deposit: '' })
       // create_staff_order may create a customer, reserve stock, and queue a
       // delivery — refresh every board so the actor's screens match the toast.
       invalidateOrderWorkflow(qc)
@@ -301,10 +318,11 @@ export default function NewOrder() {
           <div><span className="text-xs text-slate-500">Driver</span>
             <select value={deliv.driver} onChange={(e) => setDeliv({ ...deliv, driver: e.target.value })} className={`w-full ${inp}`}>
               <option value="">Unassigned</option>
-              {drivers.data?.map((d) => <option key={d.id} value={d.id}>{d.first_name} {d.last_name}</option>)}
+              {storeDrivers.map((d) => <option key={d.id} value={d.id}>{d.first_name} {d.last_name}{busyDrivers.data?.has(d.id) ? ' — busy then' : ''}</option>)}
             </select>
           </div>
           <div><span className="text-xs text-slate-500">Delivery time</span><input type="time" value={deliv.time} onChange={(e) => setDeliv({ ...deliv, time: e.target.value })} className={`w-full ${inp}`} /></div>
+          <div><span className="text-xs text-slate-500">Until{deliv.time && !deliv.end ? ' (1 hour if blank)' : ''}</span><input type="time" aria-label="Delivery end time" value={deliv.end} onChange={(e) => setDeliv({ ...deliv, end: e.target.value })} className={`w-full ${inp}`} /></div>
           {mode === 'rental' && <div><span className="text-xs text-slate-500">Deposit ($)</span><input type="number" value={deliv.deposit} onChange={(e) => setDeliv({ ...deliv, deposit: e.target.value })} className={`w-full ${inp}`} /></div>}
           <div className={mode === 'rental' ? '' : 'col-span-2'}><span className="text-xs text-slate-500">Notes</span><input value={deliv.notes} onChange={(e) => setDeliv({ ...deliv, notes: e.target.value })} placeholder="Access, parking…" className={`w-full ${inp}`} /></div>
         </div>

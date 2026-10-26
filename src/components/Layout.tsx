@@ -16,9 +16,10 @@ import { useStaffModuleAccess } from '../lib/useStaffModuleAccess'
 import NotificationsBell from './NotificationsBell'
 import { dispatchCustomerEmails } from '../lib/customerEmails'
 import { getVisibleWorkspaces, matchesWorkspaceTab } from '../lib/workspaceNavigation'
+import { BACKOFFICE_ROLES, STAFF_APP_ROLES, canSwitchStores, roleLabel } from '../lib/roles'
 
-const STAFF = ['admin', 'staff']
-const ALL = ['admin', 'staff', 'driver']
+const STAFF = BACKOFFICE_ROLES
+const ALL = STAFF_APP_ROLES
 const TAB_ICONS = {
   '/orders': ClipboardList, '/requests': Inbox, '/new-order': PlusCircle,
   '/delivery': Truck, '/drivers': UserCog, '/staff': UsersRound, '/staff-access': LockKeyhole,
@@ -56,7 +57,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   // Live work-queue counts, auto-refreshed so approving a request updates the
   // Orders + Delivery badges (and screens) without a manual refresh.
   const { data: counts } = useQuery({
-    queryKey: ['nav_counts', selectedLocationId],
+    queryKey: ['nav_counts', selectedLocationId, isDriver],
     staleTime: 0, // badge catch-up on tab return after short background
     refetchInterval: 20_000,
     refetchIntervalInBackground: true,
@@ -67,7 +68,8 @@ export default function Layout({ children }: { children: ReactNode }) {
       if (selectedLocationId) {
         reqQuery = reqQuery.eq('location_id', selectedLocationId)
         ordQuery = ordQuery.eq('location_id', selectedLocationId)
-        delQuery = delQuery.eq('location_id', selectedLocationId)
+        // A driver's stops can be at any branch they serve; RLS already limits them.
+        if (!isDriver) delQuery = delQuery.eq('location_id', selectedLocationId)
       }
       const [req, ord, del] = await Promise.all([reqQuery, ordQuery, delQuery])
       return { requests: req.count ?? 0, orders: ord.count ?? 0, deliveries: del.count ?? 0 } as Record<string, number>
@@ -85,9 +87,13 @@ export default function Layout({ children }: { children: ReactNode }) {
     },
   })
   const name = profile?.full_name || profile?.email || 'User'
-  const businessName = selectedLocation?.business?.name ?? 'Cottage Surgical'
-  const contactPhone = selectedLocation?.business?.settings?.phone ?? selectedLocation?.phone ?? '516-367-9030 ext 4'
-  const contactEmail = selectedLocation?.business?.settings?.email ?? 'info@cottagepharmacy.com'
+  // An owner viewing all their branches still sees their own business.
+  const business = selectedLocation?.business ?? (profile?.role === 'owner' ? locationScope.locations[0]?.business : null)
+  const businessName = business?.name ?? 'Cottage Surgical'
+  // Cottage's own contact is only the fallback for the all-stores admin view;
+  // another business never shows Cottage's details.
+  const contactPhone = business ? business.settings?.phone ?? selectedLocation?.phone ?? null : '516-367-9030 ext 4'
+  const contactEmail = business ? business.settings?.email ?? null : 'info@cottagepharmacy.com'
   const initials = name.split(' ').map((s) => s[0]).slice(0, 2).join('').toUpperCase()
   const workspaces = getVisibleWorkspaces(profile?.role, access.canAccess)
   const activeWorkspace = workspaces.find((workspace) => workspace.tabs.some((tab) => matchesWorkspaceTab(pathname, tab.to)))
@@ -203,17 +209,17 @@ export default function Layout({ children }: { children: ReactNode }) {
               </div>
               <div className="hidden min-w-0 min-[375px]:block">
                 <div className="truncate text-sm font-semibold leading-tight text-slate-900">{businessName}</div>
-                <div className="text-[11px] capitalize leading-tight text-slate-500">{isDriver ? 'Driver route' : `${profile?.role || 'Staff'} workspace`}</div>
+                <div className="text-[11px] capitalize leading-tight text-slate-500">{isDriver ? 'Driver route' : `${roleLabel(profile?.role)} workspace`}</div>
               </div>
             </div>
           </div>
           <div className="hidden xl:flex items-center gap-5 text-xs text-slate-500">
             <span className="flex items-center gap-1.5"><MapPin size={13} /> {selectedLocation ? `${selectedLocation.address_line1}, ${selectedLocation.address_city} ${selectedLocation.address_state} ${selectedLocation.address_zip}` : 'All store locations'}</span>
-            <span className="flex items-center gap-1.5"><Phone size={13} /> {contactPhone}</span>
-            <span className="flex items-center gap-1.5"><Mail size={13} /> {contactEmail}</span>
+            {contactPhone && <span className="flex items-center gap-1.5"><Phone size={13} /> {contactPhone}</span>}
+            {contactEmail && <span className="flex items-center gap-1.5"><Mail size={13} /> {contactEmail}</span>}
           </div>
           <div className="min-w-0 flex-1 sm:max-w-xs lg:flex-none">
-            {profile?.role === 'admin' ? (
+            {canSwitchStores(profile?.role) ? (
               <label className="block">
                 <span className="sr-only">Store selector</span>
                 <select
@@ -222,8 +228,8 @@ export default function Layout({ children }: { children: ReactNode }) {
                   onChange={(event) => locationScope.setSelectedLocationId(event.target.value === 'all' ? null : event.target.value)}
                   className="min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="all">All stores</option>
-                  {locationScope.locations.map((location) => <option key={location.id} value={location.id}>{location.name} · {location.address_city}</option>)}
+                  <option value="all">{profile?.role === 'owner' ? 'All my stores' : 'All stores'}</option>
+                  {locationScope.locations.map((location) => <option key={location.id} value={location.id}>{location.name} · {location.address_city}{location.is_active ? '' : ' (not open)'}</option>)}
                 </select>
               </label>
             ) : selectedLocation ? (
@@ -234,7 +240,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           <div className="ml-auto flex items-center gap-1 sm:gap-3 lg:ml-0">
             <div className="hidden text-right md:block">
               <div className="text-sm font-medium text-slate-800 leading-tight">{name}</div>
-              <div className="text-xs text-slate-400 capitalize leading-tight">{profile?.role || ''}</div>
+              <div className="text-xs text-slate-400 leading-tight">{roleLabel(profile?.role)}</div>
             </div>
             <div className="hidden h-8 w-8 place-items-center rounded-full bg-blue-600 text-xs font-semibold text-white sm:grid">
               {initials}

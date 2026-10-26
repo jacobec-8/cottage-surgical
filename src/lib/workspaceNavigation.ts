@@ -1,4 +1,5 @@
 import type { StaffModule } from './staffModules'
+import { BACKOFFICE_ROLES } from './roles.ts'
 
 type WorkspaceTab = {
   to: string
@@ -14,7 +15,7 @@ type Workspace = {
   tabs: readonly WorkspaceTab[]
 }
 
-const STAFF = ['admin', 'staff']
+const STAFF = BACKOFFICE_ROLES
 const WORKSPACES: readonly Workspace[] = [
   {
     id: 'orders', label: 'Orders', tabs: [

@@ -27,7 +27,7 @@ export default function Dashboard() {
   const qc = useQueryClient()
   const router = useRouter()
   const [tab, setTab] = useState<'overview' | 'rentals'>('overview')
-  const isStaff = profile?.role === 'admin' || profile?.role === 'staff'
+  const isStaff = profile?.role === 'admin' || profile?.role === 'owner' || profile?.role === 'staff'
 
   useEffect(() => {
     if (profile?.role === 'driver') router.replace('/delivery')
@@ -103,7 +103,7 @@ export default function Dashboard() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold mb-4">{profile?.role === 'staff' ? 'Staff' : 'Admin'} Dashboard{selectedLocation ? ` · ${selectedLocation.name}` : ''}</h1>
+      <h1 className="text-2xl font-semibold mb-4">{profile?.role === 'staff' ? 'Staff' : profile?.role === 'owner' ? 'Owner' : 'Admin'} Dashboard{selectedLocation ? ` · ${selectedLocation.name}` : ''}</h1>
 
       <div className="flex gap-6 border-b border-slate-200 mb-6">
         <button

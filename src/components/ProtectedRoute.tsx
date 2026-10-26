@@ -3,8 +3,7 @@
 import { useEffect, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '../contexts/AuthContext'
-
-const STAFF_ROLES = ['admin', 'staff', 'driver']
+import { STAFF_APP_ROLES } from '../lib/roles'
 
 export default function ProtectedRoute({ children }: { children: ReactNode }) {
   const router = useRouter()
@@ -29,7 +28,7 @@ export default function ProtectedRoute({ children }: { children: ReactNode }) {
     )
   }
 
-  if (!profile.is_active || !STAFF_ROLES.includes(profile.role)) {
+  if (!profile.is_active || !STAFF_APP_ROLES.includes(profile.role)) {
     return (
       <Notice title="Access denied">
         This area is for Cottage Surgical staff. Your account doesn’t have access.

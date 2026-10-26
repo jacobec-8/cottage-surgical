@@ -1,0 +1,25 @@
+name: Customer email database regressions
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  email-sql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install isolated test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql libpq-dev
+          python3 -m pip install psycopg2-binary==2.9.11
+      - name: Test email transactions and access boundaries
+        run: bash scripts/test-customer-email.sh

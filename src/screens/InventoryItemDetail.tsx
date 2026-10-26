@@ -12,6 +12,7 @@ import { supabase } from '../lib/supabase'
 import { statusLabel } from '../lib/status'
 import { fulfillmentLabel } from '../lib/fulfillment'
 import { useLocationScope } from '../contexts/LocationContext'
+import { useCatalogManager } from '../lib/useCatalogManager'
 import { bulkCounts } from '../lib/bulkStock'
 import StockStatusBadges from '../components/StockStatusBadges'
 
@@ -41,6 +42,7 @@ type Item = {
 
 type PickupLocation = {
   id: string
+  business_id: string
   name: string
   address_line1: string
   address_line2: string | null
@@ -104,6 +106,7 @@ export default function InventoryItemDetail({ itemId }: { itemId: string }) {
   const qc = useQueryClient()
   const [tab, setTab] = useState<Tab>('overview')
   const [editing, setEditing] = useState(false)
+  const catalogManager = useCatalogManager()
   const [note, setNote] = useState('')
 
   const item = useQuery({
@@ -160,7 +163,7 @@ export default function InventoryItemDetail({ itemId }: { itemId: string }) {
     queryKey: ['pickup_locations'],
     queryFn: async () => {
       const { data, error } = await supabase.from('pickup_locations')
-        .select('id,name,address_line1,address_line2,address_city,address_state,address_zip,phone,instructions,is_active,fulfillment_mode,partner_type,business:businesses(name)')
+        .select('id,business_id,name,address_line1,address_line2,address_city,address_state,address_zip,phone,instructions,is_active,fulfillment_mode,partner_type,business:businesses(name)')
         .order('name')
       if (error) throw error
       return data as unknown as PickupLocation[]
@@ -248,9 +251,11 @@ export default function InventoryItemDetail({ itemId }: { itemId: string }) {
             </div>
           </div>
         </div>
-        <button onClick={() => setEditing((value) => !value)} className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm shrink-0">
-          {editing ? <X size={16} /> : <Pencil size={16} />} {editing ? 'Cancel edit' : 'Edit item'}
-        </button>
+        {catalogManager && (
+          <button onClick={() => setEditing((value) => !value)} className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm shrink-0">
+            {editing ? <X size={16} /> : <Pencil size={16} />} {editing ? 'Cancel edit' : 'Edit item'}
+          </button>
+        )}
       </div>
 
       <div className="flex gap-2 overflow-x-auto pb-1 mb-6">
@@ -382,11 +387,12 @@ function PickupLocationsTab({ item, locations, assignments, loading }: {
   })
 
   if (loading) return <div className="text-sm text-slate-500">Loading pickup locations…</div>
-  // Admins configure every shop. A store login can only assign inventory to
-  // the location the admin associated with that account.
-  const availableLocations = profile?.role === 'admin'
-    ? locations
-    : locations.filter((location) => location.id === profile?.location_id)
+  // Admins configure every shop, owners their business's branches. A store
+  // login can only assign inventory to the location the admin associated with that account.
+  const canManageLocation = (location: PickupLocation) => profile?.role === 'admin'
+    || (profile?.role === 'owner' && location.business_id === profile.business_id)
+    || location.id === profile?.location_id
+  const availableLocations = locations.filter(canManageLocation)
   const shown = view === 'selected'
     ? availableLocations.filter((location) => assignedIds.has(location.id))
     : availableLocations
@@ -421,7 +427,7 @@ function PickupLocationsTab({ item, locations, assignments, loading }: {
         {shown.map((location) => {
           const assigned = assignedIds.has(location.id)
           const inventory = assignments.find((entry) => entry.location_id === location.id)
-          const canManage = profile?.role === 'admin' || profile?.location_id === location.id
+          const canManage = canManageLocation(location)
           return (
             <div key={location.id} className={`rounded-xl border p-4 ${assigned ? 'border-blue-200 bg-blue-50/30' : 'border-slate-200'} ${location.is_active ? '' : 'opacity-60'}`}>
               <div className="flex flex-col gap-3">

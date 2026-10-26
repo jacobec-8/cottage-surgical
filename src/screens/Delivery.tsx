@@ -12,10 +12,12 @@ import OrderDetailPanel from './orders/OrderDetailPanel'
 import { useSelectedOrder } from './orders/useSelectedOrder'
 import { useLocationScope } from '../contexts/LocationContext'
 import { PaymentBadge } from './orders/badges'
+import { DRIVER_BRANCH_FIELDS, servesBranch, type BranchDriver } from '../lib/driverBranches'
+import { dispatchErrorMessage, windowProblem } from '../lib/dispatchErrors'
 
 type Photo = { storage_path: string; captured_at: string; notes: string | null }
 
-type LifecycleResult = { ok?: boolean; reason?: string; unallocated?: number } | null
+type LifecycleResult = { ok?: boolean; reason?: string; unallocated?: number; active_order_no?: number } | null
 
 /** Staff-readable text for a refused start/complete RPC. */
 function lifecycleError(data: LifecycleResult): string {
@@ -26,6 +28,7 @@ function lifecycleError(data: LifecycleResult): string {
     case 'photo_missing': return 'The proof photo didn’t upload. Take the photo again.'
     case 'photo_invalid': return 'That photo doesn’t belong to this stop. Take the photo again.'
     case 'bad_state': return 'This stop isn’t in a state that can be completed.'
+    case 'driver_busy': return `Finish your current stop${data?.active_order_no ? ` (#${data.active_order_no})` : ''} before starting another.`
     case 'unallocated': {
       const n = data.unallocated ?? 0
       return `${n || 'Some'} item${n === 1 ? ' has' : 's have'} no equipment unit. Staff must allocate units on the order before fulfillment.`
@@ -47,6 +50,8 @@ type Deliv = {
   address_zip: string | null
   driver_id: string | null
   requires_driver: boolean
+  location_id: string | null
+  location: { name: string } | null
   order: {
     id: string
     order_no: number
@@ -59,7 +64,7 @@ type Deliv = {
 }
 
 const SELECT =
-  'id,leg_type,status,scheduled_date,window_start,window_end,completed_at,address_line1,address_city,address_state,address_zip,driver_id,requires_driver,' +
+  'id,leg_type,status,scheduled_date,window_start,window_end,completed_at,address_line1,address_city,address_state,address_zip,driver_id,requires_driver,location_id,location:pickup_locations!deliveries_location_id_fkey(name),' +
   'order:rental_orders(id,order_no,payment_status,payment_preference,customer:customers(full_name),rental_line_items(quantity,equipment:equipment_items(name))),' +
   'delivery_photos(storage_path,captured_at,notes)'
 
@@ -84,18 +89,18 @@ export default function Delivery() {
 
   const contacts = useDriverStopContacts(isDriver)
 
+  // Every driver this scope can assign, home or shared. Each stop lists only
+  // the drivers who serve its branch (3LOC-002).
   const drivers = useQuery({
-    queryKey: ['drivers', 'active', selectedLocationId],
+    queryKey: ['drivers', 'active', 'branches'],
     enabled: !isDriver,
     queryFn: async () => {
-      let query = supabase
+      const { data } = await supabase
         .from('drivers')
-        .select('id,first_name,last_name,user_id')
+        .select(`id,first_name,last_name,user_id,${DRIVER_BRANCH_FIELDS}`)
         .eq('status', 'active')
         .order('first_name')
-      if (selectedLocationId) query = query.eq('location_id', selectedLocationId)
-      const { data } = await query
-      return (data ?? []) as { id: string; first_name: string; last_name: string; user_id: string | null }[]
+      return (data ?? []) as DriverOption[]
     },
   })
   const { data, isLoading, error } = useQuery({
@@ -106,7 +111,8 @@ export default function Delivery() {
     refetchIntervalInBackground: true, // …that keeps ticking even in a background tab
     queryFn: async () => {
       let q = supabase.from('deliveries').select(SELECT)
-      if (selectedLocationId) q = q.eq('location_id', selectedLocationId)
+      // A driver's queue is every stop assigned to them, at any branch they serve.
+      if (selectedLocationId && !isDriver) q = q.eq('location_id', selectedLocationId)
       if (!isDriver && stopKind !== 'all') q = q.eq('leg_type', stopKind)
       q = view === 'active'
         ? q.not('status', 'in', '(completed,cancelled)').order('scheduled_date', { nullsFirst: true })
@@ -167,7 +173,9 @@ export default function Delivery() {
       <div className="space-y-3">
         {data?.map((d) =>
           view === 'active'
-            ? <DeliveryRow key={d.id} d={d} drivers={drivers.data ?? []} isDriver={isDriver} contact={contacts.byDeliveryId.get(d.id)} onOpen={onOpen} selected={selected === d.order?.id} />
+            ? <DeliveryRow key={d.id} d={d} drivers={drivers.data ?? []} isDriver={isDriver} contact={contacts.byDeliveryId.get(d.id)} onOpen={onOpen} selected={selected === d.order?.id}
+                activeStop={isDriver ? data.find((other) => other.status === 'en_route' && other.id !== d.id) : undefined}
+                showBranch={isDriver && new Set(data.map((stop) => stop.location_id)).size > 1} />
             : <CompletedRow key={d.id} d={d} contact={isDriver ? contacts.byDeliveryId.get(d.id) : undefined} onOpen={onOpen} selected={selected === d.order?.id} />,
         )}
       </div>
@@ -188,6 +196,7 @@ function TruckEmptyState() {
 }
 
 type OpenStop = (orderId: string, deliveryId: string) => void
+type DriverOption = BranchDriver & { id: string; first_name: string; last_name: string; user_id: string | null }
 
 /** Props that turn a stop card into a click-to-open surface (staff only). */
 function clickableCard(d: Deliv, onOpen: OpenStop | undefined, selected: boolean) {
@@ -227,14 +236,16 @@ function customerLabel(d: Deliv, contact?: StopContact): string {
 }
 
 function DeliveryRow({
-  d, drivers, isDriver, contact, onOpen, selected,
+  d, drivers: allDrivers, isDriver, contact, onOpen, selected, activeStop, showBranch,
 }: {
   d: Deliv
-  drivers: { id: string; first_name: string; last_name: string; user_id: string | null }[]
+  drivers: DriverOption[]
   isDriver: boolean
   contact?: StopContact
   onOpen?: OpenStop
   selected: boolean
+  activeStop?: Deliv
+  showBranch?: boolean
 }) {
   const isStorePickup = d.leg_type === 'pickup' && !d.requires_driver
   // Driver stops need somewhere to go; staff can fill a missing address here (BUG-011).
@@ -246,6 +257,18 @@ function DeliveryRow({
   const [driver, setDriver] = useState(d.driver_id ?? '')
   const [date, setDate] = useState(d.scheduled_date ?? '')
   const [appointmentTime, setAppointmentTime] = useState((d.window_start ?? '').slice(0, 5))
+  // Keep the saved end time; a stop with no end occupies one hour (3LOC-003).
+  const [appointmentEnd, setAppointmentEnd] = useState((d.window_end ?? '').slice(0, 5))
+  // Keep the saved driver listed even if their branches changed since.
+  const drivers = allDrivers.filter((dr) => dr.id === d.driver_id || servesBranch(dr, d.location_id))
+  const busy = useQuery({
+    queryKey: ['busy_drivers', date, appointmentTime, appointmentEnd],
+    enabled: !isDriver && !isStorePickup && Boolean(date && appointmentTime) && !windowProblem(appointmentTime, appointmentEnd),
+    queryFn: async () => {
+      const { data } = await supabase.rpc('get_busy_driver_ids', { p_date: date, p_start: appointmentTime, p_end: appointmentEnd || null })
+      return new Set((data ?? []) as string[])
+    },
+  })
   const [msg, setMsg] = useState('')
   const [completing, setCompleting] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -265,15 +288,17 @@ function DeliveryRow({
       if (!isStorePickup && driver && !(addressEditable ? addr.line1.trim() && addr.city.trim() : !missingAddress)) {
         throw new Error('Add the street and city before assigning a driver.')
       }
+      const problem = windowProblem(appointmentTime, appointmentEnd)
+      if (problem) throw new Error(problem)
       const patch = {
         ...addressPatch,
         driver_id: isStorePickup ? null : driver || null,
         scheduled_date: date || null,
         window_start: appointmentTime || null,
-        window_end: null,
+        window_end: appointmentTime ? appointmentEnd || null : null,
       }
       const { error } = await supabase.from('deliveries').update(patch).eq('id', d.id)
-      if (error) throw error
+      if (error) throw new Error(dispatchErrorMessage(error))
       return handedOff
     },
     onMutate: () => setMsg(''),
@@ -374,14 +399,18 @@ function DeliveryRow({
             <div className="text-xs text-slate-500 mt-1">
               {[
                 d.scheduled_date ? new Date(d.scheduled_date + 'T00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : 'Date TBD',
-                d.window_start ? d.window_start.slice(0, 5) : null,
+                d.window_start ? `${d.window_start.slice(0, 5)}${d.window_end ? `–${d.window_end.slice(0, 5)}` : ''}` : null,
+                showBranch ? d.location?.name : null,
               ].filter(Boolean).join(' · ')}
             </div>
           )}
         </div>
         <div className={`flex shrink-0 items-center gap-2 ${isDriver ? 'w-full sm:w-auto' : ''}`} onClick={stopOpen}>
           <DetailsHint show={Boolean(onOpen)} />
-          {d.status === 'scheduled' && isDriver && (
+          {d.status === 'scheduled' && isDriver && activeStop && (
+            <span className="w-full text-xs text-slate-500 sm:w-auto">Finish #{activeStop.order?.order_no} first</span>
+          )}
+          {d.status === 'scheduled' && isDriver && !activeStop && (
             <button onClick={() => start.mutate()} disabled={start.isPending || !d.driver_id}
               title={!d.driver_id ? 'Needs a driver first' : undefined}
               className="min-h-11 w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">Start stop</button>
@@ -427,7 +456,7 @@ function DeliveryRow({
                 <option value="">Unassigned</option>
                 {drivers.map((dr) => (
                   <option key={dr.id} value={dr.id}>
-                    {dr.first_name} {dr.last_name}{dr.user_id ? '' : ' — no login'}
+                    {dr.first_name} {dr.last_name}{dr.user_id ? '' : ' — no login'}{dr.id !== d.driver_id && busy.data?.has(dr.id) ? ' — busy then' : ''}
                   </option>
                 ))}
               </select>
@@ -443,6 +472,9 @@ function DeliveryRow({
           )}
           <div><div className="text-[11px] text-slate-400 mb-0.5">{isStorePickup ? 'Pickup date' : 'Date'}</div><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inp} /></div>
           <div><div className="text-[11px] text-slate-400 mb-0.5">{d.leg_type === 'pickup' ? 'Pickup time' : 'Delivery time'}</div><input type="time" value={appointmentTime} onChange={(e) => setAppointmentTime(e.target.value)} className={inp} /></div>
+          {!isStorePickup && (
+            <div><div className="text-[11px] text-slate-400 mb-0.5">Until{appointmentTime && !appointmentEnd ? ' (1 hour if blank)' : ''}</div><input type="time" aria-label="End time" value={appointmentEnd} onChange={(e) => setAppointmentEnd(e.target.value)} className={inp} /></div>
+          )}
           <button onClick={() => save.mutate()} disabled={save.isPending}
             className="text-sm border border-slate-300 hover:bg-slate-50 rounded-lg px-3 py-1.5 disabled:opacity-50">
             {save.isPending ? 'Saving…' : 'Save'}

@@ -7,6 +7,8 @@ import { Plus, Search, Pencil, Trash2, X, ChevronDown, ChevronRight, ImagePlus, 
 import { supabase } from '../lib/supabase'
 import { fulfillmentLabel } from '../lib/fulfillment'
 import { useLocationScope } from '../contexts/LocationContext'
+import { canSwitchStores } from '../lib/roles'
+import { useCatalogManager } from '../lib/useCatalogManager'
 import { useAuth } from '../contexts/AuthContext'
 import StockStatusBadges, { LOW_STOCK_THRESHOLD } from '../components/StockStatusBadges'
 
@@ -42,6 +44,7 @@ export default function Inventory() {
   const { locations, selectedLocationId, selectedLocation, setSelectedLocationId, isAllLocations } = useLocationScope()
   const [q, setQ] = useState('')
   const [editing, setEditing] = useState<Partial<Item> | null>(null) // null=closed, {} = new
+  const catalogManager = useCatalogManager()
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const { data, isLoading, error } = useQuery({
@@ -74,19 +77,22 @@ export default function Inventory() {
     <div>
       <div className="mb-1 flex flex-col items-start gap-3 sm:flex-row sm:justify-between">
         <h1 className="text-2xl font-semibold">Inventory Management</h1>
-        <button
-          onClick={() => setEditing({})}
-          className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 sm:w-auto"
-        >
-          <Plus size={16} /> Add Item
-        </button>
+        {catalogManager && (
+          <button
+            onClick={() => setEditing({})}
+            className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 sm:w-auto"
+          >
+            <Plus size={16} /> Add Item
+          </button>
+        )}
       </div>
       <h2 className="text-lg font-semibold mt-2">Equipment &amp; Supplies</h2>
       <p className="text-slate-500 text-sm mb-5">
         Manage rental inventory, pricing, and stock. Returned units become available when the rental closes.
+        {!catalogManager && ' The shared catalog is maintained by Cottage Surgical; set your stores’ stock and prices on each item.'}
       </p>
 
-      <div className={`mb-4 grid gap-3 ${profile?.role === 'admin' ? 'sm:grid-cols-[minmax(0,1fr)_minmax(15rem,20rem)]' : ''}`}>
+      <div className={`mb-4 grid gap-3 ${canSwitchStores(profile?.role) ? 'sm:grid-cols-[minmax(0,1fr)_minmax(15rem,20rem)]' : ''}`}>
         <div className="relative">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
@@ -96,7 +102,7 @@ export default function Inventory() {
             className="w-full border border-slate-300 rounded-lg pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
-        {profile?.role === 'admin' && (
+        {canSwitchStores(profile?.role) && (
           <label className="relative block">
             <span className="sr-only">Filter inventory by store</span>
             <Building2 size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -106,8 +112,8 @@ export default function Inventory() {
               onChange={(event) => setSelectedLocationId(event.target.value === 'all' ? null : event.target.value)}
               className="w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-9 pr-8 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="all">All stores</option>
-              {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
+              <option value="all">{profile?.role === 'owner' ? 'All my stores' : 'All stores'}</option>
+              {locations.map((location) => <option key={location.id} value={location.id}>{location.name}{location.is_active ? '' : ' (not open)'}</option>)}
             </select>
           </label>
         )}
@@ -192,7 +198,7 @@ export default function Inventory() {
                     <Link href={`/inventory/${it.id}`} aria-label={`Edit ${it.name}`} className="grid h-10 w-10 place-items-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600">
                       <Pencil size={16} />
                     </Link>
-                    <button
+                    {catalogManager && <button
                       aria-label={`Remove ${it.name}`}
                       onClick={() => {
                         if (confirm(`Remove "${it.name}" from the catalog?`)) deactivate.mutate(it.id)
@@ -200,7 +206,7 @@ export default function Inventory() {
                       className="grid h-10 w-10 place-items-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600"
                     >
                       <Trash2 size={16} />
-                    </button>
+                    </button>}
                   </div>
                 </div>
               </div>

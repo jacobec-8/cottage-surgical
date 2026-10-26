@@ -34,7 +34,7 @@ export function useStripeReconcile() {
   const { profile } = useAuth()
   return useQuery({
     queryKey: ['stripe_reconcile'],
-    enabled: profile?.role === 'admin' || profile?.role === 'staff',
+    enabled: profile?.role === 'admin' || profile?.role === 'owner' || profile?.role === 'staff',
     staleTime: 60_000,
     refetchInterval: 300_000,
     refetchIntervalInBackground: true,

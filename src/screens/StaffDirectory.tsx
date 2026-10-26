@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronRight, Search, ShieldCheck, Truck, UserCog, Users } from 'lucide-react'
 import { authEmailToUsername } from '../lib/staffLogin'
+import { roleLabel } from '../lib/roles'
 import { supabase } from '../lib/supabase'
 import { useLocationScope } from '../contexts/LocationContext'
 
@@ -13,7 +14,7 @@ type Profile = {
   email: string
   full_name: string | null
   phone: string | null
-  role: 'admin' | 'staff' | 'driver'
+  role: 'admin' | 'owner' | 'staff' | 'driver'
   is_active: boolean
   created_at: string
   location_id: string | null
@@ -29,7 +30,7 @@ export default function StaffDirectory() {
       let request = supabase
         .from('profiles')
         .select('id,email,full_name,phone,role,is_active,created_at,location_id,location:pickup_locations!profiles_location_id_fkey(name)')
-        .in('role', ['admin', 'staff', 'driver'])
+        .in('role', ['admin', 'owner', 'staff', 'driver'])
         .order('role')
         .order('full_name')
       // Location-scoped admins belong to their assigned store just like staff and
@@ -47,7 +48,7 @@ export default function StaffDirectory() {
     return text.includes(query.trim().toLowerCase())
   })
   const counts = (profiles.data ?? []).reduce((result, profile) => {
-    result[profile.role] += 1
+    result[profile.role === 'owner' ? 'staff' : profile.role] += 1
     return result
   }, { admin: 0, staff: 0, driver: 0 })
 
@@ -62,7 +63,7 @@ export default function StaffDirectory() {
 
       <div className="grid sm:grid-cols-3 gap-3 mb-5">
         <Summary label="Admins" value={counts.admin} icon={ShieldCheck} tone="blue" />
-        <Summary label="Store staff" value={counts.staff} icon={UserCog} tone="violet" />
+        <Summary label="Store staff & owners" value={counts.staff} icon={UserCog} tone="violet" />
         <Summary label="Drivers" value={counts.driver} icon={Truck} tone="green" />
       </div>
 
@@ -81,7 +82,7 @@ export default function StaffDirectory() {
               <div className="font-medium text-slate-900 truncate">{profile.full_name || 'Unnamed user'}</div>
               <div className="text-sm text-slate-500 truncate">{authEmailToUsername(profile.email)}{profile.location?.name ? ` · ${profile.location.name}` : ''}{profile.phone ? ` · ${profile.phone}` : ''}</div>
             </div>
-            <span className={`text-xs rounded-full px-2.5 py-1 capitalize ${profile.role === 'admin' ? 'bg-blue-100 text-blue-700' : profile.role === 'driver' ? 'bg-emerald-100 text-emerald-700' : 'bg-violet-100 text-violet-700'}`}>{profile.role}</span>
+            <span className={`text-xs rounded-full px-2.5 py-1 ${profile.role === 'admin' ? 'bg-blue-100 text-blue-700' : profile.role === 'driver' ? 'bg-emerald-100 text-emerald-700' : 'bg-violet-100 text-violet-700'}`}>{roleLabel(profile.role)}</span>
             <span className={`text-xs rounded-full px-2.5 py-1 ${profile.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>{profile.is_active ? 'Active' : 'Inactive'}</span>
             <ChevronRight size={18} className="text-slate-400" />
           </Link>
