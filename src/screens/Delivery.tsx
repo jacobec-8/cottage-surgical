@@ -13,7 +13,7 @@ import { useSelectedOrder } from './orders/useSelectedOrder'
 import { useLocationScope } from '../contexts/LocationContext'
 import { PaymentBadge } from './orders/badges'
 import { DRIVER_BRANCH_FIELDS, servesBranch, type BranchDriver } from '../lib/driverBranches'
-import { defaultEndTime, dispatchErrorMessage, windowProblem } from '../lib/dispatchErrors'
+import { dispatchErrorMessage, windowProblem } from '../lib/dispatchErrors'
 
 type Photo = { storage_path: string; captured_at: string; notes: string | null }
 
@@ -473,7 +473,7 @@ function DeliveryRow({
           <div><div className="text-[11px] text-slate-400 mb-0.5">{isStorePickup ? 'Pickup date' : 'Date'}</div><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inp} /></div>
           <div><div className="text-[11px] text-slate-400 mb-0.5">{d.leg_type === 'pickup' ? 'Pickup time' : 'Delivery time'}</div><input type="time" value={appointmentTime} onChange={(e) => setAppointmentTime(e.target.value)} className={inp} /></div>
           {!isStorePickup && (
-            <div><div className="text-[11px] text-slate-400 mb-0.5">Until{appointmentTime && !appointmentEnd ? ` (${defaultEndTime(appointmentTime)} if blank)` : ''}</div><input type="time" aria-label="End time" value={appointmentEnd} onChange={(e) => setAppointmentEnd(e.target.value)} className={inp} /></div>
+            <div><div className="text-[11px] text-slate-400 mb-0.5">Until{appointmentTime && !appointmentEnd ? ' (1 hour if blank)' : ''}</div><input type="time" aria-label="End time" value={appointmentEnd} onChange={(e) => setAppointmentEnd(e.target.value)} className={inp} /></div>
           )}
           <button onClick={() => save.mutate()} disabled={save.isPending}
             className="text-sm border border-slate-300 hover:bg-slate-50 rounded-lg px-3 py-1.5 disabled:opacity-50">

@@ -8,7 +8,7 @@ import { supabase } from '../lib/supabase'
 import { invalidateOrderWorkflow } from '../lib/workflowKeys'
 import { useLocationScope } from '../contexts/LocationContext'
 import { DRIVER_BRANCH_FIELDS, driversForBranch, type BranchDriver } from '../lib/driverBranches'
-import { DRIVER_BUSY_MSG, defaultEndTime, dispatchErrorMessage, windowProblem } from '../lib/dispatchErrors'
+import { DRIVER_BUSY_MSG, dispatchErrorMessage, windowProblem } from '../lib/dispatchErrors'
 
 type Item = {
   id: string
@@ -322,7 +322,7 @@ export default function NewOrder() {
             </select>
           </div>
           <div><span className="text-xs text-slate-500">Delivery time</span><input type="time" value={deliv.time} onChange={(e) => setDeliv({ ...deliv, time: e.target.value })} className={`w-full ${inp}`} /></div>
-          <div><span className="text-xs text-slate-500">Until{deliv.time && !deliv.end ? ` (${defaultEndTime(deliv.time)} if blank)` : ''}</span><input type="time" aria-label="Delivery end time" value={deliv.end} onChange={(e) => setDeliv({ ...deliv, end: e.target.value })} className={`w-full ${inp}`} /></div>
+          <div><span className="text-xs text-slate-500">Until{deliv.time && !deliv.end ? ' (1 hour if blank)' : ''}</span><input type="time" aria-label="Delivery end time" value={deliv.end} onChange={(e) => setDeliv({ ...deliv, end: e.target.value })} className={`w-full ${inp}`} /></div>
           {mode === 'rental' && <div><span className="text-xs text-slate-500">Deposit ($)</span><input type="number" value={deliv.deposit} onChange={(e) => setDeliv({ ...deliv, deposit: e.target.value })} className={`w-full ${inp}`} /></div>}
           <div className={mode === 'rental' ? '' : 'col-span-2'}><span className="text-xs text-slate-500">Notes</span><input value={deliv.notes} onChange={(e) => setDeliv({ ...deliv, notes: e.target.value })} placeholder="Access, parking…" className={`w-full ${inp}`} /></div>
         </div>

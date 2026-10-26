@@ -48,8 +48,9 @@ export function LocationProvider({ children }: { children: ReactNode }) {
       let query = supabase.from('pickup_locations')
         .select('id,name,slug,address_line1,address_city,address_state,address_zip,phone,fulfillment_mode,partner_type,is_active,business:businesses(id,name,settings:pharmacy_settings(phone,email))')
         .order('name')
-      // Owners also work in their branches that are not open to customers yet.
-      query = ownerBusinessId ? query.eq('business_id', ownerBusinessId) : query.eq('is_active', true)
+      // RLS lists open stores plus the caller's own not-yet-open ones (admins see all),
+      // so staff of a branch still being set up keep their store context.
+      if (ownerBusinessId) query = query.eq('business_id', ownerBusinessId)
       const { data, error } = await query
       if (error) throw error
       return data as unknown as StaffLocation[]

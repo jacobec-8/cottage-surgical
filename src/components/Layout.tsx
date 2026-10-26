@@ -57,7 +57,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   // Live work-queue counts, auto-refreshed so approving a request updates the
   // Orders + Delivery badges (and screens) without a manual refresh.
   const { data: counts } = useQuery({
-    queryKey: ['nav_counts', selectedLocationId],
+    queryKey: ['nav_counts', selectedLocationId, isDriver],
     staleTime: 0, // badge catch-up on tab return after short background
     refetchInterval: 20_000,
     refetchIntervalInBackground: true,
@@ -68,7 +68,8 @@ export default function Layout({ children }: { children: ReactNode }) {
       if (selectedLocationId) {
         reqQuery = reqQuery.eq('location_id', selectedLocationId)
         ordQuery = ordQuery.eq('location_id', selectedLocationId)
-        delQuery = delQuery.eq('location_id', selectedLocationId)
+        // A driver's stops can be at any branch they serve; RLS already limits them.
+        if (!isDriver) delQuery = delQuery.eq('location_id', selectedLocationId)
       }
       const [req, ord, del] = await Promise.all([reqQuery, ordQuery, delQuery])
       return { requests: req.count ?? 0, orders: ord.count ?? 0, deliveries: del.count ?? 0 } as Record<string, number>

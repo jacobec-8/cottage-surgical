@@ -12,6 +12,7 @@ import { supabase } from '../lib/supabase'
 import { statusLabel } from '../lib/status'
 import { fulfillmentLabel } from '../lib/fulfillment'
 import { useLocationScope } from '../contexts/LocationContext'
+import { useCatalogManager } from '../lib/useCatalogManager'
 import { bulkCounts } from '../lib/bulkStock'
 import StockStatusBadges from '../components/StockStatusBadges'
 
@@ -105,6 +106,7 @@ export default function InventoryItemDetail({ itemId }: { itemId: string }) {
   const qc = useQueryClient()
   const [tab, setTab] = useState<Tab>('overview')
   const [editing, setEditing] = useState(false)
+  const catalogManager = useCatalogManager()
   const [note, setNote] = useState('')
 
   const item = useQuery({
@@ -249,9 +251,11 @@ export default function InventoryItemDetail({ itemId }: { itemId: string }) {
             </div>
           </div>
         </div>
-        <button onClick={() => setEditing((value) => !value)} className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm shrink-0">
-          {editing ? <X size={16} /> : <Pencil size={16} />} {editing ? 'Cancel edit' : 'Edit item'}
-        </button>
+        {catalogManager && (
+          <button onClick={() => setEditing((value) => !value)} className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm shrink-0">
+            {editing ? <X size={16} /> : <Pencil size={16} />} {editing ? 'Cancel edit' : 'Edit item'}
+          </button>
+        )}
       </div>
 
       <div className="flex gap-2 overflow-x-auto pb-1 mb-6">

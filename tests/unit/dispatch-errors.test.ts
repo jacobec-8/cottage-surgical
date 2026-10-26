@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { DRIVER_BUSY_MSG, defaultEndTime, dispatchErrorMessage, windowProblem } from '../../src/lib/dispatchErrors.ts'
+import { DRIVER_BUSY_MSG, dispatchErrorMessage, windowProblem } from '../../src/lib/dispatchErrors.ts'
 
 test('3LOC-003: an overlapping booking explains the conflict', () => {
   assert.equal(dispatchErrorMessage({ code: '23P01', message: 'conflicting key value violates exclusion constraint "deliveries_driver_no_overlap"' }), DRIVER_BUSY_MSG)
@@ -11,13 +11,6 @@ test('other dispatch rules map to plain messages', () => {
   assert.match(dispatchErrorMessage({ code: '23514', message: 'driver_branch: This driver is not set up to work at this branch.' }), /branch/)
   assert.match(dispatchErrorMessage({ code: '23505', message: 'duplicate key value violates unique constraint "uq_deliveries_one_en_route_per_driver"' }), /another stop/)
   assert.equal(dispatchErrorMessage({ code: '42501', message: 'x' }, 'fallback'), 'fallback')
-})
-
-test('a stop defaults to one hour, capped at the end of the day', () => {
-  assert.equal(defaultEndTime('10:00'), '11:00')
-  assert.equal(defaultEndTime('10:30:00'), '11:30')
-  assert.equal(defaultEndTime('23:30'), '23:59')
-  assert.equal(defaultEndTime(''), '')
 })
 
 test('windowProblem refuses an end before or without a start', () => {

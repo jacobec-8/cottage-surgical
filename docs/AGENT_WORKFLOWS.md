@@ -300,7 +300,10 @@ and its step components, [validation/payload](../src/lib/businessOnboarding.ts),
 [076 atomic onboarding](../supabase/migrations/076_multi_branch_onboarding.sql)
 (`onboard_business`; the single-branch `onboard_business_location` from 062
 still works on the same per-branch code), [owner scope](../supabase/migrations/074_business_owner_scope.sql),
-[shared drivers and schedules](../supabase/migrations/075_shared_drivers_dispatch_conflicts.sql).
+[shared drivers and schedules](../supabase/migrations/075_shared_drivers_dispatch_conflicts.sql),
+[review hardening](../supabase/migrations/078_business_scope_hardening.sql).
+Regression check against a database with 074–078 applied (one transaction, always
+rolled back): `VERIFY_DB_URL=... python3 scripts/verify-three-location.py`.
 
 ## 5. Requests, fulfillment, payments, and returns
 
@@ -424,7 +427,7 @@ as a side effect of an inventory operation.
 | Change area | Start here | Related data/behavior |
 | --- | --- | --- |
 | Navigation, roles, store selection | `src/lib/roles.ts`, `src/components/Layout.tsx`, `src/lib/staffAccessServer.ts`, `src/contexts/LocationContext.tsx`, `src/contexts/AuthContext.tsx`, `src/app/(staff)` | `profiles` (`business_id` for owners), `staff_module_access`; 039/054/059; owner scope, `can_access_location` and `current_business_id` in 074. |
-| Products, quantities, photos | `src/screens/Inventory.tsx`, `InventoryItemDetail.tsx`, `src/components/StockStatusBadges.tsx` | `equipment_items`, `equipment_units`, `equipment_location_inventory`, `equipment-images`; 005/048/051/054/061. |
+| Products, quantities, photos | `src/screens/Inventory.tsx`, `InventoryItemDetail.tsx`, `src/components/StockStatusBadges.tsx`, `src/lib/useCatalogManager.ts` | `equipment_items`, `equipment_units`, `equipment_location_inventory`, `equipment-images`; 005/048/051/054/061. The shared catalog (items, images) is edited only by admins and Cottage Surgical's own staff/owner (`is_catalog_manager`, 078); other businesses set their stores' stock and prices. Item notes are visible within the author's business. |
 | Storefront, cart, fulfillment, pricing | `src/screens/shop`, `src/components/shop/CartContext.tsx`, `CartDrawer.tsx`, `src/lib/shop.ts`, `shopServer.ts`, `fulfillment.ts`, `shopFlags.ts` | Guest requests/Stripe wrappers; 044/053–058/061. Catalog server cache is 60 seconds. |
 | Staff order creation and allocation | `src/screens/NewOrder.tsx`, `Requests.tsx`, `requests/stock.ts`, `orders/useAllocateLine.ts` | `create_staff_order`, `confirm_rental_request`, `reserve_equipment_unit`; latest definitions in 054; `allocate_line_item` and `order_unallocated_count` in 063. |
 | Order detail, edit, cancellation/closeout | `src/screens/Orders.tsx`, `src/screens/orders` | `update_rental_details` 046; `cancel_order` 044; `close_out_order` 051; location guards 054. |
