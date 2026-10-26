@@ -8,7 +8,7 @@ import { supabase } from '../lib/supabase'
 type LocationUser = {
   id: string
   email: string
-  role: 'admin' | 'staff' | 'driver'
+  role: 'admin' | 'owner' | 'staff' | 'driver'
   is_active: boolean
 }
 
@@ -46,7 +46,7 @@ export default function Locations() {
     <div className="max-w-6xl">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div><h1 className="flex items-center gap-2 text-2xl font-semibold"><Building2 className="text-blue-600" /> Locations</h1><p className="mt-1 text-sm text-slate-500">Manage owned pharmacies, partner pickup stores, and their location-scoped users.</p></div>
-        <Link href="/locations/onboard" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700"><Plus size={16} /> Onboard a location</Link>
+        <Link href="/locations/onboard" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700"><Plus size={16} /> Onboard a business or branches</Link>
       </div>
       {locations.isLoading && <div className="text-sm text-slate-500">Loading locations…</div>}
       {locations.error && <div className="text-sm text-red-600">Couldn’t load locations.</div>}

@@ -6,9 +6,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, History, MessageSquarePlus, Save, ShieldCheck, Truck, UserCog } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { authEmailToUsername } from '../lib/staffLogin'
+import { roleLabel } from '../lib/roles'
 import { supabase } from '../lib/supabase'
 
-type Profile = { id: string; email: string; full_name: string | null; phone: string | null; role: 'admin' | 'staff' | 'driver'; is_active: boolean; created_at: string; updated_at: string; location_id: string | null }
+type Profile = { id: string; email: string; full_name: string | null; phone: string | null; role: 'admin' | 'owner' | 'staff' | 'driver'; is_active: boolean; created_at: string; updated_at: string; location_id: string | null }
 type Driver = { id: string; first_name: string; last_name: string; phone: string | null; license_number: string | null; license_expiry: string | null; hire_date: string | null; status: 'active' | 'inactive' | 'on_leave' }
 type Note = { id: string; body: string; created_at: string; author: { full_name: string | null; email: string } | null }
 type Delivery = { id: string; leg_type: string; status: string; scheduled_date: string | null }
@@ -78,7 +79,7 @@ export default function StaffDetail({ profileId }: { profileId: string }) {
         <div className="min-w-0 pt-1">
           <h1 className="text-3xl font-semibold text-slate-900 truncate">{name}</h1>
           <div className="text-slate-500 mt-1">@{authEmailToUsername(profile.email)}{profile.phone ? ` · ${profile.phone}` : ''}</div>
-          <div className="flex flex-wrap gap-2 mt-3"><Badge>{profile.role}</Badge><Badge tone={profile.is_active ? 'green' : 'gray'}>{profile.is_active ? 'Active account' : 'Inactive account'}</Badge>{driver.data && <Badge tone="green">Driver record linked</Badge>}</div>
+          <div className="flex flex-wrap gap-2 mt-3"><Badge>{roleLabel(profile.role)}</Badge><Badge tone={profile.is_active ? 'green' : 'gray'}>{profile.is_active ? 'Active account' : 'Inactive account'}</Badge>{driver.data && <Badge tone="green">Driver record linked</Badge>}</div>
         </div>
       </div>
 
@@ -90,7 +91,7 @@ export default function StaffDetail({ profileId }: { profileId: string }) {
         <div className="space-y-5">
           <section className="bg-white border border-slate-200 rounded-2xl p-5">
             <div className="flex items-center gap-2 mb-4"><UserCog size={18} className="text-blue-600" /><h2 className="font-semibold text-lg">Account details</h2></div>
-            <dl className="grid grid-cols-2 gap-4 text-sm"><Detail label="Username" value={authEmailToUsername(profile.email)} /><Detail label="Role" value={profile.role} /><Detail label="Created" value={new Date(profile.created_at).toLocaleDateString()} /><Detail label="Updated" value={new Date(profile.updated_at).toLocaleString()} /></dl>
+            <dl className="grid grid-cols-2 gap-4 text-sm"><Detail label="Username" value={authEmailToUsername(profile.email)} /><Detail label="Role" value={roleLabel(profile.role)} /><Detail label="Created" value={new Date(profile.created_at).toLocaleDateString()} /><Detail label="Updated" value={new Date(profile.updated_at).toLocaleString()} /></dl>
           </section>
           {driver.data && <section className="bg-white border border-slate-200 rounded-2xl p-5"><div className="flex items-center gap-2 mb-4"><Truck size={18} className="text-emerald-600" /><h2 className="font-semibold text-lg">Driver activity</h2></div><div className="grid grid-cols-3 gap-3"><Metric label="Assigned" value={deliveries.data?.length ?? 0} /><Metric label="Upcoming" value={upcoming} /><Metric label="Completed" value={completed} /></div></section>}
           <NoteComposer note={note} setNote={setNote} submit={() => addNote.mutate()} pending={addNote.isPending} error={addNote.error as Error | null} />
@@ -107,7 +108,16 @@ function ProfileSettings({ profile, currentUserId, driver, onSaved }: { profile:
   const save = useMutation({
     mutationFn: async () => {
       if (!form.fullName.trim()) throw new Error('Full name is required.')
-      const payload = { full_name: form.fullName.trim(), phone: form.phone.trim() || null, role: isSelf ? profile.role : form.role, is_active: isSelf ? profile.is_active : form.active }
+      const role = isSelf ? profile.role : form.role
+      // An owner covers every branch of their store's business (migration 074).
+      let business_id: string | null = null
+      if (role === 'owner') {
+        if (!profile.location_id) throw new Error('Assign this user to a store before making them a business owner.')
+        const { data: location, error: locationError } = await supabase.from('pickup_locations').select('business_id').eq('id', profile.location_id).single()
+        if (locationError || !location) throw new Error('Couldn’t find this user’s store. Try again.')
+        business_id = location.business_id
+      }
+      const payload = { full_name: form.fullName.trim(), phone: form.phone.trim() || null, role, business_id, is_active: isSelf ? profile.is_active : form.active }
       let insertedDriverId: string | null = null
       if (payload.role === 'driver' && !driver) {
         const parts = payload.full_name.split(/\s+/); const first_name = parts.shift() || payload.full_name; const last_name = parts.join(' ') || 'Driver'
@@ -125,7 +135,7 @@ function ProfileSettings({ profile, currentUserId, driver, onSaved }: { profile:
   })
   const set = (key: keyof typeof form, value: string | boolean) => setForm((current) => ({ ...current, [key]: value }))
   const input = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
-  return <section className="bg-white border border-slate-200 rounded-2xl p-5"><div className="flex items-center gap-2 mb-5"><ShieldCheck size={18} className="text-blue-600" /><h2 className="font-semibold text-lg">Profile &amp; access</h2></div><div className="grid sm:grid-cols-2 gap-4"><Field label="Full name"><input className={input} value={form.fullName} onChange={(e) => set('fullName', e.target.value)} /></Field><Field label="Phone"><input className={input} value={form.phone} onChange={(e) => set('phone', e.target.value)} /></Field><Field label="Role"><select disabled={isSelf} className={input} value={form.role} onChange={(e) => set('role', e.target.value)}><option value="admin">Admin</option><option value="staff">Store staff</option><option value="driver">Driver</option></select></Field><Field label="Account status"><select disabled={isSelf} className={input} value={form.active ? 'active' : 'inactive'} onChange={(e) => set('active', e.target.value === 'active')}><option value="active">Active</option><option value="inactive">Inactive</option></select></Field></div>{isSelf && <div className="text-xs text-slate-400 mt-3">Your own role and active status are protected to prevent an accidental admin lockout.</div>}{save.error && <div className="text-sm text-red-600 mt-3">{(save.error as Error).message}</div>}<div className="flex justify-end mt-5"><button onClick={() => save.mutate()} disabled={save.isPending} className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 text-sm disabled:opacity-50"><Save size={15} /> {save.isPending ? 'Saving…' : 'Save profile'}</button></div></section>
+  return <section className="bg-white border border-slate-200 rounded-2xl p-5"><div className="flex items-center gap-2 mb-5"><ShieldCheck size={18} className="text-blue-600" /><h2 className="font-semibold text-lg">Profile &amp; access</h2></div><div className="grid sm:grid-cols-2 gap-4"><Field label="Full name"><input className={input} value={form.fullName} onChange={(e) => set('fullName', e.target.value)} /></Field><Field label="Phone"><input className={input} value={form.phone} onChange={(e) => set('phone', e.target.value)} /></Field><Field label="Role"><select disabled={isSelf} className={input} value={form.role} onChange={(e) => set('role', e.target.value)}><option value="admin">Admin</option><option value="owner">Business owner (all branches)</option><option value="staff">Store staff</option><option value="driver">Driver</option></select></Field><Field label="Account status"><select disabled={isSelf} className={input} value={form.active ? 'active' : 'inactive'} onChange={(e) => set('active', e.target.value === 'active')}><option value="active">Active</option><option value="inactive">Inactive</option></select></Field></div>{isSelf && <div className="text-xs text-slate-400 mt-3">Your own role and active status are protected to prevent an accidental admin lockout.</div>}{save.error && <div className="text-sm text-red-600 mt-3">{(save.error as Error).message}</div>}<div className="flex justify-end mt-5"><button onClick={() => save.mutate()} disabled={save.isPending} className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 text-sm disabled:opacity-50"><Save size={15} /> {save.isPending ? 'Saving…' : 'Save profile'}</button></div></section>
 }
 
 function DriverSettings({ profile, driver, onSaved }: { profile: Profile; driver: Driver | null; onSaved: () => void }) {

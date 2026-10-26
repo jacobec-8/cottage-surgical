@@ -17,7 +17,7 @@ export async function requireStaffModule(module: StaffModule, allowDriver = fals
     .maybeSingle()
 
   if (!profile?.is_active) redirect('/admin-login')
-  if (profile.role === 'admin') return
+  if (profile.role === 'admin' || profile.role === 'owner') return
   if (profile.role === 'driver') {
     if (allowDriver && module === 'delivery') return
     redirect('/delivery')

@@ -32,7 +32,8 @@ and respiratory equipment. Public purchasing is currently hidden by
 | --- | --- |
 | Guest customer | `/`, `/product/[handle]`, cart and checkout. Current customer flow is guest-based; there is no implemented customer-account portal. |
 | Store staff | Operational modules enabled by the admin, scoped to the account's assigned store. The header identifies that store. |
-| Driver | `/delivery`, labeled **My Deliveries**; assigned stops, start/complete actions, and proof photos. A login needs a linked `drivers` record to receive assignments. |
+| Business owner | Every operational module in every branch of one business (074), with a header selector for **All my stores** or one branch. No Staff/Locations admin screens, no other business's data, and staff module switches do not restrict it. New branches of the business are covered automatically. |
+| Driver | `/delivery`, labeled **My Deliveries**; assigned stops at every branch they serve, start/complete actions, and proof photos. A login needs a linked `drivers` record to receive assignments. One stop can be en route at a time (075). |
 | Admin | Operational modules plus **Staff** (users and access tabs) and **Locations**. Can select a store or **All stores**. |
 
 An admin role has global access even when its profile has a `location_id`.
@@ -81,7 +82,8 @@ credentials, or a delivery commitment.
 | "Set stock to three" | Absolute available quantity for the stated store. For serialized items, reconcile actual unit records rather than editing only the displayed total. |
 | "New order for this person on this date" | Resolve customer, items/quantities, store, rental/purchase, fulfillment, and what the date means. New Order currently creates a delivery workflow. |
 | "Move it to Friday" | Identify the order and whether this is outbound delivery, in-store collection, return pickup, or a billing due date. Use the user's calendar/timezone for relative dates. |
-| "Add a store" | Admin → Locations → Onboard a location. Choose business, address, catalog stock, and optional staff/drivers; review before creating. |
+| "Add a store" / "Set up a business with three branches" | Admin → Locations → Onboard a business or branches. One submission: business and owner login, every branch with its stock and staff, drivers with the branches they serve; review before creating (§4). |
+| "Let this driver work at both stores" | Drivers → that driver → **Branches…** (owner or admin). Not a second driver record or login. |
 | "Add a staff member/driver" | Resolve store and role. An authentication account, driver roster record, and assignment are distinct objects. A login acts as a driver only while its profile is an active `driver` at the roster record's store (065). Changing a driver's role, store or activation releases their open stops for reassignment. Moving a driver to another store means updating both the profile and the roster record. |
 | "Mark paid" / "Record payment" | Establish which actual payment is being recorded. Updating a payment badge is different from recording a monthly rental payment or charging a card. |
 | "Cancel it" / "It's returned" | Check whether equipment is still reserved or has gone out. Cancellation, physical return, and a refund have different effects. |
@@ -176,7 +178,9 @@ enough to distinguish two customers; use existing contact details.
    This picker uses inventory assigned to the store. Rental choices require
    delivery enabled and a delivery rental price. Quantities are capped at 20
    per cart line in this staff flow.
-4. Set **Schedule delivery → Date**, **Delivery time**, and driver when supplied.
+4. Set **Schedule delivery → Date**, **Delivery time**, **Until** (blank means one
+   hour), and driver when supplied. The driver list shows the store's own and
+   shared drivers, marking those already booked then; a double booking is refused.
    Add deposit and access/parking instructions when applicable. An unassigned
    driver can be left unassigned; do not choose one arbitrarily.
 5. Choose **Create rental order** or **Create purchase order** once.
@@ -240,49 +244,63 @@ Implementation: [Delivery.tsx](../src/screens/Delivery.tsx),
 [031 returns](../supabase/migrations/031_return_lifecycle.sql),
 [057 store pickup](../supabase/migrations/057_store_pickup_workflow.sql).
 
-## 4. Add or edit a store and its users
+## 4. Add or edit a business, its branches and users
 
-The guided flow on `codex/location-onboarding` is **Locations → Onboard a
-location** (`/locations/onboard`). It requires database migration 062. Until
-that migration is deployed, preview the form but do not claim Save is enabled.
+**Locations → Onboard a business or branches** (`/locations/onboard`) sets up a
+whole business in one submission (migration 076): Business → Branches → Drivers
+→ Review. Use it for a new business, or choose an existing business to add
+branches to it.
 
-1. Choose an existing business or enter a new business name and primary contact
-   (name plus email or phone). Existing business details are preserved.
-2. Enter a distinct location name, street/city/state/ZIP, public phone and pickup
-   instructions, services (pickup-only or pickup+delivery), and owned/partner
-   relationship. A partner location is not automatically pickup-only.
-3. Select products from the shared active catalog and enter available quantities.
-   Optional rental overrides apply only to this location; blank uses the catalog.
-   Serialized quantities create actual available units with generated asset tags;
-   serial numbers are left blank for later entry. Bulk items get location counts.
-   Zero quantities may be used to configure products that are not stocked yet.
-4. Add optional staff and drivers. Supply names and authorized credentials for
-   logins. Drivers can be roster-only or have a linked login. Owners receive
-   location staff access here; the wizard never creates global admins. Stock and
-   team may be skipped. No invitation emails are sent.
-5. Review the business, address, stock/prices, and team. Activation is an explicit
-   checkbox, initially off. Click **Create location** once. All records save in
-   one transaction. On an uncertain network response, use **Check and finish
-   setup**, which retries with the same request ID and cannot create duplicates.
-6. Verify the returned location ID, business, quantities, actual serialized
-   units, and driver links in the location detail, Inventory, Staff, and Drivers.
-   Inactive locations do not appear in the active header selector or checkout.
+1. **Business.** Choose an existing business or enter a new business name and
+   primary contact (name plus email or phone). Existing details are preserved.
+   Optionally create the **owner login**: one username that works in every
+   branch of this business (orders, customers, stock, billing, dispatch). It is
+   not an admin account and cannot see other businesses or admin settings.
+2. **Branches.** Add one branch per store (up to 10), each with a distinct name,
+   street/city/state/ZIP, phone, pickup instructions, services
+   (pickup-only or pickup+delivery), owned/partner relationship and an explicit
+   "open to customers now" checkbox, initially off. Its **Stock** tab picks
+   products from the shared catalog with quantities and optional rental price
+   overrides for that branch only; **Start from another branch's stock** copies a
+   list to adjust. Serialized quantities create real units with generated asset
+   tags. Its **Staff** tab adds logins confined to that branch.
+3. **Drivers.** Add each driver once with a home branch, then tick every other
+   branch they also serve. One login serves all ticked branches. For an existing
+   business, **Share an existing driver** adds the new branches to a current
+   driver without new credentials.
+4. **Review** shows access (owner covers all branches; staff their branch),
+   each branch's address, stock and prices, and how many drivers serve each
+   delivery branch. Click **Create N branches** once. Everything commits in one
+   transaction or nothing does; an error names the branch at fault. On an
+   uncertain network response use **Check and finish setup**, which retries with
+   the same request ID and cannot create duplicates.
+5. Verify the result: each branch in Locations, its Inventory, the owner and staff
+   in Staff, and driver home/shared branches in Drivers.
 
-Existing edits remain at `/locations/[id]`; changing a location name no longer
-renames its parent business. The private **Business contact** editor updates the
-owner contact shared across the business's locations. The legacy **Users → Add
-user** editor still only creates accounts: driver accounts added there need a
-separate roster link. The onboarding wizard creates that link automatically.
+Existing edits remain at `/locations/[id]`. An admin can also add an owner later
+(**Location → Add user → Business owner**, or **Staff → user → Role → Business
+owner**); the owner's business is that user's store's business. The private
+**Business contact** editor updates the owner contact shared across branches.
+
+Shared drivers after onboarding: **Delivery & Pickup → Drivers → Branches…**
+(owner or admin only) ticks the branches a driver serves. Unticking a branch
+takes the driver off their open stops there. Branch staff see drivers shared
+with their branch and can assign them, but only the home branch edits the
+driver record. Every assignment path refuses a driver who does not serve the
+stop's branch (075).
 
 Logins use 3–63 letters/numbers/hyphens, starting with a letter or number;
-`admin`, `administrator`, and `root` are reserved. Onboarding passwords require
-at least eight characters and no more than 72 UTF-8 bytes. Never record passwords
-in reports, screenshots, or this guide. Drafts live only in the open page.
+`admin`, `administrator`, and `root` are reserved, and every username in one
+setup must be different. Passwords require at least eight characters and no
+more than 72 UTF-8 bytes. Never record passwords in reports, screenshots, or
+this guide. Drafts live only in the open page. No invitation emails are sent.
 
-Implementation: [LocationOnboarding.tsx](../src/screens/LocationOnboarding.tsx),
-[validation/payload](../src/lib/locationOnboarding.ts),
-[062 atomic onboarding](../supabase/migrations/062_guided_location_onboarding.sql),
-[testing and rollout](LOCATION_ONBOARDING.md).
+Implementation: [BusinessOnboarding.tsx](../src/screens/onboarding/BusinessOnboarding.tsx)
+and its step components, [validation/payload](../src/lib/businessOnboarding.ts),
+[076 atomic onboarding](../supabase/migrations/076_multi_branch_onboarding.sql)
+(`onboard_business`; the single-branch `onboard_business_location` from 062
+still works on the same per-branch code), [owner scope](../supabase/migrations/074_business_owner_scope.sql),
+[shared drivers and schedules](../supabase/migrations/075_shared_drivers_dispatch_conflicts.sql).
 
 ## 5. Requests, fulfillment, payments, and returns
 
@@ -290,8 +308,8 @@ Implementation: [LocationOnboarding.tsx](../src/screens/LocationOnboarding.tsx),
 | --- | --- | --- |
 | Guest rental request | Cart → pickup/delivery → payment choice. Pay in store/on delivery submits `requested`; online starts `pending_payment`, then verified Stripe payment promotes it to `requested`. | Request/order number and actual payment state. Submission/payment does not promise stock or an appointment. |
 | Approve request | **Requests → Approve pickup / Approve delivery** calls `confirm_rental_request`. It reserves stock, creates the appropriate stop and paused rental billing, and sets `open` (displayed **Approved**). | Request leaves inbox; order, correct store/stop type, and allocations appear. Shortages block serialized approval. |
-| Dispatch delivery | Staff assigns driver/date/time on **Delivery & Pickup → Save**. | Correct assigned driver with a login, saved date/time, scheduled state. Reassigning clears the previous driver's active stop; an en-route stop returns to scheduled and the new driver starts it (064). |
-| Driver stop | Driver: **Start stop**, then **Complete + photo** when the real stop is complete. Staff has **Complete (override)** for an en-route stop. | Completion, proof photo (or intentional override), order/unit state. Do not fabricate handoff evidence. Outbound stops with unallocated serialized lines are refused; a photo path must be an uploaded image under that stop's `delivery-photos/{delivery_id}/` folder (063). |
+| Dispatch delivery | Staff assigns driver/date/start/**Until** on **Delivery & Pickup → Save**. Only drivers who serve the stop's branch are listed; "busy then" marks a booked driver. | Correct assigned driver with a login, saved date and window, scheduled state. A stop without an end time occupies one hour; a driver cannot hold overlapping open stops at any branch, including under simultaneous saves, but back-to-back stops are allowed (no travel buffer). Cancelling or completing a stop frees its slot. Reassigning clears the previous driver's active stop; an en-route stop returns to scheduled and the new driver starts it (064, 075). |
+| Driver stop | Driver: **Start stop**, then **Complete + photo** when the real stop is complete. A second start is refused until the en-route stop is completed, unassigned or cancelled (075). Staff has **Complete (override)** for an en-route stop. | Completion, proof photo (or intentional override), order/unit state. Do not fabricate handoff evidence. Outbound stops with unallocated serialized lines are refused; a photo path must be an uploaded image under that stop's `delivery-photos/{delivery_id}/` folder (063). |
 | Customer collects at store | Staff: **Mark picked up**, no driver or photo required. | Rental becomes `active` (displayed **Open**); units rented; billing starts. Purchase closes instead. |
 | Record monthly payment | **Billing → Record payment** after money is actually received. | Last-paid date, next due advanced one month, and order payment badge. This records payment and queues a customer receipt (071); it does not charge a card. Each submission names the due date on screen, so a double-click, retry or concurrent duplicate is refused as already recorded; recording another month after the refresh advances again (064). |
 | Set order payment badge | Order detail **Payment** selection calls `set_order_payment_state`. | Persisted badge and correct payment method. A manually set **Paid Online** badge is not independent proof of Stripe settlement. |
@@ -405,15 +423,15 @@ as a side effect of an inventory operation.
 
 | Change area | Start here | Related data/behavior |
 | --- | --- | --- |
-| Navigation, roles, store selection | `src/components/Layout.tsx`, `src/lib/staffAccessServer.ts`, `src/contexts/LocationContext.tsx`, `src/contexts/AuthContext.tsx`, `src/app/(staff)` | `profiles`, `staff_module_access`; 039/054/059 migrations. |
+| Navigation, roles, store selection | `src/lib/roles.ts`, `src/components/Layout.tsx`, `src/lib/staffAccessServer.ts`, `src/contexts/LocationContext.tsx`, `src/contexts/AuthContext.tsx`, `src/app/(staff)` | `profiles` (`business_id` for owners), `staff_module_access`; 039/054/059; owner scope, `can_access_location` and `current_business_id` in 074. |
 | Products, quantities, photos | `src/screens/Inventory.tsx`, `InventoryItemDetail.tsx`, `src/components/StockStatusBadges.tsx` | `equipment_items`, `equipment_units`, `equipment_location_inventory`, `equipment-images`; 005/048/051/054/061. |
 | Storefront, cart, fulfillment, pricing | `src/screens/shop`, `src/components/shop/CartContext.tsx`, `CartDrawer.tsx`, `src/lib/shop.ts`, `shopServer.ts`, `fulfillment.ts`, `shopFlags.ts` | Guest requests/Stripe wrappers; 044/053–058/061. Catalog server cache is 60 seconds. |
 | Staff order creation and allocation | `src/screens/NewOrder.tsx`, `Requests.tsx`, `requests/stock.ts`, `orders/useAllocateLine.ts` | `create_staff_order`, `confirm_rental_request`, `reserve_equipment_unit`; latest definitions in 054; `allocate_line_item` and `order_unallocated_count` in 063. |
 | Order detail, edit, cancellation/closeout | `src/screens/Orders.tsx`, `src/screens/orders` | `update_rental_details` 046; `cancel_order` 044; `close_out_order` 051; location guards 054. |
-| Stops, driver access, proof | `src/screens/Delivery.tsx`, `Drivers.tsx`, `src/lib/useDriverStopContacts.ts` | `deliveries`, `drivers`, `delivery_photos`; lifecycle 012/024–026, returns 031, driver RLS 032, assignments 043, store handoff 057; latest `schedule_pickup`, `start_delivery`, `complete_delivery`, `complete_store_pickup` in 063. |
+| Stops, driver access, proof | `src/screens/Delivery.tsx`, `Drivers.tsx`, `src/screens/drivers/DriverBranches.tsx`, `src/lib/driverBranches.ts`, `src/lib/dispatchErrors.ts`, `src/lib/useDriverStopContacts.ts` | `deliveries`, `drivers`, `delivery_photos`; lifecycle 012/024–026, returns 031, driver RLS 032, assignments 043, store handoff 057; latest `schedule_pickup`, `complete_delivery`, `complete_store_pickup` in 063; `driver_branches`, `set_driver_branches`, overlap constraint `deliveries_driver_no_overlap`, one-en-route index, latest `start_delivery`, `create_staff_order` and `get_busy_driver_ids` in 075. |
 | Billing and payment labels | `src/screens/Billing.tsx`, `src/screens/billing`, `src/screens/orders/format.ts`, `src/lib/useStripeReconcile.ts` | `recurring_charges`, deposits/refunds; Stripe 029/033/044/056, payment state 055–056/060. |
-| Stores and accounts | `src/screens/Locations.tsx`, `LocationDetail.tsx`, `StaffDirectory.tsx`, `StaffDetail.tsx`, `StaffAccess.tsx` | `businesses`, `pharmacy_settings`, `pickup_locations`, profiles/driver linkage; 039/041/054/059. |
-| Customer communication and refresh | `src/lib/customerEmails.ts`, `workflowKeys.ts`, `src/components/RealtimeSync.tsx`, `NotificationsBell.tsx` | Internal notifications 011/028/034; customer outbox/content/reminders 045/047/049/050. |
+| Stores and accounts | `src/screens/Locations.tsx`, `LocationDetail.tsx`, `StaffDirectory.tsx`, `StaffDetail.tsx`, `StaffAccess.tsx`, `src/screens/onboarding` | `businesses`, `pharmacy_settings`, `pickup_locations`, profiles/driver linkage; 039/041/054/059; owners 074; `onboard_business` 076. |
+| Customer communication and refresh | `src/lib/customerEmails.ts`, `workflowKeys.ts`, `src/components/RealtimeSync.tsx`, `NotificationsBell.tsx` | Internal notifications 011/028/034 go to admins, the order store's staff and its business owner (074); customer outbox/content/reminders 045/047/049/050. |
 
 Migration numbers above are entry points, not substitutes for finding the last
 definition of a function. Later files override earlier functions. Search the

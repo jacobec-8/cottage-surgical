@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import { useQueryClient } from '@tanstack/react-query'
 import { hasSupabaseConfig, supabase } from '../lib/supabase'
 import { usernameToAuthEmail } from '../lib/staffLogin'
+import { STAFF_APP_ROLES } from '../lib/roles'
 
 export type Profile = {
   id: string
@@ -12,9 +13,8 @@ export type Profile = {
   role: string
   is_active: boolean
   location_id: string | null
+  business_id: string | null
 }
-
-const STAFF_ROLES = ['admin', 'staff', 'driver']
 
 function profileAccessKey(profile: Profile | null | undefined) {
   return profile ? `${profile.role}:${profile.is_active}` : null
@@ -110,7 +110,7 @@ export function AuthProvider({ children, initialUserId, initialProfile }: AuthPr
       if (showLoading) setProfileLoaded(false)
       const { data, error } = await supabase
         .from('profiles')
-        .select('id,email,full_name,role,is_active,location_id')
+        .select('id,email,full_name,role,is_active,location_id,business_id')
         .eq('id', userId)
         .single()
       if (!active) return
@@ -137,7 +137,7 @@ export function AuthProvider({ children, initialUserId, initialProfile }: AuthPr
       prevProfileAccess.current !== undefined && prevProfileAccess.current !== accessKey
     const accessRevoked =
       Boolean(userId && profileLoaded) &&
-      !(profile?.is_active && STAFF_ROLES.includes(profile.role))
+      !(profile?.is_active && STAFF_APP_ROLES.includes(profile.role))
 
     if (accessChanged || accessRevoked) {
       void queryClient.cancelQueries()

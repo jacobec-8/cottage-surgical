@@ -7,6 +7,7 @@ import { Plus, Search, Pencil, Trash2, X, ChevronDown, ChevronRight, ImagePlus, 
 import { supabase } from '../lib/supabase'
 import { fulfillmentLabel } from '../lib/fulfillment'
 import { useLocationScope } from '../contexts/LocationContext'
+import { canSwitchStores } from '../lib/roles'
 import { useAuth } from '../contexts/AuthContext'
 import StockStatusBadges, { LOW_STOCK_THRESHOLD } from '../components/StockStatusBadges'
 
@@ -86,7 +87,7 @@ export default function Inventory() {
         Manage rental inventory, pricing, and stock. Returned units become available when the rental closes.
       </p>
 
-      <div className={`mb-4 grid gap-3 ${profile?.role === 'admin' ? 'sm:grid-cols-[minmax(0,1fr)_minmax(15rem,20rem)]' : ''}`}>
+      <div className={`mb-4 grid gap-3 ${canSwitchStores(profile?.role) ? 'sm:grid-cols-[minmax(0,1fr)_minmax(15rem,20rem)]' : ''}`}>
         <div className="relative">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
@@ -96,7 +97,7 @@ export default function Inventory() {
             className="w-full border border-slate-300 rounded-lg pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
-        {profile?.role === 'admin' && (
+        {canSwitchStores(profile?.role) && (
           <label className="relative block">
             <span className="sr-only">Filter inventory by store</span>
             <Building2 size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -106,7 +107,7 @@ export default function Inventory() {
               onChange={(event) => setSelectedLocationId(event.target.value === 'all' ? null : event.target.value)}
               className="w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-9 pr-8 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="all">All stores</option>
+              <option value="all">{profile?.role === 'owner' ? 'All my stores' : 'All stores'}</option>
               {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
             </select>
           </label>

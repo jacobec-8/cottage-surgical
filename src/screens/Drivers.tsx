@@ -8,8 +8,11 @@ import { useAuth } from '../contexts/AuthContext'
 import { authEmailToUsername } from '../lib/staffLogin'
 import { supabase } from '../lib/supabase'
 import { useLocationScope } from '../contexts/LocationContext'
+import { DRIVER_BRANCH_FIELDS, driversForBranch, type BranchDriver } from '../lib/driverBranches'
+import { canSwitchStores } from '../lib/roles'
+import DriverBranches from './drivers/DriverBranches'
 
-type Driver = {
+type Driver = BranchDriver & {
   id: string
   first_name: string
   last_name: string
@@ -26,7 +29,7 @@ type DriverUpdate = Pick<Driver, 'first_name' | 'last_name' | 'email' | 'phone' 
 
 export default function Drivers() {
   const { profile } = useAuth()
-  const { selectedLocationId } = useLocationScope()
+  const { selectedLocationId, locations } = useLocationScope()
   const qc = useQueryClient()
   const [adding, setAdding] = useState(false)
   const [f, setF] = useState({ first_name: '', last_name: '', phone: '' })
@@ -38,14 +41,14 @@ export default function Drivers() {
     // blank columns between pages. invalidate(['drivers']) still refreshes both.
     queryKey: ['drivers', 'all', selectedLocationId],
     queryFn: async () => {
-      let query = supabase
+      // RLS returns this scope's drivers plus drivers shared with it; filter to
+      // the chosen branch here so shared drivers are included.
+      const { data, error } = await supabase
         .from('drivers')
-        .select('id,first_name,last_name,email,phone,license_number,license_expiry,hire_date,status,user_id')
+        .select(`id,first_name,last_name,email,phone,license_number,license_expiry,hire_date,status,user_id,${DRIVER_BRANCH_FIELDS}`)
         .order('first_name')
-      if (selectedLocationId) query = query.eq('location_id', selectedLocationId)
-      const { data, error } = await query
       if (error) throw error
-      return data as Driver[]
+      return driversForBranch(data as Driver[], selectedLocationId)
     },
   })
 
@@ -70,6 +73,7 @@ export default function Drivers() {
   const add = useMutation({
     mutationFn: async () => {
       if (!f.first_name.trim() || !f.last_name.trim()) throw new Error('First and last name are required.')
+      if (!selectedLocationId) throw new Error('Choose the driver’s home store in the header first.')
       const { error } = await supabase.from('drivers').insert({
         first_name: f.first_name.trim(),
         last_name: f.last_name.trim(),
@@ -174,6 +178,8 @@ export default function Drivers() {
             linking={link.isPending}
             saving={update.isPending}
             openSettings={profile?.role === 'admin'}
+            canEdit={canSwitchStores(profile?.role) || d.location_id === profile?.location_id}
+            branches={<DriverBranches driver={d} locations={locations} canShare={canSwitchStores(profile?.role)} />}
             onLink={(profileId) => link.mutate({ driverId: d.id, profileId })}
             onSave={(values) => update.mutateAsync({ driverId: d.id, values })}
           />
@@ -189,6 +195,8 @@ function DriverRow({
   linking,
   saving,
   openSettings,
+  canEdit,
+  branches,
   onLink,
   onSave,
 }: {
@@ -197,6 +205,8 @@ function DriverRow({
   linking: boolean
   saving: boolean
   openSettings: boolean
+  canEdit: boolean
+  branches: React.ReactNode
   onLink: (profileId: string) => void
   onSave: (values: DriverUpdate) => Promise<void>
 }) {
@@ -247,9 +257,13 @@ function DriverRow({
     <div className="bg-white border border-slate-200 rounded-xl p-4">
       <div className="flex items-center gap-3">
         <DriverSummary d={d} unlinked={unlinked} />
-        <button onClick={beginEdit} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50">
-          <Pencil size={13} /> Edit
-        </button>
+        {canEdit ? (
+          <button onClick={beginEdit} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50">
+            <Pencil size={13} /> Edit
+          </button>
+        ) : (
+          <span className="text-xs text-slate-400">Managed by home store</span>
+        )}
         {d.user_id && openSettings && (
           <Link href={`/staff/${d.user_id}`} className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline">
             Login <ExternalLink size={12} />
@@ -281,7 +295,8 @@ function DriverRow({
           </div>
         </div>
       )}
-      {!editing && unlinked && (
+      {!editing && branches}
+      {!editing && unlinked && canEdit && (
         <div className="mt-3 pt-3 border-t border-slate-100">
           <div className="text-xs text-amber-700 mb-2">
             Assigned stops won’t reach this driver’s app until a login is linked.
