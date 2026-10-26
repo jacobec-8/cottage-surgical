@@ -21,8 +21,8 @@ function requestedQty(l: RequestLine): number {
 export function lineShortage(l: RequestLine): Shortage | null {
   const requested = requestedQty(l)
   if (!l.equipment) return { name: UNKNOWN_ITEM, requested, available: 0 }
-  // Bulk stock is per store; confirm_rental_request gates it and reports any shortage.
-  if (l.equipment.is_serialized === false) return null
+  // quantity_on_hand is the request store's count for both serialized units and
+  // bulk stock; confirm_rental_request gates both the same way (064).
   const available = Math.max(l.equipment.quantity_on_hand ?? 0, 0)
   return available >= requested ? null : { name: l.equipment.name, requested, available }
 }
@@ -42,5 +42,5 @@ export function requestShortages(lines: RequestLine[]): Shortage[] {
 
 export function shortageMessage(shortages: Shortage[]): string {
   const parts = shortages.map((s) => `${s.name} (${s.requested} requested, ${s.available} available)`)
-  return `Not enough stock to confirm: ${parts.join('; ')}. Add units in Inventory first.`
+  return `Not enough stock to confirm: ${parts.join('; ')}. Add units or stock in Inventory first.`
 }

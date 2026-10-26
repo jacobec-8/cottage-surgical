@@ -13,9 +13,10 @@ test('lineShortage: enough stock → null; short → requested/available', () =>
   assert.deepEqual(lineShortage(line(1, 0)), { name: 'Hospital Bed', requested: 1, available: 0 })
 })
 
-test('lineShortage: quantity defaults to 1 and bulk items are not gated', () => {
+test('lineShortage: quantity defaults to 1; bulk is gated by store stock like the server (064)', () => {
   assert.deepEqual(lineShortage(line(0, 0)), { name: 'Hospital Bed', requested: 1, available: 0 })
-  assert.equal(lineShortage(line(5, 0, 'Gloves', false)), null)
+  assert.deepEqual(lineShortage(line(5, 3, 'Gloves', false)), { name: 'Gloves', requested: 5, available: 3 })
+  assert.equal(lineShortage(line(5, 8, 'Gloves', false)), null)
 })
 
 test('lineShortage: unknown item (deleted catalog row) counts as short', () => {

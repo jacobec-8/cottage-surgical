@@ -191,7 +191,7 @@ export default function Requests() {
                       >
                         {li.equipment?.name ?? 'Unknown item'}
                         {(li.quantity ?? 1) > 1 ? ` ×${li.quantity}` : ''}
-                        {li.equipment && li.equipment.is_serialized !== false && (
+                        {li.equipment && (
                           <span className={short ? 'font-medium text-amber-800' : 'text-emerald-700'}>
                             · {onHand} in stock
                           </span>
