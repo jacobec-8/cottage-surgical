@@ -14,19 +14,23 @@ import { statusClass, statusLabel } from '../lib/status'
 import { useLocationScope } from '../contexts/LocationContext'
 import StoreOverview from './dashboard/StoreOverview'
 import RetailSalesSwitch from './dashboard/RetailSalesSwitch'
+import { useStaffModuleAccess } from '../lib/useStaffModuleAccess'
+import type { StaffModule } from '../lib/staffModules'
 
-const MODULES = [
-  { to: '/customers', icon: Users, title: 'Customers', desc: 'Directory with rental history and payment methods on file' },
-  { to: '/orders', icon: ClipboardList, title: 'Rentals', desc: 'Approved, open, scheduled, overdue, pickup, and closed rentals' },
-  { to: '/inventory', icon: Package, title: 'Inventory', desc: 'Wheelchairs, beds, oxygen, supplies, serial/asset tracking' },
-  { to: '/billing', icon: CreditCard, title: 'Billing', desc: 'Invoices, deposits, recurring charges, failed payments, refunds' },
-  { to: '/delivery', icon: Truck, title: 'Routes', desc: 'Delivery and pickup schedule by driver' },
+const MODULES: { to: string; module: StaffModule; icon: typeof Users; title: string; desc: string }[] = [
+  { to: '/customers', module: 'customers', icon: Users, title: 'Customers', desc: 'Directory with rental history and payment methods on file' },
+  { to: '/orders', module: 'orders', icon: ClipboardList, title: 'Rentals', desc: 'Approved, open, scheduled, overdue, pickup, and closed rentals' },
+  { to: '/inventory', module: 'inventory', icon: Package, title: 'Inventory', desc: 'Wheelchairs, beds, oxygen, supplies, serial/asset tracking' },
+  { to: '/billing', module: 'billing', icon: CreditCard, title: 'Billing', desc: 'Invoices, deposits, recurring charges, failed payments, refunds' },
+  { to: '/delivery', module: 'delivery', icon: Truck, title: 'Routes', desc: 'Delivery and pickup schedule by driver' },
 ]
 
 export default function Dashboard() {
   const { profile } = useAuth()
   const { selectedLocationId, selectedLocation } = useLocationScope()
   const router = useRouter()
+  // A module the owner locked for this store isn't offered as a tile either.
+  const { canAccess } = useStaffModuleAccess()
   const [tab, setTab] = useState<'overview' | 'rentals'>('overview')
 
   useEffect(() => {
@@ -119,7 +123,7 @@ export default function Dashboard() {
 
           <h3 className="text-sm font-semibold text-slate-700 mb-3">Modules</h3>
           <div className="grid md:grid-cols-2 gap-3 mb-8">
-            {MODULES.map((m) => {
+            {MODULES.filter((m) => canAccess(m.module)).map((m) => {
               const Icon = m.icon
               return (
                 <Link
