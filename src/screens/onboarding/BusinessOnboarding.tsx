@@ -152,7 +152,7 @@ export default function BusinessOnboarding() {
   const current = draft.branches[Math.min(branchIndex, draft.branches.length - 1)]
   const locked = save.isPending || uncertain
 
-  if (result) return <Done result={result} businessName={businessName} />
+  if (result) return <Done result={result} businessName={businessName} addedToExisting={Boolean(draft.businessId)} />
 
   return <div className="mx-auto max-w-6xl">
     <Link href="/locations" onClick={(event) => { if (locked || (dirty && !window.confirm('Leave onboarding? Your unsaved setup will be lost.'))) event.preventDefault() }} className="mb-5 inline-flex items-center gap-2 text-sm text-slate-500 hover:text-blue-600"><ArrowLeft size={16} /> Locations</Link>
@@ -258,16 +258,16 @@ function BusinessStep({ draft, set, businesses, businessName, ownerNames, owners
   </div>
 }
 
-function Done({ result, businessName }: { result: Result; businessName: string }) {
+function Done({ result, businessName, addedToExisting }: { result: Result; businessName: string; addedToExisting: boolean }) {
   const roleText = (role: string) => role === 'owner' ? 'Business owner · all branches' : role === 'driver' ? 'Driver' : 'Branch staff'
   return <div className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white p-6 sm:p-10">
     <CheckCircle2 size={42} className="mb-5 text-emerald-600" />
-    <h1 className="text-2xl font-semibold">{businessName} is set up</h1>
+    <h1 className="text-2xl font-semibold">{addedToExisting ? `${result.branches.length === 1 ? result.branches[0].name : `${result.branches.length} branches`} added to ${businessName}` : `${businessName} is set up`}</h1>
     <p className="mt-2 text-slate-600">{result.branches.length} branch{result.branches.length === 1 ? '' : 'es'} · {result.driver_count} new driver{result.driver_count === 1 ? '' : 's'}{result.shared_driver_count ? ` · ${result.shared_driver_count} existing shared` : ''}</p>
     <ul className="my-6 space-y-2">
       {result.branches.map((branch) => (
         <li key={branch.location_id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-50 p-4">
-          <span><span className="font-medium">{branch.name}</span><span className="block text-sm text-slate-500">{branch.product_count} products · {branch.quantity} in stock{branch.unit_count ? ` · ${branch.unit_count} tracked units` : ''}</span></span>
+          <span><span className="font-medium">{branch.name}</span><span className="block text-sm text-slate-500">{branch.product_count} product{branch.product_count === 1 ? '' : 's'} · {branch.quantity} in stock{branch.unit_count ? ` · ${branch.unit_count} tracked units` : ''}</span></span>
           <Link className="text-sm font-medium text-blue-600 hover:underline" href={`/locations/${branch.location_id}`}>Open</Link>
         </li>
       ))}
