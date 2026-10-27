@@ -12,6 +12,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { statusClass, statusLabel } from '../lib/status'
 import { useLocationScope } from '../contexts/LocationContext'
+import StoreOverview from './dashboard/StoreOverview'
 
 const MODULES = [
   { to: '/customers', icon: Users, title: 'Customers', desc: 'Directory with rental history and payment methods on file' },
@@ -124,6 +125,8 @@ export default function Dashboard() {
         <>
           <h2 className="text-lg font-semibold">Management Overview</h2>
           <p className="text-slate-500 text-sm mb-5">Centralized control for rentals, inventory, billing, and delivery routes.</p>
+
+          {!selectedLocationId && (profile?.role === 'owner' || profile?.role === 'admin') && <StoreOverview />}
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
             {tiles.map((t) => {
