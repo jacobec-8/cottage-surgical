@@ -29,6 +29,7 @@ type Item = {
   delivery_rental_price: number | null
   sale_price: number | null
   quantity_on_hand: number
+  location_id?: string | null
   is_serialized: boolean
   is_rentable: boolean
   is_purchasable: boolean
@@ -98,7 +99,7 @@ type ItemNote = {
 }
 
 type Tab = 'overview' | 'units' | 'rentals' | 'pickup' | 'notes'
-const ITEM_SELECT = 'id,name,description,category,sku,image_url,monthly_rental_price,pickup_rental_price,delivery_rental_price,sale_price,quantity_on_hand,is_serialized,is_rentable,is_purchasable,is_active,created_at,updated_at,pickup_enabled,delivery_enabled,same_day_pickup,installation_required'
+const ITEM_SELECT = 'id,location_id,name,description,category,sku,image_url,monthly_rental_price,pickup_rental_price,delivery_rental_price,sale_price,quantity_on_hand,is_serialized,is_rentable,is_purchasable,is_active,created_at,updated_at,pickup_enabled,delivery_enabled,same_day_pickup,installation_required'
 
 export default function InventoryItemDetail({ itemId }: { itemId: string }) {
   const { profile } = useAuth()
@@ -107,6 +108,9 @@ export default function InventoryItemDetail({ itemId }: { itemId: string }) {
   const [tab, setTab] = useState<Tab>('overview')
   const [editing, setEditing] = useState(false)
   const catalogManager = useCatalogManager()
+  // Owner/admin edit the owner's products; store staff edit only their own store's products (100).
+  const canEditProduct = (product: { location_id?: string | null } | null | undefined) =>
+    catalogManager || Boolean(product?.location_id && product.location_id === profile?.location_id)
   const [note, setNote] = useState('')
 
   const item = useQuery({
@@ -191,7 +195,8 @@ export default function InventoryItemDetail({ itemId }: { itemId: string }) {
     mutationFn: async () => {
       const body = note.trim()
       if (!body) throw new Error('Enter a note first.')
-      const { error } = await supabase.from('inventory_item_notes').insert({ item_id: itemId, body, created_by: profile?.id ?? null })
+      // A note belongs to the store it was written for (100).
+      const { error } = await supabase.from('inventory_item_notes').insert({ item_id: itemId, body, created_by: profile?.id ?? null, ...(selectedLocationId ? { location_id: selectedLocationId } : {}) })
       if (error) throw error
     },
     onSuccess: () => {
@@ -251,7 +256,7 @@ export default function InventoryItemDetail({ itemId }: { itemId: string }) {
             </div>
           </div>
         </div>
-        {catalogManager && (
+        {canEditProduct(product) && (
           <button onClick={() => setEditing((value) => !value)} className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm shrink-0">
             {editing ? <X size={16} /> : <Pencil size={16} />} {editing ? 'Cancel edit' : 'Edit item'}
           </button>
@@ -698,7 +703,6 @@ function EditItemForm({ item, onCancel, onSaved }: { item: Item; onCancel: () =>
         delivery_rental_price: form.rentable && form.delivery ? Number(form.deliveryPrice) : null,
         monthly_rental_price: form.rentable ? Number(form.delivery ? form.deliveryPrice : form.pickupPrice) : null,
         sale_price: form.purchasable ? Number(form.sale) : null,
-        quantity_on_hand: item.is_serialized ? item.quantity_on_hand : Math.max(0, Number(form.quantity) || 0),
         is_rentable: form.rentable,
         is_purchasable: form.purchasable,
         is_active: form.active,
@@ -710,7 +714,7 @@ function EditItemForm({ item, onCancel, onSaved }: { item: Item; onCancel: () =>
       let uploadedPath: string | null = null
       if (imageFile) {
         const ext = imageFile.name.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg'
-        uploadedPath = `${crypto.randomUUID()}/catalog.${ext}`
+        uploadedPath = `${item.location_id ? `${item.location_id}/` : ''}${crypto.randomUUID()}/catalog.${ext}`
         const upload = await supabase.storage.from('equipment-images').upload(uploadedPath, imageFile, { cacheControl: '3600', contentType: imageFile.type, upsert: false })
         if (upload.error) throw upload.error
         payload.image_url = supabase.storage.from('equipment-images').getPublicUrl(uploadedPath).data.publicUrl
@@ -741,7 +745,6 @@ function EditItemForm({ item, onCancel, onSaved }: { item: Item; onCancel: () =>
         <Field label="Product name"><input className={input} value={form.name} onChange={(event) => set('name', event.target.value)} /></Field>
         <Field label="SKU"><input className={input} value={form.sku} onChange={(event) => set('sku', event.target.value)} /></Field>
         <Field label="Category"><select className={input} value={form.category} onChange={(event) => set('category', event.target.value)}>{CATEGORIES.map((category) => <option key={category}>{category}</option>)}</select></Field>
-        <Field label="Quantity on hand"><input className={input} type="number" min="0" disabled={item.is_serialized} value={form.quantity} onChange={(event) => set('quantity', event.target.value)} /><div className="mt-1 text-xs text-slate-400">{item.is_serialized ? 'Manage stock from the Units tab. Available physical units determine this number.' : 'Editable for bulk stock.'}</div></Field>
         <Field label="In-store pickup rental price"><input className={input} type="number" min="0" step="0.01" disabled={!form.rentable || !form.pickup} value={form.pickupPrice} onChange={(event) => set('pickupPrice', event.target.value)} /></Field>
         <Field label="Delivery + return pickup rental price"><input className={input} type="number" min="0" step="0.01" disabled={!form.rentable || !form.delivery} value={form.deliveryPrice} onChange={(event) => set('deliveryPrice', event.target.value)} /></Field>
         <Field label={`Sale price${form.purchasable ? '' : ' — not required'}`}><input className={input} type="number" min="0" step="0.01" disabled={!form.purchasable} value={form.sale} onChange={(event) => set('sale', event.target.value)} /></Field>

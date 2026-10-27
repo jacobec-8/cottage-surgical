@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
-import { Shield, ClipboardList, Truck, CreditCard, Package, Eye, EyeOff, LogIn, MapPin, Phone, Mail } from 'lucide-react'
+import { Shield, ClipboardList, Truck, CreditCard, Package, Eye, EyeOff, LogIn } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
 const FEATURES = [
@@ -47,7 +47,7 @@ export default function Login() {
             <div className="w-10 h-10 rounded-xl bg-white/10 grid place-items-center">
               <Shield size={22} />
             </div>
-            <span className="text-lg font-semibold">Cottage Surgical</span>
+            <span className="text-lg font-semibold">Pharmacy Portal</span>
           </div>
           <h1 className="text-4xl font-bold leading-tight mb-4">
             DME Rental
@@ -73,11 +73,6 @@ export default function Login() {
               )
             })}
           </div>
-        </div>
-        <div className="space-y-1.5 text-sm text-blue-100/70">
-          <div className="flex items-center gap-2"><MapPin size={14} /> 8285 Jericho Tpke, Woodbury, NY 11797</div>
-          <div className="flex items-center gap-2"><Phone size={14} /> 516-367-9030 ext 4</div>
-          <div className="flex items-center gap-2"><Mail size={14} /> info@cottagepharmacy.com</div>
         </div>
       </div>
 
@@ -133,7 +128,7 @@ export default function Login() {
               </button>
             </form>
           </div>
-          <p className="text-center text-xs text-slate-400 mt-4">© 2026 Cottage Surgical · Staff sign-in</p>
+          <p className="text-center text-xs text-slate-400 mt-4">Staff sign-in</p>
         </div>
       </div>
     </div>

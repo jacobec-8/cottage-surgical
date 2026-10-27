@@ -6,7 +6,7 @@ import { businessPayload, emptyBranch, emptyBusiness, emptyDriver, emptyStaff, v
 const fixturePassword = ['test', 'only', 'not', 'a', 'credential'].join('-')
 
 function branch(name: string) {
-  return { ...emptyBranch(), name, line1: '1 Main St', city: 'Melville', state: 'NY', zip: '11747' }
+  return { ...emptyBranch(), name, line1: '1 Main St', city: 'Melville', state: 'NY', zip: '11747', deliveryZips: '11747' }
 }
 function readyDraft() {
   const draft = emptyBusiness()

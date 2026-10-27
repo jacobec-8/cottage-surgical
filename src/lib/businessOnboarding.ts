@@ -12,6 +12,8 @@ export type BranchDraft = {
   key: string
   name: string; line1: string; line2: string; city: string; state: string; zip: string; phone: string; notes: string
   fulfillmentMode: 'pickup_and_delivery' | 'pickup_only'; partnerType: 'owned' | 'partner'; active: boolean
+  /** ZIP codes this branch delivers to (100); a delivery only ever goes to a branch that lists the ZIP. */
+  deliveryZips: string; deliversAnywhere: boolean
   stock: StockDraft[]; staff: StaffDraft[]
 }
 export type DriverDraft = {
@@ -31,7 +33,7 @@ export type BusinessDraft = {
 export function emptyBranch(): BranchDraft {
   return {
     key: newOnboardingId(), name: '', line1: '', line2: '', city: '', state: 'NY', zip: '', phone: '', notes: '',
-    fulfillmentMode: 'pickup_and_delivery', partnerType: 'owned', active: false, stock: [], staff: [],
+    fulfillmentMode: 'pickup_and_delivery', partnerType: 'owned', active: false, deliveryZips: '', deliversAnywhere: false, stock: [], staff: [],
   }
 }
 export function emptyStaff(): StaffDraft {
@@ -56,6 +58,12 @@ const priceValid = (value: string) => value === '' || (/^\d+(\.\d{1,2})?$/.test(
 const usernameValid = (value: string) => /^[a-z0-9][a-z0-9-]{2,62}$/.test(value) && !['admin', 'administrator', 'root'].includes(value)
 const passwordValid = (value: string) => value.length >= 8 && new TextEncoder().encode(value).length <= 72
 const norm = (value: string) => value.trim().toLowerCase()
+/** "11954, 11930 11937" → ['11954', '11930', '11937']; null when any entry is not a 5-digit ZIP. */
+export function parseZips(value: string): string[] | null {
+  const parts = value.split(/[\s,;]+/).map((part) => part.trim()).filter(Boolean)
+  if (parts.some((part) => !/^\d{5}$/.test(part))) return null
+  return [...new Set(parts)]
+}
 
 export function branchLabel(branch: BranchDraft, index: number): string {
   return branch.name.trim() || `Branch ${index + 1}`
@@ -103,6 +111,11 @@ export function branchProblem(draft: BusinessDraft, index: number): string | nul
   if (branch.line1.trim().length < 2 || branch.city.trim().length < 2) return prefix + 'enter the street address and city.'
   if (!/^[A-Za-z]{2}$/.test(branch.state.trim())) return prefix + 'use the two-letter state abbreviation.'
   if (!/^\d{5}(-\d{4})?$/.test(branch.zip.trim())) return prefix + 'enter a five-digit ZIP code (or ZIP+4).'
+  if (branch.fulfillmentMode === 'pickup_and_delivery') {
+    const zips = parseZips(branch.deliveryZips)
+    if (zips === null) return prefix + 'delivery ZIP codes must be five digits, separated by commas.'
+    if (!zips.length && !branch.deliversAnywhere) return prefix + 'enter the ZIP codes this branch delivers to.'
+  }
   if (branch.stock.length > 100) return prefix + 'select no more than 100 products.'
   if (new Set(branch.stock.map((item) => item.itemId)).size !== branch.stock.length) return prefix + 'each product can only appear once.'
   if (branch.stock.some((item) => !/^\d+$/.test(item.quantity) || Number(item.quantity) > 500)) return prefix + 'enter a whole quantity from 0 to 500 for each selected product.'
@@ -172,6 +185,8 @@ export function businessPayload(draft: BusinessDraft) {
         name: branch.name.trim(), line1: branch.line1.trim(), line2: branch.line2.trim(), city: branch.city.trim(),
         state: branch.state.trim().toUpperCase(), zip: branch.zip.trim(), phone: branch.phone.trim(), instructions: branch.notes.trim(),
         fulfillment_mode: branch.fulfillmentMode, partner_type: branch.partnerType, is_active: branch.active,
+        delivery_zips: branch.fulfillmentMode === 'pickup_and_delivery' ? parseZips(branch.deliveryZips) ?? [] : [],
+        delivers_anywhere: branch.fulfillmentMode === 'pickup_and_delivery' && branch.deliversAnywhere,
       },
       stock: branch.stock.map((item) => ({
         item_id: item.itemId, quantity: Number(item.quantity), pickup_enabled: item.pickup,

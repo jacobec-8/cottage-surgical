@@ -83,7 +83,7 @@ export default function Inventory() {
     <div>
       <div className="mb-1 flex flex-col items-start gap-3 sm:flex-row sm:justify-between">
         <h1 className="text-2xl font-semibold">Inventory Management</h1>
-        {catalogManager && (
+        {(catalogManager || profile?.role === 'staff') && (
           <button
             onClick={() => setEditing({})}
             className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 sm:w-auto"
@@ -95,7 +95,7 @@ export default function Inventory() {
       <h2 className="text-lg font-semibold mt-2">Equipment &amp; Supplies</h2>
       <p className="text-slate-500 text-sm mb-5">
         Manage rental inventory, pricing, and stock. Returned units become available when the rental closes.
-        {!catalogManager && ' The shared catalog is maintained by Cottage Surgical; set your stores’ stock and prices on each item.'}
+        {!catalogManager && ' The business owner maintains the product list; add your own store-only products with Add Item, and set your store’s stock and prices on each item.'}
       </p>
 
       <div className={`mb-4 grid gap-3 ${canSwitchStores(profile?.role) ? 'sm:grid-cols-[minmax(0,1fr)_auto_minmax(15rem,20rem)]' : 'sm:grid-cols-[minmax(0,1fr)_auto]'}`}>
@@ -323,7 +323,10 @@ function initialForm(item: Partial<Item>) {
 
 function ItemModal({ item, onClose }: { item: Partial<Item>; onClose: () => void }) {
   const qc = useQueryClient()
+  const { profile } = useAuth()
   const isNew = !item.id
+  // Store staff create products for their own store only (100); owner/admin create the owner's products.
+  const storeOwner = profile?.role === 'staff' ? profile.location_id ?? null : null
   const [f, setF] = useState(() => initialForm(item))
   const [initial] = useState(() => JSON.stringify(initialForm(item)))
   const [imageFile, setImageFile] = useState<File | null>(null)
@@ -369,7 +372,6 @@ function ItemModal({ item, onClose }: { item: Partial<Item>; onClose: () => void
         delivery_rental_price: f.is_rentable && f.delivery_enabled && f.delivery_rental_price !== '' ? Number(f.delivery_rental_price) : null,
         monthly_rental_price: f.is_rentable && f.delivery_enabled && f.delivery_rental_price !== '' ? Number(f.delivery_rental_price) : (f.pickup_rental_price !== '' ? Number(f.pickup_rental_price) : null),
         sale_price: f.is_purchasable && f.sale_price !== '' ? Number(f.sale_price) : null,
-        quantity_on_hand: f.is_serialized ? 0 : Math.max(0, Number(f.quantity_on_hand) || 0),
         is_serialized: f.is_serialized,
         is_active: f.is_active,
         is_rentable: f.is_rentable,
@@ -389,7 +391,7 @@ function ItemModal({ item, onClose }: { item: Partial<Item>; onClose: () => void
       let uploadedPath: string | null = null
       if (imageFile) {
         const ext = imageFile.name.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg'
-        uploadedPath = `${crypto.randomUUID()}/catalog.${ext}`
+        uploadedPath = `${storeOwner ? `${storeOwner}/` : ''}${crypto.randomUUID()}/catalog.${ext}`
         const upload = await supabase.storage.from('equipment-images').upload(uploadedPath, imageFile, {
           cacheControl: '3600',
           contentType: imageFile.type,
@@ -400,7 +402,7 @@ function ItemModal({ item, onClose }: { item: Partial<Item>; onClose: () => void
       }
 
       const res = isNew
-        ? await supabase.from('equipment_items').insert(payload)
+        ? await supabase.from('equipment_items').insert(storeOwner ? { ...payload, location_id: storeOwner } : payload)
         : await supabase.from('equipment_items').update(payload).eq('id', item.id!)
       if (res.error) {
         if (uploadedPath) await supabase.storage.from('equipment-images').remove([uploadedPath])
@@ -485,11 +487,6 @@ function ItemModal({ item, onClose }: { item: Partial<Item>; onClose: () => void
               <input value={f.delivery_rental_price} onChange={set('delivery_rental_price')} type="number" min="0" step="0.01" disabled={!f.is_rentable || !f.delivery_enabled} className={inp} />
             </div>
             <div><label className="block text-xs text-slate-500 mb-1">Sale price ($) {f.is_purchasable ? '' : '— not required'}</label><input value={f.sale_price} onChange={set('sale_price')} type="number" min="0" step="0.01" disabled={!f.is_purchasable} className={inp} /></div>
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">Qty on hand</label>
-              <input value={f.quantity_on_hand} onChange={set('quantity_on_hand')} type="number" min="0" disabled={f.is_serialized} className={inp} />
-              <div className="mt-1 text-xs text-slate-400">{f.is_serialized ? 'Add physical units after creating the item.' : 'Enter the available bulk quantity.'}</div>
-            </div>
             <div className="space-y-3 sm:mt-6">
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={f.is_serialized} onChange={set('is_serialized')} disabled={!isNew} /> Track individual units

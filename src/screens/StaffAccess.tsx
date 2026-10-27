@@ -17,6 +17,7 @@ export default function StaffAccess() {
         .from('staff_module_access')
         .update({ enabled, updated_at: new Date().toISOString(), updated_by: profile?.id ?? null })
         .in('module_key', modules)
+        .eq('location_id', access.storeId!)
       if (error) throw error
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['staff_module_access'] }),
@@ -31,7 +32,7 @@ export default function StaffAccess() {
         <div>
           <h2 className="sr-only">Staff Access</h2>
           <p className="text-sm text-slate-500">
-            Choose which operational modules store staff can use. Admin access and the driver app are unaffected.
+            Choose which modules this store’s staff can use. Other stores are not affected; admin access and the driver app are unaffected.
           </p>
         </div>
         <div className="grid w-full shrink-0 grid-cols-2 gap-2 sm:flex sm:w-auto">
@@ -46,6 +47,7 @@ export default function StaffAccess() {
         </div>
       </div>
 
+      {!access.storeId && <div className="mb-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Choose a store in the header. Module switches are set per store.</div>}
       {access.isLoading && <div className="text-sm text-slate-500">Loading access controls…</div>}
       {access.error && <div className="text-sm text-red-600">Couldn’t load staff access controls.</div>}
       {update.error && <div className="text-sm text-red-600 mb-3">{(update.error as Error).message}</div>}

@@ -55,6 +55,14 @@ function Details({ branch, onChange }: Pick<Props, 'branch' | 'onChange'>) {
           <option value="pickup_and_delivery">Pickup and delivery</option><option value="pickup_only">Pickup only</option>
         </select>
       </Field>
+      {branch.fulfillmentMode === 'pickup_and_delivery' && (
+        <div className="sm:col-span-2 rounded-xl border border-slate-200 p-4">
+          <TextField label="Delivery ZIP codes" required={!branch.deliversAnywhere} value={branch.deliveryZips} onChange={(deliveryZips) => onChange({ deliveryZips })} placeholder="e.g. 11954, 11930" />
+          <p className="mt-1 text-xs text-slate-500">Website deliveries for these ZIP codes go to this branch only. Other branches never take them.</p>
+          <label className="mt-3 flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={branch.deliversAnywhere} onChange={(e) => onChange({ deliversAnywhere: e.target.checked })} />
+            <span>Also deliver to ZIP codes no branch lists</span></label>
+        </div>
+      )}
       <Field label="Relationship">
         <select className={INPUT} value={branch.partnerType} onChange={(e) => onChange({ partnerType: e.target.value as BranchDraft['partnerType'] })}>
           <option value="owned">Owned location</option><option value="partner">Partner location</option>

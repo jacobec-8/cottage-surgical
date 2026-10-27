@@ -89,12 +89,12 @@ export default function Layout({ children }: { children: ReactNode }) {
   const name = profile?.full_name || profile?.email || 'User'
   // An owner viewing all their branches still sees their own business.
   const business = selectedLocation?.business ?? (profile?.role === 'owner' ? locationScope.locations[0]?.business : null)
-  const businessName = business?.name ?? 'Cottage Surgical'
+  const businessName = business?.name ?? 'All stores'
   // Cottage's own contact is only the fallback for the all-stores admin view;
   // another business never shows Cottage's details.
   // A single store shows its own phone (its staff answer it), else the business's.
-  const contactPhone = business ? selectedLocation?.phone || business.settings?.phone || null : '516-367-9030 ext 4'
-  const contactEmail = business ? business.settings?.email ?? null : 'info@cottagepharmacy.com'
+  const contactPhone = business ? selectedLocation?.phone || business.settings?.phone || null : null
+  const contactEmail = business ? business.settings?.email ?? null : null
   const initials = name.split(' ').map((s) => s[0]).slice(0, 2).join('').toUpperCase()
   const workspaces = getVisibleWorkspaces(profile?.role, access.canAccess)
   const activeWorkspace = workspaces.find((workspace) => workspace.tabs.some((tab) => matchesWorkspaceTab(pathname, tab.to)))

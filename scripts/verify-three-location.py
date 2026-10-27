@@ -84,6 +84,11 @@ check("3LOC-005 one submission creates business, 3 branches, owner, staff, drive
 r2, e2 = call(ADMIN, "SELECT public.onboard_business(%s,%s::jsonb)", (REQ, json.dumps(payload)))
 check("retry with the same request ID returns the receipt, no duplicates", r2 == r and q("SELECT count(*) FROM pickup_locations WHERE name LIKE %s", (f"V074 % {tag}",))[0][0] == 3, r2 or e2)
 LOC = {b["key"]: b["location_id"] for b in r["branches"]}
+BIZ = r["business_id"]
+# Each business stocks its own copy of a product (100).
+SER_ORIG = SER
+SER = q("SELECT public.business_product(%s,%s)::text", (SER, BIZ))[0][0]
+BULK = q("SELECT public.business_product(%s,%s)::text", (BULK, BIZ))[0][0]
 other = {"business": {"name": f"V074 Other {tag}", "contact_name": "Other QA", "contact_email": "", "contact_phone": "555-0100"},
          "branches": [{"key": "a", "location": {"name": f"V074 other {tag}", "line1": "9 Elm St", "city": "Huntington", "state": "NY", "zip": "11743", "fulfillment_mode": "pickup_and_delivery", "partner_type": "owned", "is_active": True},
                        "stock": [{"item_id": SER, "quantity": 1}], "staff": [staff("other")]}]}
@@ -196,11 +201,10 @@ check("driver GPS: home and shared branches see it, other stores do not",
 
 # ── 078 hardening ──
 r, e = call(OWNER, "UPDATE equipment_items SET name=name WHERE id=%s RETURNING 1", (SER,)); r2, e2 = call(NORTH, "UPDATE equipment_items SET name=name WHERE id=%s RETURNING 1", (SER,))
-check("another business's owner and staff cannot edit the shared catalog", r is None and r2 is None, (r or e, r2 or e2))
-check("they still read the catalog", call(OWNER, "SELECT count(*) FROM equipment_items WHERE id=%s", (SER,))[0] == 1)
-cottage = q("SELECT p.id::text FROM profiles p JOIN pickup_locations l ON l.id=p.location_id JOIN businesses b ON b.id=l.business_id WHERE b.slug='cottage-surgical' AND p.role='staff' AND p.is_active LIMIT 1")
-if cottage:
-    r, e = call(cottage[0][0], "UPDATE equipment_items SET name=name WHERE id=%s RETURNING 1", (SER,)); check("Cottage staff still edit the catalog", r == 1, r or e)
+check("the owner edits their business's products; their store staff cannot (100)", r == 1 and r2 is None, (r or e, r2 or e2))
+r3, e3 = call(A_STAFF, "UPDATE equipment_items SET name=name WHERE id=%s RETURNING 1", (SER,))
+check("another business can neither edit nor see them", r3 is None and call(A_STAFF, "SELECT count(*) FROM equipment_items WHERE id=%s", (SER,))[0] == 0, r3 or e3)
+check("store staff read their business's products", call(NORTH, "SELECT count(*) FROM equipment_items WHERE id=%s", (SER,))[0] == 1)
 r, e = call(OWNER, "INSERT INTO inventory_item_notes(item_id, body, created_by) VALUES (%s, 'v074 private note', auth.uid()) RETURNING 1", (SER,))
 check("item notes stay inside the author's business",
       r == 1 and call(NORTH, "SELECT count(*) FROM inventory_item_notes WHERE body='v074 private note'")[0] == 1
@@ -223,7 +227,7 @@ NOW = "; SET CONSTRAINTS ALL IMMEDIATE"
 r, e = order(NORTH, LOC["north"], item=BULK); n_order = r["order_id"]
 foreign_cust = q("SELECT id::text FROM customers WHERE location_id=%s LIMIT 1", (LOC_A,))
 if not foreign_cust:
-    order(A_STAFF, LOC_A); foreign_cust = q("SELECT id::text FROM customers WHERE location_id=%s LIMIT 1", (LOC_A,))
+    order(A_STAFF, LOC_A, item=q("SELECT public.business_product(%s,%s)::text", (SER_ORIG, q("SELECT business_id::text FROM pickup_locations WHERE id=%s", (LOC_A,))[0][0]))[0][0]); foreign_cust = q("SELECT id::text FROM customers WHERE location_id=%s LIMIT 1", (LOC_A,))
 foreign_cust = foreign_cust[0][0]
 r, e = call(NORTH, "UPDATE rental_orders SET customer_id=%s WHERE id=%s" + NOW, (foreign_cust, n_order))
 check("BIZ-003 own order -> another business's customer rejected", e is not None and "location_mismatch" in e, r or e)
@@ -234,7 +238,8 @@ foreign_order = q("SELECT id::text FROM rental_orders WHERE location_id=%s LIMIT
 r, e = call(NORTH, "INSERT INTO deliveries(order_id, leg_type, location_id, status) VALUES (%s,'delivery',%s,'pending') RETURNING 1", (foreign_order, LOC["north"]))
 check("BIZ-003 own-store stop -> another business's order rejected", e is not None and "location_mismatch" in e, r or e)
 # Deterministic fixtures: a North order holding a North unit, an East unit, a North unit of another product.
-OTHER_SER = q(f"SELECT id::text FROM equipment_items WHERE is_serialized AND id <> %s ORDER BY created_at LIMIT 1", (SER,))[0][0]
+OTHER_SER = q(f"SELECT id::text FROM equipment_items WHERE is_serialized AND id NOT IN (%s,%s) AND template_of IS NULL ORDER BY created_at LIMIT 1", (SER, SER_ORIG))[0][0]
+OTHER_SER = q("SELECT public.business_product(%s,%s)::text", (OTHER_SER, BIZ))[0][0]  # the business's own copy (100)
 east_unit = q("INSERT INTO equipment_units(item_id, location_id, asset_tag, status) VALUES (%s,%s,%s,'available') RETURNING id::text", (SER, LOC["east"], f"V074-E-{tag}"))[0][0]
 q("INSERT INTO equipment_units(item_id, location_id, asset_tag, status) VALUES (%s,%s,%s,'available')", (SER, LOC["north"], f"V074-N-{tag}"))
 wrong_item = q("INSERT INTO equipment_units(item_id, location_id, asset_tag, status) VALUES (%s,%s,%s,'available') RETURNING id::text", (OTHER_SER, LOC["north"], f"V074-X-{tag}"))[0][0]
@@ -253,11 +258,12 @@ charge = q("SELECT c.id::text FROM recurring_charges c JOIN rental_orders o ON o
 if charge:
     r, e = call(None, "UPDATE recurring_charges SET customer_id=%s WHERE id=%s RETURNING 1", (east_cust, charge[0][0]))
     check("a charge cannot name a customer other than its order's (any path)", e is not None and "location_mismatch" in e, r or e)
+q("UPDATE pickup_locations SET delivery_zips=ARRAY['11747'] WHERE id=%s", (LOC["north"],))  # North delivers to 11747 (100)
 r, e = call(None, "SET CONSTRAINTS ALL DEFERRED; SELECT public.submit_rental_request_with_fulfillment('rental', %s::jsonb, %s::jsonb, %s::jsonb, NULL, %s::jsonb)",
             (json.dumps([{"item_id": SER, "quantity": 1}]), json.dumps({"full_name": "V074 Storefront", "phone": "5550100"}),
              json.dumps({"line1": "5 Shop St", "city": "Melville", "state": "NY", "zip": "11747"}),
              json.dumps({"method": "delivery", "payment_method": "on_delivery"})))
-check("storefront request still submits (store assigned after creation)", bool(r and r.get("ok")), r or e)
+check("storefront request submits to the store whose area lists the ZIP, numbered within that store", bool(r and r.get("ok")) and q("SELECT location_id::text FROM rental_orders WHERE id=%s", (r["order_id"],))[0][0] == LOC["north"], r or e)
 if r and r.get("ok"):
     sf_loc = q("SELECT location_id::text FROM rental_orders WHERE id=%s", (r["order_id"],))[0][0]
     sf_to = [x[0] for x in q("SELECT p.role FROM notifications n JOIN profiles p ON p.id=n.user_id WHERE n.reference_id=%s AND p.role <> 'admin'", (f"order_{r['order_id']}_requested",))]
@@ -289,14 +295,19 @@ check("a first month already paid makes the first due date one month after the s
 
 # ── Storefront delivery routing (086) ──
 item = q("INSERT INTO equipment_items(name, sku, category, is_serialized, is_rentable, is_purchasable, delivery_enabled, pickup_enabled, delivery_rental_price, is_active) VALUES (%s,%s,'mobility',false,true,false,true,false,10,true) RETURNING id::text", (f"V074 route {tag}", f"V074-ROUTE-{tag}"))[0][0]
+q("UPDATE equipment_items SET business_id=%s WHERE id=%s", (BIZ, item))
 for loc, zipc, qty, price in [("north", "11747", 0, 11), ("east", "11743", 5, 12), ("west", "11801", 5, 13)]:
-    q("UPDATE pickup_locations SET address_zip=%s WHERE id=%s", (zipc, LOC[loc]))
+    q("UPDATE pickup_locations SET address_zip=%s, delivery_zips=ARRAY[%s] WHERE id=%s", (zipc, zipc, LOC[loc]))
     q("INSERT INTO equipment_location_inventory(equipment_item_id, location_id, quantity_on_hand, pickup_enabled, delivery_rental_price) VALUES (%s,%s,%s,false,%s)", (item, LOC[loc], qty, price))
 route = lambda z, n=1: call(None, "SELECT public.validate_storefront_fulfillment(%s::jsonb, %s::jsonb)", (json.dumps([{"item_id": item, "quantity": n}]), json.dumps({"method": "delivery", "delivery_zip": z})))[0]
-check("delivery skips the nearest branch when it has no stock (11747 -> stocked East, not empty North)", route("11747")["pickup_location_id"] == LOC["east"], route("11747"))
-check("delivery prefers the stocked branch nearest the ZIP (11803 -> West)", route("11803")["pickup_location_id"] == LOC["west"], route("11803"))
-check("with no ZIP the choice is deterministic", route(None)["pickup_location_id"] == route(None)["pickup_location_id"])
-check("when no branch has enough, delivery is refused as out of stock (088)", route("11747", 50).get("reason") == "out_of_stock", route("11747", 50))
+q("UPDATE pickup_locations SET delivery_zips = delivery_zips || ARRAY['11803'] WHERE id=%s", (LOC["west"],))
+check("delivery goes to the store whose area lists the ZIP (11743 -> East)", route("11743").get("pickup_location_id") == LOC["east"], route("11743"))
+check("a ZIP listed only by an empty store is out of stock; it is NOT sent to another store's area (11747)", route("11747").get("reason") == "out_of_stock", route("11747"))
+q("UPDATE pickup_locations SET delivers_anywhere=false WHERE delivers_anywhere")
+check("a ZIP no store lists is outside the delivery area", route("11999").get("reason") == "outside_delivery_area", route("11999"))
+q("UPDATE equipment_location_inventory SET quantity_on_hand=40 WHERE equipment_item_id=%s AND location_id=%s", (item, LOC["north"]))
+check("restocking or adding a store never takes another store's ZIP (11743 stays East)", route("11743").get("pickup_location_id") == LOC["east"], route("11743"))
+check("when no listed store has enough, delivery is refused as out of stock (088)", route("11743", 50).get("reason") == "out_of_stock", route("11743", 50))
 quote = call(None, "SELECT public.quote_storefront_rentals(%s::jsonb, %s::jsonb)", (json.dumps([{"item_id": item, "quantity": 1}]), json.dumps({"method": "delivery", "delivery_zip": "11803"})))[0]
 check("the cart quote prices at the routed branch (West 13)", float(quote["prices"][item]) == 13.0, quote)
 r, e = call(None, "SET CONSTRAINTS ALL DEFERRED; SELECT public.submit_rental_request_with_fulfillment('rental', %s::jsonb, %s::jsonb, %s::jsonb, NULL, %s::jsonb)",
@@ -307,6 +318,7 @@ check("checkout routes by the address ZIP and charges the quoted price", routed 
 
 # ── Checkout holds stock; never sell what can't be filled (088) ──
 one = q("INSERT INTO equipment_items(name, sku, category, is_serialized, is_rentable, is_purchasable, delivery_enabled, pickup_enabled, delivery_rental_price, pickup_rental_price, is_active) VALUES (%s,%s,'mobility',true,true,false,true,true,40,30,true) RETURNING id::text", (f"V088 last unit {tag}", f"V088-ONE-{tag}"))[0][0]
+q("UPDATE equipment_items SET business_id=%s WHERE id=%s", (BIZ, one))
 q("INSERT INTO equipment_location_inventory(equipment_item_id, location_id, quantity_on_hand, pickup_enabled, delivery_rental_price, pickup_rental_price) VALUES (%s,%s,0,true,40,30)", (one, LOC["west"]))
 UNIT = q("INSERT INTO equipment_units(item_id, location_id, asset_tag, status) VALUES (%s,%s,%s,'available') RETURNING id::text", (one, LOC["west"], f"V088-{tag}"))[0][0]
 check_v = lambda items, f: call(None, "SELECT public.validate_storefront_fulfillment(%s::jsonb,%s::jsonb)", (json.dumps(items), json.dumps(f)))[0]
@@ -349,7 +361,7 @@ oid = q("SELECT o.id::text, o.status FROM rental_orders o JOIN customers c ON c.
 check("when Stripe refuses the session, the checkout is cancelled and its hold released", (r or {}).get("reason") == "stripe_error" and oid and oid[0][1] == "cancelled" and bulk_qty() == stock_before, (r or e, oid, stock_before, bulk_qty()))
 q("UPDATE equipment_items SET is_purchasable=true, sale_price=99 WHERE id IN (%s,%s)", (one, item))
 # Purchases need the owner's retail switch on (094).
-q("UPDATE pharmacy_settings SET online_retail_enabled=true WHERE business_id=(SELECT id FROM businesses WHERE slug='cottage-surgical')")
+q("UPDATE pickup_locations SET online_retail_enabled=true WHERE id = ANY(%s::uuid[])", (list(LOC.values()),))
 pco = lambda items, who: call(None, "SET CONSTRAINTS ALL DEFERRED; SELECT public.create_stripe_checkout_with_fulfillment(%s::jsonb,%s::jsonb,%s::jsonb,'https://www.cottagesurgical.com',%s::jsonb)",
     (json.dumps(items), json.dumps({"full_name": who, "phone": "", "email": ""}), json.dumps({"line1": "", "city": "", "state": "NY", "zip": ""}), json.dumps(pick)))
 r, e = pco([{"item_id": one, "quantity": 1}], "V088 purchase late")
@@ -362,6 +374,7 @@ check("the cart quote reports out of stock with the item name", quote.get("reaso
 
 # ── Unit-tracked stock is counted from units, never typed (089) ──
 two = q("INSERT INTO equipment_items(name, sku, category, is_serialized, is_rentable, is_purchasable, delivery_enabled, pickup_enabled, delivery_rental_price, pickup_rental_price, is_active) VALUES (%s,%s,'mobility',true,true,false,true,true,40,30,true) RETURNING id::text", (f"V089 counted {tag}", f"V089-TWO-{tag}"))[0][0]
+q("UPDATE equipment_items SET business_id=%s WHERE id=%s", (BIZ, two))
 units = [q("INSERT INTO equipment_units(item_id, location_id, asset_tag, status) VALUES (%s,%s,%s,'available') RETURNING id::text", (two, LOC["west"], f"V089-{n}-{tag}"))[0][0] for n in range(2)]
 on_hand = lambda: q("SELECT quantity_on_hand FROM equipment_location_inventory WHERE equipment_item_id=%s AND location_id=%s", (two, LOC["west"]))[0][0]
 short = lambda qty: call(None, "SELECT public._storefront_shortages(%s::jsonb,%s)", (json.dumps([{"item_id": two, "quantity": qty}]), LOC["west"]))[0]
@@ -447,17 +460,20 @@ check("guests cannot call the store overview", q("SELECT has_function_privilege(
 
 # ── Online retail sales switch (094) ──
 retail = q("INSERT INTO equipment_items(name, sku, category, is_serialized, is_rentable, is_purchasable, sale_price, delivery_enabled, pickup_enabled, is_active, list_when_out_of_stock) VALUES (%s,%s,'braces & supports',false,false,true,12,true,true,true,false) RETURNING id::text", (f"V094 brace {tag}", f"V094-{tag}"))[0][0]
+q("UPDATE equipment_items SET business_id=%s WHERE id=%s", (BIZ, retail))
 q("INSERT INTO equipment_location_inventory(equipment_item_id, location_id, quantity_on_hand, pickup_enabled) VALUES (%s,%s,3,true)", (retail, LOC["west"]))
 flags = lambda: q("SELECT public.can_buy(i), public.storefront_listed(i) FROM equipment_items i WHERE id=%s", (retail,))[0]
-q("UPDATE pharmacy_settings SET online_retail_enabled=false WHERE business_id=(SELECT id FROM businesses WHERE slug='cottage-surgical')")
+q("UPDATE pickup_locations SET online_retail_enabled=false WHERE id = ANY(%s::uuid[])", (list(LOC.values()),))
 check("with retail sales off, a priced, stocked retail item is not buyable or listed", flags() == (False, False), flags())
 r, e = pco([{"item_id": retail, "quantity": 1}], "V094 buyer off")
 check("with retail sales off, purchase checkout is refused", (r or {}).get("reason") == "purchases_disabled", r or e)
-refused = [call(NORTH, "SELECT public.set_online_retail(true)")[0], call(OWNER, "SELECT public.set_online_retail(true)")[0]]
-check("only admins (not staff, not another business's owner) may manage the switch", [call(w, "SELECT public.can_manage_online_retail()")[0] for w in (ADMIN, OWNER, NORTH)] == [True, False, False])
-check("store staff and another business's owner cannot switch retail sales on", [x.get("reason") for x in refused] == ["forbidden", "forbidden"], refused)
-r, e = call(ADMIN, "SELECT public.set_online_retail(true)")
-check("an admin switches retail sales on; the item becomes buyable and listed", bool(r and r.get("ok")) and flags() == (True, True), (r or e, flags()))
+refused = [call(WEST, "SELECT public.set_online_retail(%s,true)", (LOC["west"],))[0], call(A_STAFF, "SELECT public.set_online_retail(%s,true)", (LOC["west"],))[0]]
+check("retail is managed per store: the store's owner and admins yes; staff and other businesses no",
+      [call(w, "SELECT public.can_manage_online_retail(%s)", (LOC["west"],))[0] for w in (ADMIN, OWNER, WEST, A_STAFF)] == [True, True, False, False])
+check("store staff and another business cannot switch a store's retail on", [x.get("reason") for x in refused] == ["forbidden", "forbidden"], refused)
+r, e = call(OWNER, "SELECT public.set_online_retail(%s,true)", (LOC["west"],))
+check("the owner switches retail on for West only; the item becomes buyable and listed", bool(r and r.get("ok")) and flags() == (True, True)
+      and q("SELECT bool_or(online_retail_enabled) FROM pickup_locations WHERE id IN (%s,%s)", (LOC["north"], LOC["east"]))[0][0] is False, (r or e, flags()))
 q("UPDATE equipment_items SET sale_price=0 WHERE id=%s", (retail,))
 check("an unpriced retail item stays off the website even when sales are on", flags() == (False, False), flags())
 r, e = pco([{"item_id": retail, "quantity": 1}], "V094 buyer unpriced")
@@ -507,6 +523,62 @@ check("a request the store declines still says 'denied'", "denied" in mailed(o2)
 q("UPDATE pickup_locations SET phone='631-555-0199' WHERE id=%s", (LOC["west"],))
 q("INSERT INTO pharmacy_settings(business_id, display_name, phone) SELECT business_id, 'V099', '516-000-0000' FROM pickup_locations WHERE id=%s ON CONFLICT (business_id) DO UPDATE SET phone='516-000-0000'", (LOC["west"],))
 check("a branch order's emails use that branch's phone", q("SELECT phone FROM public.order_brand(%s)", (o1,))[0][0] == "631-555-0199", q("SELECT phone FROM public.order_brand(%s)", (o1,)))
+
+# ── Store separation (100): no store sees or changes another; only the owner sees across ──
+VIS_TABLES = ["customers", "rental_orders", "rental_line_items", "deliveries", "equipment_items", "equipment_location_inventory",
+              "equipment_units", "inventory_item_notes", "staff_module_access", "pickup_locations", "recurring_charges", "notifications",
+              "equipment_item_pickup_locations", "stop_attempts"]
+def seen_by(who):
+    out = {}
+    for t in VIS_TABLES:
+        out[t] = call(who, f"SELECT md5(coalesce(string_agg(x::text, '|' ORDER BY x::text), '')) FROM {t} x")[0]
+    return out
+east_before = seen_by(EAST)
+# North does a day's work.
+tmpl = q("SELECT id::text FROM equipment_items WHERE business_id=%s AND location_id IS NULL LIMIT 1", (BIZ,))[0][0]
+r, e = call(NORTH, "UPDATE equipment_items SET name='renamed by North' WHERE id=%s RETURNING 1", (tmpl,))
+check("store staff cannot change the owner's product (template)", r is None and q("SELECT name FROM equipment_items WHERE id=%s", (tmpl,))[0][0] != "renamed by North", r or e)
+r, e = call(NORTH, "INSERT INTO equipment_items(name, category, is_serialized, is_rentable, is_purchasable, delivery_enabled, pickup_enabled, pickup_rental_price, location_id) VALUES ('North only cane','mobility',false,true,false,false,true,9,%s) RETURNING id::text", (LOC["north"],))
+NORTH_ITEM = r
+check("store staff create their own store product (owned by their store and business)",
+      bool(NORTH_ITEM) and q("SELECT location_id::text, business_id::text FROM equipment_items WHERE id=%s", (NORTH_ITEM,))[0] == (LOC["north"], BIZ)
+      and q("SELECT count(*) FROM equipment_location_inventory WHERE equipment_item_id=%s AND location_id=%s", (NORTH_ITEM, LOC["north"]))[0][0] == 1, r or e)
+r, e = call(NORTH, "UPDATE equipment_items SET name='North cane (edited)' WHERE id=%s RETURNING 1", (NORTH_ITEM,))
+check("store staff edit their own store product", r == 1, r or e)
+r, e = call(EAST, "SELECT count(*) FROM equipment_items WHERE id=%s", (NORTH_ITEM,))
+check("another store cannot see that store product", r == 0, r or e)
+r, e = call(OWNER, "INSERT INTO equipment_location_inventory(equipment_item_id, location_id, quantity_on_hand) VALUES (%s,%s,1) RETURNING 1", (NORTH_ITEM, LOC["east"]))
+check("a store product cannot be stocked at another store, even by the owner", e is not None and "another store" in e, r or e)
+r, e = call(NORTH, "INSERT INTO inventory_item_notes(item_id, body, created_by) VALUES (%s,'North note',%s) RETURNING location_id::text", (tmpl, NORTH))
+check("item notes belong to the author's store", r == LOC["north"], r or e)
+check("another store cannot read that note", call(EAST, "SELECT count(*) FROM inventory_item_notes WHERE body='North note'")[0] == 0)
+r, e = call(OWNER, "UPDATE staff_module_access SET enabled=false WHERE location_id=%s AND module_key='billing' RETURNING 1", (LOC["north"],))
+check("the owner switches a module off for one store", r == 1 and q("SELECT enabled FROM staff_module_access WHERE location_id=%s AND module_key='billing'", (LOC["east"],))[0][0] is True, r or e)
+r, e = call(NORTH, "UPDATE staff_module_access SET enabled=true WHERE location_id=%s AND module_key='billing' RETURNING 1", (LOC["north"],))
+check("store staff cannot change their module switches", r is None, r or e)
+on1, _ = order(NORTH, LOC["north"], item=BULK)
+q("UPDATE equipment_location_inventory SET quantity_on_hand=quantity_on_hand+7 WHERE equipment_item_id=%s AND location_id=%s", (BULK, LOC["north"]))
+east_after = seen_by(EAST)
+changed = [t for t in VIS_TABLES if east_before[t] != east_after[t]]
+check("everything North did changed nothing East can see (all store tables)", changed == [], changed)
+check("a store sees only itself in the store directory", call(NORTH, "SELECT array_agg(id::text) FROM pickup_locations")[0] == [LOC["north"]])
+check("a store sees only its own product availability rows",
+      call(NORTH, "SELECT bool_and(pickup_location_id=%s) FROM equipment_item_pickup_locations", (LOC["north"],))[0] in (True, None))
+nos = q("SELECT order_no FROM rental_orders WHERE location_id=%s ORDER BY order_no", (LOC_A,))
+ra, ea = call(A_STAFF, "SELECT 1")
+check("order numbers count per store (a new store starts from 1)", True if not nos else min(r[0] for r in nos) == 1, nos)
+r1, e1 = call(NORTH, "INSERT INTO equipment_units(item_id, location_id, asset_tag, status) VALUES (%s,%s,'SAME-TAG','available') RETURNING 1", (SER, LOC["north"]))
+r2, e2 = call(EAST, "INSERT INTO equipment_units(item_id, location_id, asset_tag, status) VALUES (%s,%s,'SAME-TAG','available') RETURNING 1", (SER, LOC["east"]))
+check("two stores may use the same asset tag", r1 == 1 and r2 == 1, (r1 or e1, r2 or e2))
+r, e = call(NORTH, "SELECT public.mark_overdue()")
+check("store staff cannot run the network-wide overdue job", e is not None, r or e)
+r, e = call(NORTH, "SELECT public.reconcile_pending_stripe_orders(5, 5)")
+check("store staff cannot run the network-wide payment reconcile", (r or {}).get("reason") == "forbidden", r or e)
+check("users and guests cannot send every store's emails", q("SELECT has_function_privilege('anon','public.process_customer_email_outbox(integer)','EXECUTE') OR has_function_privilege('authenticated','public.process_customer_email_outbox(integer)','EXECUTE')")[0][0] is False)
+check("staff may send only their own store's pending emails", q("SELECT has_function_privilege('authenticated','public.dispatch_store_emails(integer)','EXECUTE')")[0][0] is True)
+nt = q("SELECT title FROM notifications WHERE reference_id LIKE %s LIMIT 1", (f"order_{on1['order_id']}%",)) if on1 else []
+check("alerts name the store", (not nt) or nt[0][0].startswith(f"V074 north {tag}"), nt)
+check("the separation check passes", __import__('subprocess').run(['python3', 'scripts/check_store_separation.py'], env={**os.environ, 'VERIFY_APPLY_FIRST': ''}).returncode == 0 if not os.environ.get('VERIFY_APPLY_FIRST') else True)
 
 conn.rollback(); print("-- ROLLED BACK")
 f = [n for n, ok in results if not ok]; print(f"{len(results)-len(f)}/{len(results)} passed"); sys.exit(1 if f else 0)

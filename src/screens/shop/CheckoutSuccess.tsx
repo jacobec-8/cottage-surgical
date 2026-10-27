@@ -8,7 +8,7 @@ import { supabase } from '../../lib/supabase'
 import { useCart } from '../../components/shop/CartContext'
 import ShopHeader from '../../components/shop/ShopHeader'
 import ShopFooter from '../../components/shop/ShopFooter'
-import { dispatchCustomerEmails } from '../../lib/customerEmails'
+import { dispatchOrderEmails } from '../../lib/customerEmails'
 
 type State = 'checking' | 'paid' | 'unpaid' | 'error'
 
@@ -29,7 +29,7 @@ export default function CheckoutSuccess() {
         const { data, error } = await supabase.rpc('verify_stripe_payment', { p_order_id: ref })
         if (!error && data?.ok && data.paid) {
           clear()
-          void dispatchCustomerEmails()
+          void dispatchOrderEmails(ref)
           setState('paid')
           return
         }

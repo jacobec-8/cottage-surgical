@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import {
   CheckCircle, AlertCircle, CalendarClock, DollarSign,
   Users, ClipboardList, Package, CreditCard, Truck,
@@ -26,43 +26,14 @@ const MODULES = [
 export default function Dashboard() {
   const { profile } = useAuth()
   const { selectedLocationId, selectedLocation } = useLocationScope()
-  const qc = useQueryClient()
   const router = useRouter()
   const [tab, setTab] = useState<'overview' | 'rentals'>('overview')
-  const isStaff = profile?.role === 'admin' || profile?.role === 'owner' || profile?.role === 'staff'
 
   useEffect(() => {
     if (profile?.role === 'driver') router.replace('/delivery')
   }, [profile?.role, router])
 
-  // Opportunistic overdue sweep (records-only billing; no-op until due dates are set).
-  useQuery({
-    queryKey: ['overdue_sweep'],
-    staleTime: 600_000,
-    enabled: isStaff,
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc('mark_overdue')
-      if (error) throw error
-      if (data && ((data.orders_marked ?? 0) > 0 || (data.charges_marked ?? 0) > 0)) {
-        qc.invalidateQueries({ queryKey: ['dashboard'] })
-        qc.invalidateQueries({ queryKey: ['recurring_charges'] })
-        qc.invalidateQueries({ queryKey: ['rentals'] })
-        qc.invalidateQueries({ queryKey: ['orders'] })
-      }
-      return data as { ok: boolean; charges_marked?: number; orders_marked?: number }
-    },
-  })
-
-  const stats = useQuery({
-    queryKey: ['dashboard'],
-    refetchInterval: 30_000, // fallback behind app realtime (rental_orders / deliveries / charges)
-    enabled: profile?.role !== 'driver',
-    queryFn: async () => {
-      const { data, error } = await supabase.from('ops_dashboard_stats').select('*').single()
-      if (error) throw error
-      return data as Record<string, number>
-    },
-  })
+  // Overdue statuses are updated by the scheduler every 10 minutes (100).
 
   const rentals = useQuery({
     queryKey: ['rentals', selectedLocationId],
@@ -87,12 +58,13 @@ export default function Dashboard() {
   const items = (r: any) => r.rental_line_items?.[0]?.count ?? 0
 
   const scopedRows = rentals.data ?? []
-  const scoped = selectedLocationId ? {
+  // One definition for every view: the same counts whether one store or all are selected (100).
+  const scoped = {
     active_rentals: scopedRows.filter((row) => ['open', 'active', 'delivered'].includes(row.status)).length,
     overdue_rentals: scopedRows.filter((row) => row.status === 'overdue').length,
     scheduled_rentals: scopedRows.filter((row) => row.status === 'scheduled').length,
     active_monthly_rate: scopedRows.filter((row) => !['closed', 'cancelled'].includes(row.status)).reduce((sum, row) => sum + Number(row.monthly_rate ?? 0), 0),
-  } : stats.data
+  }
   const tiles = [
     { label: 'Open Rentals', value: scoped?.active_rentals ?? 0, icon: CheckCircle, color: 'text-emerald-600 bg-emerald-50' },
     { label: 'Overdue', value: scoped?.overdue_rentals ?? 0, icon: AlertCircle, color: 'text-red-600 bg-red-50' },
@@ -128,7 +100,7 @@ export default function Dashboard() {
           <p className="text-slate-500 text-sm mb-5">Centralized control for rentals, inventory, billing, and delivery routes.</p>
 
           {!selectedLocationId && (profile?.role === 'owner' || profile?.role === 'admin') && <StoreOverview />}
-          {!selectedLocationId && (profile?.role === 'owner' || profile?.role === 'admin') && <RetailSalesSwitch />}
+          {selectedLocationId && (profile?.role === 'owner' || profile?.role === 'admin') && <RetailSalesSwitch locationId={selectedLocationId} />}
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
             {tiles.map((t) => {
