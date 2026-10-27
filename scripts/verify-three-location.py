@@ -503,5 +503,10 @@ check("a customer's own cancellation is not called 'denied'", "was cancelled" in
 o2 = mail_order("V098 declined"); q("UPDATE rental_orders SET status='requested' WHERE id=%s", (o2,)); call(WEST, "SELECT public.cancel_order(%s,'Declined from the Requests inbox')", (o2,))
 check("a request the store declines still says 'denied'", "denied" in mailed(o2), mailed(o2)[:120])
 
+# ── Emails give the branch's own phone (099) ──
+q("UPDATE pickup_locations SET phone='631-555-0199' WHERE id=%s", (LOC["west"],))
+q("INSERT INTO pharmacy_settings(business_id, display_name, phone) SELECT business_id, 'V099', '516-000-0000' FROM pickup_locations WHERE id=%s ON CONFLICT (business_id) DO UPDATE SET phone='516-000-0000'", (LOC["west"],))
+check("a branch order's emails use that branch's phone", q("SELECT phone FROM public.order_brand(%s)", (o1,))[0][0] == "631-555-0199", q("SELECT phone FROM public.order_brand(%s)", (o1,)))
+
 conn.rollback(); print("-- ROLLED BACK")
 f = [n for n, ok in results if not ok]; print(f"{len(results)-len(f)}/{len(results)} passed"); sys.exit(1 if f else 0)
