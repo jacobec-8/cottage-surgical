@@ -25,7 +25,9 @@ def plain_text(body: str) -> str:
     """Shopify body HTML → one paragraph of plain text."""
     text = re.sub(r"<li>", " • ", body or "")
     text = re.sub(r"<[^>]+>", " ", text)
-    return re.sub(r"\s+", " ", html.unescape(text)).strip()
+    text = re.sub(r"\s+", " ", html.unescape(text)).strip()
+    # The source copy said "call for pricing"; stores now set real prices.
+    return re.sub(r"\s*Available in-store at Cottage Pharmacy\s*\.\s*Call or stop by for current pricing and availability[^.]*\.?", "", text).strip()
 
 
 rows = [r for r in csv.DictReader(open(path, newline="", encoding="utf-8")) if r.get("Title")]

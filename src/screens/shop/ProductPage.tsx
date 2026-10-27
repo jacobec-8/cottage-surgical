@@ -1,5 +1,6 @@
 'use client'
 
+import { shopPrice } from '../../lib/shopPrice'
 import { useState } from 'react'
 import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
@@ -93,7 +94,7 @@ export default function ProductPage({
 
               <div className="flex items-baseline gap-4 mt-6">
                 {rentable && <div className="space-y-1">{p.pickup_enabled && pickupPrice && <div className="text-3xl font-bold text-navy">{pickupPrice}<span className="text-base font-medium text-slate-500">/mo pickup</span></div>}{p.delivery_enabled && deliveryPrice && <div className="text-base font-medium text-slate-600">{deliveryPrice}/mo with delivery + return pickup</div>}{pickupPrice?.includes('–') || deliveryPrice?.includes('–') ? <div className="text-xs text-slate-500">Price depends on the store; you’ll see the exact price at checkout.</div> : null}</div>}
-                {purchasable && <div className="text-lg text-terracotta font-semibold">${Number(p.sale_price).toFixed(0)} to buy</div>}
+                {purchasable && <div className="text-lg text-terracotta font-semibold">{shopPrice(Number(p.sale_price))} to buy</div>}
                 {!rentable && !purchasable && <div className="text-slate-500">Call for pricing</div>}
               </div>
 

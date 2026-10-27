@@ -1,5 +1,6 @@
 'use client'
 
+import { shopPrice } from '../../lib/shopPrice'
 import Link from 'next/link'
 import { Check, MapPin, Truck, Wrench, Zap } from 'lucide-react'
 import { productPickupLocations, rentalPriceText, type Product } from '../../lib/shop'
@@ -70,7 +71,7 @@ export default function ProductCard({ p }: { p: Product }) {
               {p.delivery_enabled && deliveryPrice && <div className="text-sm font-medium text-slate-600">{deliveryPrice}/mo delivery + return pickup</div>}
             </div>
           )}
-          {purchasable && <div className="text-sm text-terracotta font-medium mt-1">${Number(p.sale_price).toFixed(0)} to purchase</div>}
+          {purchasable && <div className="text-sm text-terracotta font-medium mt-1">{shopPrice(Number(p.sale_price))} to purchase</div>}
           {!rentable && !purchasable && <div className="text-sm text-slate-500">Call for pricing</div>}
         </div>
 

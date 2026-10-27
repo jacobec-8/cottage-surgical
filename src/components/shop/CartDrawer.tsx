@@ -7,6 +7,7 @@ import { X, ShoppingCart, Trash2, Plus, Minus, CheckCircle, CreditCard, Store, T
 import { dispatchCustomerEmails } from '../../lib/customerEmails'
 import { commonPickupLocations, pickupLocationSelection } from '../../lib/fulfillment'
 import { publicSupabase } from '../../lib/publicSupabase'
+import { shopPrice } from '../../lib/shopPrice'
 import { outOfStockMessage, refusalStands, type Shortage } from '../../lib/stockMessage'
 import { useCart } from './CartContext'
 
@@ -306,7 +307,7 @@ export default function CartDrawer() {
                     <input type="radio" name="payment-choice" value="online" checked={paymentChoice === 'online'} onChange={() => setPaymentChoice('online')} className="sr-only" />
                     <CreditCard size={20} className="mb-2 text-navy" />
                     <span className="block text-sm font-semibold text-navy">Pay Online</span>
-                    <span className="mt-0.5 block text-xs leading-5 text-slate-500">Pay ${rentTotal.toFixed(0)} securely with Stripe.</span>
+                    <span className="mt-0.5 block text-xs leading-5 text-slate-500">Pay {shopPrice(rentTotal)} securely with Stripe.</span>
                   </label>
                 </div>
               </fieldset>
@@ -341,7 +342,7 @@ export default function CartDrawer() {
                       <span className={`text-[10px] font-semibold rounded px-1.5 py-0.5 ${i.mode === 'rent' ? 'bg-navy text-white' : 'bg-terracotta text-white'}`}>{i.mode === 'rent' ? 'Rent' : 'Buy'}</span>
                       <span className="text-sm font-medium text-navy truncate">{i.name}</span>
                     </div>
-                    <div className="text-sm text-slate-500 mt-0.5">${effectivePrice(i).toFixed(0)}{i.mode === 'rent' ? `/mo ${fulfillmentChoice === 'pickup' ? 'pickup' : 'delivery + return pickup'}` : ''}</div>
+                    <div className="text-sm text-slate-500 mt-0.5">{shopPrice(effectivePrice(i))}{i.mode === 'rent' ? `/mo ${fulfillmentChoice === 'pickup' ? 'pickup' : 'delivery + return pickup'}` : ''}</div>
                     <div className="mt-1 flex flex-wrap gap-1 text-[10px] font-medium">
                       {i.pickup_enabled && <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-emerald-700">Pickup</span>}
                       {i.delivery_enabled && <span className="rounded bg-blue-50 px-1.5 py-0.5 text-blue-700">Delivery</span>}
@@ -358,8 +359,8 @@ export default function CartDrawer() {
               ))}
             </div>
             <div className="border-t border-slate-200 p-5 shrink-0">
-              {rentTotal > 0 && <div className="flex justify-between text-sm mb-1"><span className="text-slate-500">Rental / month</span><span className="font-semibold text-navy">${rentTotal.toFixed(0)}/mo</span></div>}
-              {buyTotal > 0 && <div className="flex justify-between text-sm mb-1"><span className="text-slate-500">Purchase</span><span className="font-semibold text-navy">${buyTotal.toFixed(0)}</span></div>}
+              {rentTotal > 0 && <div className="flex justify-between text-sm mb-1"><span className="text-slate-500">Rental / month</span><span className="font-semibold text-navy">{shopPrice(rentTotal)}/mo</span></div>}
+              {buyTotal > 0 && <div className="flex justify-between text-sm mb-1"><span className="text-slate-500">Purchase</span><span className="font-semibold text-navy">{shopPrice(buyTotal)}</span></div>}
               {stockProblem && <div role="alert" className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">{stockProblem}</div>}
               <button onClick={() => setCheckout(true)} className="w-full mt-2 bg-navy hover:bg-navy-800 text-white rounded-lg py-3 font-semibold">
                 Continue to checkout ({count})
