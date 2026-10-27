@@ -29,6 +29,11 @@ Evidence (checkpoint PNGs + recording.webm) is in the session scratchpad under `
 | Owner sets module switches per store (PR #42, #43) | Montauk vs Pharmacy 2 | Billing locked at Montauk only; tile and nav hidden there; Pharmacy 2 kept it; unlocked | sep-mod2-*, sep-mod3-* |
 | Onboard a branch with delivery ZIPs | Pharmacy 5 | Empty ZIPs refused with message; created closed with 11935, 11952 and its own module switches | sep-onboard, sep-onboard2 |
 | Restock at one store doesn't take another's customers | Montauk / Pharmacy 2 | 11954 → $69 (Montauk), 11957 → $75 (Pharmacy 2) after Pharmacy 2 restocked | sep-cart2-* |
+| Retire a unit while a customer's cart (7 chairs, Montauk) is open, both windows on screen | Montauk | Cart switched to "only 6 available", Submit disabled; price held at $483 (after PR #45); restore cleared it; no order created | oc-customer3, oc-retire2, oc-restore3 |
+| Restock a bulk item | Montauk | Leg Separator 10 → 14; Pharmacy 2's 4 untouched; staff see only their store's row | rs-restock |
+| Remove a product from the store (PR #36 confirmation) | Montauk | Confirmation names product and store; Cancel keeps it; OK removes it; re-added at 12 | rs-remove2, rs-readd, rs-setqty |
+| Owner removes a product from the catalog | Cottage catalog | "Remove … from the catalog?" Cancel keeps; OK marks it inactive (throwaway QA-DISC product) | rs-catalog-remove |
+| Owner Stores table | All stores | Six stores listed; tiles equal the column totals (after PR #46); clicking a row opens that store with matching numbers | owner-stores2 |
 
 ## Bugs found on screen and fixed today
 
@@ -37,6 +42,8 @@ Evidence (checkpoint PNGs + recording.webm) is in the session scratchpad under `
 - PR #41 + migration 101: a purchase refused because the area's store sells nothing online said "Delivery is not available".
 - PR #42: owners couldn't open Staff Access although 100 made the switches theirs per store; the page said "Your staff account".
 - PR #43: the dashboard showed tiles for modules locked at the store.
+- PR #45: an open cart showing a shortage jumped from the store's price ($483) to list price ($525).
+- PR #46: the "Open Rentals" tile (4) disagreed with the owner's Stores table (6 out with customers); tiles now use the table's definitions.
 
 ## State after the run
 
