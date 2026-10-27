@@ -309,7 +309,7 @@ export default function CartDrawer() {
               {buyItems.length
                 ? 'Purchases are paid securely with Stripe on the next step.'
                 : paymentChoice === 'online'
-                  ? 'Stripe collects the first month’s rental. Your request is still reviewed for availability; a rejected paid request is refunded automatically.'
+                  ? 'Stripe collects the first month’s rental. Your equipment is held for you while you pay; we then confirm your delivery or pickup time.'
                   : fulfillmentChoice === 'delivery'
                     ? 'No payment is taken now. Pay the delivery person when your equipment arrives.'
                     : 'No payment is taken now. Pay in store when you pick up your equipment.'}
