@@ -49,6 +49,8 @@ export default function Inventory() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [view, setView] = useState<'store' | 'catalog'>('store')
   const [category, setCategory] = useState('all')
+  // Products added this visit stay in the catalog list with "Added · set stock".
+  const [justAdded, setJustAdded] = useState<readonly string[]>([])
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['equipment_items', selectedLocationId],
@@ -73,7 +75,7 @@ export default function Inventory() {
     && [it.name, it.description, it.sku, it.category].filter(Boolean).join(' ').toLowerCase().includes(q.toLowerCase())
   const filtered = (data ?? []).filter((it) => matches(it) && (!selectedLocationId || inStore(it)))
   // A store adds products from the shared catalog itself ("Add from catalog").
-  const addable = selectedLocationId ? (data ?? []).filter((it) => it.is_active && !inStore(it) && matches(it)) : []
+  const addable = selectedLocationId ? (data ?? []).filter((it) => it.is_active && (!inStore(it) || justAdded.includes(`${selectedLocationId}:${it.id}`)) && matches(it)) : []
   const showCatalog = Boolean(selectedLocation) && view === 'catalog'
   const usedCategories = CATEGORIES.filter((c) => (data ?? []).some((it) => it.category === c))
 
@@ -142,7 +144,7 @@ export default function Inventory() {
       {isLoading && <div className="text-slate-500">Loading…</div>}
       {error && <div className="text-red-600 text-sm">{(error as Error).message}</div>}
 
-      {showCatalog && selectedLocation && <CatalogPicker items={addable} locationId={selectedLocation.id} locationName={selectedLocation.name} />}
+      {showCatalog && selectedLocation && <CatalogPicker items={addable} locationId={selectedLocation.id} locationName={selectedLocation.name} added={justAdded.filter((key) => key.startsWith(`${selectedLocation.id}:`)).map((key) => key.split(':')[1])} onAdded={(id) => setJustAdded((prev) => [...prev, `${selectedLocation.id}:${id}`])} />}
 
       <div className={`space-y-3 ${showCatalog ? 'hidden' : ''}`}>
         {filtered.map((it) => {
