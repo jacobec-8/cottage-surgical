@@ -432,7 +432,11 @@ function PickupLocationsTab({ item, locations, assignments, loading }: {
             <div key={location.id} className={`rounded-xl border p-4 ${assigned ? 'border-blue-200 bg-blue-50/30' : 'border-slate-200'} ${location.is_active ? '' : 'opacity-60'}`}>
               <div className="flex flex-col gap-3">
                 <label className="flex cursor-pointer items-start gap-3">
-                  <input type="checkbox" className="mt-1" checked={assigned} disabled={!canManage || !location.is_active || assignment.isPending} onChange={(event) => assignment.mutate({ locationId: location.id, assigned: event.target.checked })} />
+                  <input type="checkbox" className="mt-1" checked={assigned} disabled={!canManage || !location.is_active || assignment.isPending} onChange={(event) => {
+                    // Removing clears this store's stock record for the item; ask first.
+                    if (!event.target.checked && !confirm(`Remove ${item.name} from ${location.name}? Its stock count at this store is cleared and it no longer appears in the store's inventory.`)) return
+                    assignment.mutate({ locationId: location.id, assigned: event.target.checked })
+                  }} />
                   <span>
                     <span className="block font-medium text-slate-900">{location.name} <span className="text-xs font-normal text-slate-400">· {location.business?.name}</span> {!location.is_active && <span className="text-xs font-normal text-slate-500">(inactive)</span>}</span>
                     <span className="mt-0.5 block text-sm text-slate-600">{location.address_line1}{location.address_line2 ? `, ${location.address_line2}` : ''}<br />{location.address_city}, {location.address_state} {location.address_zip}</span>
