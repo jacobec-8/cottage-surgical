@@ -312,5 +312,40 @@ check("single-branch onboarding (062 RPC) still works", bool(r and r.get("ok") a
 r, e = call(OWNER, "SELECT count(*) FROM pickup_locations WHERE business_id=%s", (q("SELECT business_id::text FROM pickup_locations WHERE id=%s", (LOC["north"],))[0][0],))
 check("the owner automatically covers a branch added later", r == 4, r or e)
 
+# ── Owners manage their team's logins (087) ──
+add = lambda who, loc, role, user, pw="verify-087-pass": call(who, "SELECT public.add_branch_login(%s,%s,%s,%s,%s,%s)", (loc, role, "Team Member QA", "555-0101", user, pw))
+pw_ok = lambda pid, pw: q("SELECT encrypted_password = crypt(%s, encrypted_password) FROM auth.users WHERE id=%s", (pw, pid))[0][0]
+r, e = add(OWNER, LOC["west"], "staff", f"v087-staff-{tag}")
+NEW_STAFF = (r or {}).get("profile_id")
+check("owner adds a staff login at their branch", bool(NEW_STAFF) and q("SELECT role, location_id::text, is_active FROM profiles WHERE id=%s", (NEW_STAFF,))[0] == ("staff", LOC["west"], True) and pw_ok(NEW_STAFF, "verify-087-pass"), r or e)
+r, e = add(OWNER, LOC["east"], "driver", f"v087-drv-{tag}")
+NEW_DRV = (r or {}).get("profile_id")
+check("owner adds a driver login with a dispatch record at that branch", bool(NEW_DRV) and q("SELECT location_id::text, status FROM drivers WHERE user_id=%s", (NEW_DRV,)) == [(LOC["east"], "active")], r or e)
+bad_adds = [add(OWNER, LOC_A, "staff", f"v087-x1-{tag}"), add(OWNER, LOC["west"], "owner", f"v087-x2-{tag}"), add(OWNER, LOC["west"], "admin", f"v087-x3-{tag}"),
+            add(OWNER, LOC["west"], "staff", f"v087-x4-{tag}", "short"), add(OWNER, LOC["west"], "staff", f"v087-staff-{tag}"), add(NORTH, LOC["north"], "staff", f"v087-x5-{tag}")]
+check("refused: other business, owner/admin role, short password, taken username, branch staff adding logins",
+      [(x[0] or {}).get("reason") for x in bad_adds] == ["forbidden", "invalid_role", "invalid_role", "weak_password", "username_taken", "forbidden"], [x[0] or x[1] for x in bad_adds])
+anon_exec = q("SELECT bool_or(has_function_privilege('anon', p.oid, 'EXECUTE')) FROM pg_proc p WHERE p.proname IN ('add_branch_login','update_branch_login','reset_branch_login_password','_create_staff_auth_user')")[0][0]
+check("guests cannot call the login-management functions", anon_exec is False, anon_exec)
+upd = lambda who, pid, loc, active=True: call(who, "SELECT public.update_branch_login(%s,'Moved QA','555-0102',%s,%s)", (pid, loc, active))
+r, e = upd(OWNER, NEW_STAFF, LOC["north"]); check("owner moves staff to another of their branches", bool(r and r.get("ok")) and q("SELECT location_id::text, full_name FROM profiles WHERE id=%s", (NEW_STAFF,))[0] == (LOC["north"], "Moved QA"), r or e)
+r, e = upd(OWNER, NEW_STAFF, LOC_A); check("owner cannot move staff into another business", (r or {}).get("reason") == "invalid_location", r or e)
+q("INSERT INTO auth.sessions(id, user_id, created_at, updated_at) VALUES (gen_random_uuid(), %s, now(), now())", (NEW_DRV,))
+r, e = upd(OWNER, NEW_DRV, LOC["east"], False)
+check("turning a login off signs the person out everywhere", q("SELECT count(*) FROM auth.sessions WHERE user_id=%s", (NEW_DRV,))[0][0] == 0)
+check("owner turns a driver login off: profile inactive and dispatch status inactive", bool(r and r.get("ok")) and q("SELECT p.is_active, d.status FROM profiles p JOIN drivers d ON d.user_id=p.id WHERE p.id=%s", (NEW_DRV,))[0] == (False, "inactive"), r or e)
+r, e = upd(OWNER, NEW_DRV, LOC["north"], True)
+check("owner turns it back on and moves the driver's home branch", bool(r and r.get("ok")) and q("SELECT p.is_active, d.status, d.location_id::text FROM profiles p JOIN drivers d ON d.user_id=p.id WHERE p.id=%s", (NEW_DRV,))[0] == (True, "active", LOC["north"]), r or e)
+refused = [upd(OWNER, OWNER, LOC["north"]), upd(OWNER, A_STAFF, LOC["north"]), upd(NORTH, NEW_STAFF, LOC["north"]), upd(OWNER, ADMIN, LOC["north"])]
+check("owner cannot edit themselves, another business's staff or an admin; staff cannot edit logins", all((x[0] or {}).get("reason") == "forbidden" for x in refused), [x[0] or x[1] for x in refused])
+r, e = call(OWNER, "SELECT public.reset_branch_login_password(%s,'verify-087-new')", (NEW_STAFF,))
+check("owner resets a staff password", bool(r and r.get("ok")) and pw_ok(NEW_STAFF, "verify-087-new") and not pw_ok(NEW_STAFF, "verify-087-pass"), r or e)
+r, e = call(OWNER, "SELECT public.reset_branch_login_password(%s,'verify-087-new')", (A_STAFF,)); r2, _ = call(OWNER, "SELECT public.reset_branch_login_password(%s,'short')", (NEW_STAFF,))
+check("owner cannot reset another business's password; short passwords refused", (r or {}).get("reason") == "forbidden" and (r2 or {}).get("reason") == "weak_password", (r or e, r2))
+call(OWNER, "UPDATE profiles SET role='admin', business_id=NULL WHERE id=%s", (NORTH,)); r, e = call(OWNER, "UPDATE profiles SET role='admin' WHERE id=auth.uid()")
+check("direct profile writes still cannot promote anyone", q("SELECT role FROM profiles WHERE id=%s", (NORTH,))[0][0] == "staff" and q("SELECT role FROM profiles WHERE id=%s", (OWNER,))[0][0] == "owner" and e is not None, e)
+r, e = call(ADMIN, "SELECT public.add_branch_login(%s,'staff','Admin Added QA','',%s,'verify-087-pass')", (LOC_A, f"v087-adm-{tag}"))
+check("admins can add a login at any branch", bool(r and r.get("ok")), r or e)
+
 conn.rollback(); print("-- ROLLED BACK")
 f = [n for n, ok in results if not ok]; print(f"{len(results)-len(f)}/{len(results)} passed"); sys.exit(1 if f else 0)

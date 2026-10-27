@@ -2,12 +2,15 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronRight, Search, ShieldCheck, Truck, UserCog, Users } from 'lucide-react'
+import { ChevronRight, Plus, Search, ShieldCheck, Truck, UserCog, Users } from 'lucide-react'
 import { authEmailToUsername } from '../lib/staffLogin'
 import { roleLabel } from '../lib/roles'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../contexts/AuthContext'
 import { useLocationScope } from '../contexts/LocationContext'
+import AddLoginForm from './staff/AddLoginForm'
 
 type Profile = {
   id: string
@@ -22,8 +25,12 @@ type Profile = {
 }
 
 export default function StaffDirectory() {
-  const { selectedLocationId } = useLocationScope()
+  const { selectedLocationId, locations } = useLocationScope()
+  const { profile: viewer } = useAuth()
+  const router = useRouter()
+  const isOwner = viewer?.role === 'owner'
   const [query, setQuery] = useState('')
+  const [adding, setAdding] = useState(false)
   const profiles = useQuery({
     queryKey: ['profiles', 'staff-directory', selectedLocationId],
     queryFn: async () => {
@@ -54,15 +61,18 @@ export default function StaffDirectory() {
 
   return (
     <div className="max-w-5xl">
-      <div className="mb-6">
+      <div className="mb-6 flex items-start justify-between gap-4">
         <div>
           <h2 className="sr-only">Staff &amp; Users</h2>
-          <p className="text-sm text-slate-500 mt-1">Manage store access, driver settings, and internal staff notes.</p>
+          <p className="text-sm text-slate-500 mt-1">{isOwner ? 'Add logins for your staff and drivers, move them between your stores, or turn them off.' : 'Manage store access, driver settings, and internal staff notes.'}</p>
         </div>
+        {!adding && <button onClick={() => setAdding(true)} className="inline-flex shrink-0 items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 text-sm"><Plus size={15} /> Add login</button>}
       </div>
 
-      <div className="grid sm:grid-cols-3 gap-3 mb-5">
-        <Summary label="Admins" value={counts.admin} icon={ShieldCheck} tone="blue" />
+      {adding && <AddLoginForm locations={locations} defaultLocationId={selectedLocationId} onClose={() => setAdding(false)} onCreated={(id) => { setAdding(false); void profiles.refetch(); router.push(`/staff/${id}`) }} />}
+
+      <div className={`grid gap-3 mb-5 ${isOwner ? 'sm:grid-cols-2' : 'sm:grid-cols-3'}`}>
+        {!isOwner && <Summary label="Admins" value={counts.admin} icon={ShieldCheck} tone="blue" />}
         <Summary label="Store staff & owners" value={counts.staff} icon={UserCog} tone="violet" />
         <Summary label="Drivers" value={counts.driver} icon={Truck} tone="green" />
       </div>

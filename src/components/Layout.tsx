@@ -31,7 +31,7 @@ const NAV = [
   { to: '/inventory', label: 'Inventory', icon: Package, roles: STAFF, module: 'inventory' },
   { to: '/billing', label: 'Billing', icon: CreditCard, roles: STAFF, module: 'billing' },
   { to: '/delivery', label: 'Delivery & Pickup', icon: Truck, roles: ALL, workspace: 'delivery' },
-  { to: '/staff', label: 'Staff', icon: UsersRound, roles: ['admin'], workspace: 'staff' },
+  { to: '/staff', label: 'Staff', icon: UsersRound, roles: ['admin', 'owner'], workspace: 'staff' },
   { to: '/locations', label: 'Locations', icon: Building2, roles: ['admin'], adminOnly: true },
 ]
 
