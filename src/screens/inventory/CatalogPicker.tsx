@@ -1,6 +1,5 @@
 'use client'
 
-import { useState } from 'react'
 import Link from 'next/link'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Check, Plus } from 'lucide-react'
@@ -20,12 +19,11 @@ export type CatalogItem = {
   location_inventory: { location_id: string }[]
 }
 
-type Props = { items: CatalogItem[]; locationId: string; locationName: string }
+type Props = { items: CatalogItem[]; locationId: string; locationName: string; added: readonly string[]; onAdded: (id: string) => void }
 
 /** Catalog products this store doesn't carry yet, each with "Add to <store>". */
-export default function CatalogPicker({ items, locationId, locationName }: Props) {
+export default function CatalogPicker({ items, locationId, locationName, added, onAdded }: Props) {
   const qc = useQueryClient()
-  const [added, setAdded] = useState<readonly string[]>([])
   const add = useMutation({
     mutationFn: async (item: CatalogItem) => {
       // Unit-tracked counts come from units (089); bulk starts at 0 until staff enter stock.
@@ -36,7 +34,7 @@ export default function CatalogPicker({ items, locationId, locationName }: Props
       return item.id
     },
     onSuccess: (id) => {
-      setAdded((prev) => [...prev, id])
+      onAdded(id)
       qc.invalidateQueries({ queryKey: ['equipment_items'] })
     },
   })
