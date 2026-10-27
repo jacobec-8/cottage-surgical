@@ -54,7 +54,7 @@ export default function Shop({ initialProducts }: { initialProducts?: Product[] 
     queryFn: async () => {
       const { data, error } = await supabase
         .from('equipment_items').select(PRODUCT_FIELDS)
-        .eq('is_active', true).order('category').order('name')
+        .eq('is_active', true).eq('storefront_listed', true).order('category').order('name')
       if (error) throw error
       return data as unknown as Product[]
     },
