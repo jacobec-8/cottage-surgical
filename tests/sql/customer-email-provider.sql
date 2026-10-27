@@ -20,6 +20,8 @@ END $$;
 \ir ../../supabase/migrations/073_customer_email_quota_backoff.sql
 -- Reapplication preserves the circuit state and does not send anything.
 \ir ../../supabase/migrations/073_customer_email_quota_backoff.sql
+\ir ../../supabase/migrations/084_customer_email_sender_brand.sql
+\ir ../../supabase/migrations/084_customer_email_sender_brand.sql
 UPDATE customer_email_outbox SET status='sent';
 INSERT INTO customer_email_outbox(id,order_id,event_key,dedupe_key,recipient,subject,html_body,text_body) VALUES
  ('80000000-0000-0000-0000-000000000001','30000000-0000-0000-0000-000000000003','quota1','quota1','a@example.invalid','Quota1','HTML','Text'),
@@ -51,4 +53,10 @@ SELECT test_assert((SELECT status='failed' AND attempts=1 FROM customer_email_ou
 UPDATE customer_email_outbox SET status='skipped' WHERE event_key='quota1';
 SELECT send_customer_status_email('80000000-0000-0000-0000-000000000001');
 SELECT test_assert((SELECT count(*)=6 FROM test_http_calls),'skipped messages never escape through direct internal sender');
+-- Another business's order is sent under its own name; no Cottage reply-to (084).
+UPDATE test_http_response SET status=200,body='{"id":"fake-brand-id"}';
+INSERT INTO customer_email_outbox(id,order_id,event_key,dedupe_key,recipient,subject,html_body,text_body) VALUES
+ ('80000000-0000-0000-0000-000000000070','30000000-0000-0000-0000-000000000070','brand1','brand1','harbor@example.invalid','Brand','HTML','Text');
+SELECT send_customer_status_email('80000000-0000-0000-0000-000000000070');
+SELECT test_assert((SELECT body->>'from'='Harbor Medical <test@example.invalid>' AND NOT body ? 'reply_to' FROM test_http_calls ORDER BY ctid DESC LIMIT 1),'sender name follows the business; no Cottage reply-to');
 SELECT 'customer email provider assertions passed' AS result;

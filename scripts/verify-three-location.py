@@ -257,6 +257,11 @@ r, e = call(None, "SET CONSTRAINTS ALL DEFERRED; SELECT public.submit_rental_req
              json.dumps({"line1": "5 Shop St", "city": "Melville", "state": "NY", "zip": "11747"}),
              json.dumps({"method": "delivery", "payment_method": "on_delivery"})))
 check("storefront request still submits (store assigned after creation)", bool(r and r.get("ok")), r or e)
+if r and r.get("ok"):
+    sf_loc = q("SELECT location_id::text FROM rental_orders WHERE id=%s", (r["order_id"],))[0][0]
+    sf_to = [x[0] for x in q("SELECT p.role FROM notifications n JOIN profiles p ON p.id=n.user_id WHERE n.reference_id=%s AND p.role <> 'admin'", (f"order_{r['order_id']}_requested",))]
+    has_staff = q("SELECT count(*) FROM profiles WHERE role='staff' AND is_active AND location_id=%s", (sf_loc,))[0][0]
+    check("a storefront request notifies its store's staff, not just admins (082)", has_staff == 0 or "staff" in sf_to, (sf_loc, sf_to))
 r, e = call(None, "SET CONSTRAINTS ALL IMMEDIATE")
 check("every legitimate write in this run satisfies the link rules", e is None, e)
 

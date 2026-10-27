@@ -53,6 +53,10 @@ ALTER TABLE public.rental_orders ADD CHECK(status IN ('pending_payment','request
 ALTER TABLE public.rental_line_items ADD COLUMN bulk_stock text;
 ALTER TABLE public.deliveries ADD COLUMN requires_driver boolean DEFAULT true,
  ADD COLUMN location_id uuid REFERENCES pickup_locations;
+CREATE TABLE public.businesses(id uuid PRIMARY KEY DEFAULT gen_random_uuid(), name text NOT NULL);
+CREATE TABLE public.pharmacy_settings(business_id uuid PRIMARY KEY REFERENCES businesses,
+ display_name text NOT NULL, phone text, email text);
+ALTER TABLE public.pickup_locations ADD COLUMN business_id uuid REFERENCES businesses, ADD COLUMN phone text;
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO authenticated;
 ''')
 print(function('current_location_id', '054_multi_location_tenancy.sql'))
@@ -83,6 +87,6 @@ CREATE OR REPLACE FUNCTION public.send_customer_status_email(p_email_id uuid) RE
 REVOKE ALL ON FUNCTION public.send_customer_status_email(uuid) FROM PUBLIC,anon,authenticated;
 ''')
 for name in ['070_customer_email_store_isolation.sql', '071_customer_email_lifecycle.sql',
-             '072_customer_billing_reminders.sql']:
+             '072_customer_billing_reminders.sql', '083_customer_email_business_branding.sql']:
     if (ROOT / name).exists():
         print(read(name))
