@@ -35,3 +35,10 @@ test('shortageMessage is a staff-readable sentence', () => {
   assert.match(msg, /2 requested/)
   assert.match(msg, /1 available/)
 })
+
+test('088: lines an online checkout already holds are never short and do not use store stock', () => {
+  const held = { ...line(1, 0), held: true }
+  assert.equal(lineShortage(held), null)
+  assert.deepEqual(requestShortages([held, held]), [])
+  assert.deepEqual(requestShortages([held, line(1, 0)]), [{ name: 'Hospital Bed', requested: 1, available: 0 }])
+})

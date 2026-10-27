@@ -7,6 +7,7 @@ import { X, ShoppingCart, Trash2, Plus, Minus, CheckCircle, CreditCard, Store, T
 import { dispatchCustomerEmails } from '../../lib/customerEmails'
 import { commonPickupLocations, pickupLocationSelection } from '../../lib/fulfillment'
 import { publicSupabase } from '../../lib/publicSupabase'
+import { outOfStockMessage, type Shortage } from '../../lib/stockMessage'
 import { useCart } from './CartContext'
 
 const REASONS: Record<string, string> = {
@@ -17,6 +18,7 @@ const REASONS: Record<string, string> = {
   invalid_pickup_location: 'Choose an available pickup location.',
   pickup_unavailable: 'Pickup is no longer available for one of your items. Choose delivery or update your cart.',
   delivery_unavailable: 'Delivery is not available for one of your items. Choose pickup or update your cart.',
+  out_of_stock: 'Sorry — something in your cart just sold out. Update your cart or call us.',
   invalid_payment_method: 'Choose a payment method that matches pickup or delivery.',
 }
 
@@ -48,12 +50,15 @@ export default function CartDrawer() {
         p_fulfillment: { method: fulfillmentChoice, pickup_location_id: fulfillmentChoice === 'pickup' ? pickupLocationId : null, delivery_zip: deliveryZip },
       })
       if (error) throw error
-      return (data?.ok ? data.prices : {}) as Record<string, number | null>
+      return data as { ok: boolean; reason?: string; prices?: Record<string, number | null>; shortages?: Shortage[] }
     },
   })
+  const quotedPrices = quote.data?.ok ? quote.data.prices ?? {} : {}
+  // The server refuses quantities it can't hold right now (088); say so before checkout.
+  const stockProblem = quote.data?.reason === 'out_of_stock' ? outOfStockMessage(quote.data.shortages, fulfillmentChoice) : null
   const effectivePrice = (item: typeof items[number]) => item.mode === 'purchase'
     ? item.price
-    : Number(quote.data?.[item.id] ?? (fulfillmentChoice === 'pickup'
+    : Number(quotedPrices[item.id] ?? (fulfillmentChoice === 'pickup'
       ? item.pickup_price ?? item.price
       : item.delivery_price ?? item.price))
   const rentTotal = rentItems.reduce((s, i) => s + effectivePrice(i) * i.qty, 0)
@@ -127,6 +132,10 @@ export default function CartDrawer() {
             if (data?.reason === 'missing_email') {
               throw new Error('Please enter a valid email for payment and order updates.')
             }
+            if (data?.reason === 'out_of_stock') {
+              void quote.refetch()
+              throw new Error(outOfStockMessage(data.shortages, fulfillmentChoice))
+            }
             throw new Error(REASONS[data?.reason] || 'We couldn’t start your payment. Please call us.')
           }
           clear()
@@ -139,6 +148,10 @@ export default function CartDrawer() {
             p_fulfillment: fulfillment,
           })
           if (error) throw new Error('Something went wrong. Please try again or call us.')
+          if (data?.reason === 'out_of_stock') {
+            void quote.refetch()
+            throw new Error(outOfStockMessage(data.shortages, fulfillmentChoice))
+          }
           if (!data?.ok) throw new Error(REASONS[data?.reason] || 'We couldn’t submit your rental request. Please call us.')
           rentNo = data.order_no
           void dispatchCustomerEmails()
@@ -159,6 +172,7 @@ export default function CartDrawer() {
           if (data?.reason === 'invalid_redirect') {
             throw new Error('Checkout is misconfigured for this site. Please call us.')
           }
+          if (data?.reason === 'out_of_stock') throw new Error(outOfStockMessage(data.shortages, fulfillmentChoice))
           throw new Error(REASONS[data?.reason] || 'We couldn’t start your payment. Please call us.')
         }
         clear()
@@ -284,8 +298,9 @@ export default function CartDrawer() {
                 </div>
               </fieldset>
             )}
-            {error && <div className="text-sm text-red-600">{error}</div>}
-            <button disabled={busy} className="w-full bg-terracotta hover:opacity-90 text-white rounded-lg py-3 font-semibold disabled:opacity-50">
+            {stockProblem && !error && <div role="alert" className="text-sm text-red-600">{stockProblem}</div>}
+            {error && <div role="alert" className="text-sm text-red-600">{error}</div>}
+            <button disabled={busy || Boolean(stockProblem)} className="w-full bg-terracotta hover:opacity-90 text-white rounded-lg py-3 font-semibold disabled:opacity-50">
               {busy
                 ? (buyItems.length || paymentChoice === 'online' ? 'Redirecting…' : 'Submitting…')
                 : buyItems.length || paymentChoice === 'online' ? 'Continue to Secure Payment' : 'Submit Request'}
@@ -332,6 +347,7 @@ export default function CartDrawer() {
             <div className="border-t border-slate-200 p-5 shrink-0">
               {rentTotal > 0 && <div className="flex justify-between text-sm mb-1"><span className="text-slate-500">Rental / month</span><span className="font-semibold text-navy">${rentTotal.toFixed(0)}/mo</span></div>}
               {buyTotal > 0 && <div className="flex justify-between text-sm mb-1"><span className="text-slate-500">Purchase</span><span className="font-semibold text-navy">${buyTotal.toFixed(0)}</span></div>}
+              {stockProblem && <div role="alert" className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">{stockProblem}</div>}
               <button onClick={() => setCheckout(true)} className="w-full mt-2 bg-navy hover:bg-navy-800 text-white rounded-lg py-3 font-semibold">
                 Continue to checkout ({count})
               </button>

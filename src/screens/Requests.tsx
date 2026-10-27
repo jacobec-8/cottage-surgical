@@ -37,7 +37,7 @@ export default function Requests() {
             'location:pickup_locations!rental_orders_location_id_fkey(name),' +
             'pickup_location:pickup_locations!rental_orders_pickup_location_id_fkey(name,address_line1,address_line2,address_city,address_state,address_zip),' +
             'customer:customers(full_name,phone,email),' +
-            'rental_line_items(quantity,equipment:equipment_items(id,name,quantity_on_hand,is_serialized,location_inventory:equipment_location_inventory(location_id,quantity_on_hand)))',
+            'rental_line_items(quantity,is_active,equipment_unit_id,bulk_stock,equipment:equipment_items(id,name,quantity_on_hand,is_serialized,location_inventory:equipment_location_inventory(location_id,quantity_on_hand)))',
         )
         .eq('status', 'requested')
         .order('created_at', { ascending: false })
@@ -48,6 +48,7 @@ export default function Requests() {
         ...order,
         rental_line_items: (order.rental_line_items ?? []).map((line: any) => ({
           ...line,
+          held: Boolean(line.is_active && (line.equipment_unit_id || line.bulk_stock === 'held')),
           equipment: line.equipment ? {
             ...line.equipment,
             quantity_on_hand: (line.equipment.location_inventory ?? []).find(
@@ -193,7 +194,7 @@ export default function Requests() {
                         {(li.quantity ?? 1) > 1 ? ` ×${li.quantity}` : ''}
                         {li.equipment && (
                           <span className={short ? 'font-medium text-amber-800' : 'text-emerald-700'}>
-                            · {onHand} in stock
+                            {li.held ? '· held for this order' : `· ${onHand} in stock`}
                           </span>
                         )}
                       </span>
