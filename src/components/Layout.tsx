@@ -92,7 +92,8 @@ export default function Layout({ children }: { children: ReactNode }) {
   const businessName = business?.name ?? 'Cottage Surgical'
   // Cottage's own contact is only the fallback for the all-stores admin view;
   // another business never shows Cottage's details.
-  const contactPhone = business ? business.settings?.phone ?? selectedLocation?.phone ?? null : '516-367-9030 ext 4'
+  // A single store shows its own phone (its staff answer it), else the business's.
+  const contactPhone = business ? selectedLocation?.phone || business.settings?.phone || null : '516-367-9030 ext 4'
   const contactEmail = business ? business.settings?.email ?? null : 'info@cottagepharmacy.com'
   const initials = name.split(' ').map((s) => s[0]).slice(0, 2).join('').toUpperCase()
   const workspaces = getVisibleWorkspaces(profile?.role, access.canAccess)
