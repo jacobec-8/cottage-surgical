@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { outOfStockMessage } from '../../src/lib/stockMessage.ts'
+import { outOfStockMessage, refusalStands } from '../../src/lib/stockMessage.ts'
 
 test('names each short item and what is left', () => {
   const text = outOfStockMessage([
@@ -17,4 +17,12 @@ test('delivery wording does not suggest another store', () => {
 test('a race with no named shortage still explains what happened', () => {
   assert.match(outOfStockMessage([], 'pickup'), /just sold out at this store/)
   assert.match(outOfStockMessage(undefined, 'delivery'), /just sold out for delivery/)
+})
+
+test('a refused submit stands until a newer stock check passes', () => {
+  assert.equal(refusalStands(null, { ok: false, updatedAt: 5 }), false)
+  assert.equal(refusalStands(100, { ok: true, updatedAt: 90 }), true, 'an older passing check does not clear it')
+  assert.equal(refusalStands(100, { ok: false, updatedAt: 200 }), true, 'a newer failing check keeps it')
+  assert.equal(refusalStands(100, { ok: undefined, updatedAt: 0 }), true, 'no check yet keeps it')
+  assert.equal(refusalStands(100, { ok: true, updatedAt: 200 }), false, 'restocked: a newer passing check clears it')
 })
