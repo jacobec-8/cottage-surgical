@@ -31,7 +31,7 @@ export default function ReviewStep({ draft, businessName, catalog, existing, go 
         <ul className="mt-2 space-y-1">
           <li className="flex items-start gap-2"><ShieldCheck size={15} className="mt-0.5 shrink-0 text-blue-600" />
             {draft.ownerLogin
-              ? <span><span className="font-medium">{draft.ownerFirstName} {draft.ownerLastName}</span> (@{draft.ownerUsername.trim().toLowerCase()}) sees orders, stock, billing and dispatch for all {draft.branches.length} branches{draft.businessId ? ' and existing ones' : ''}.</span>
+              ? <span><span className="font-medium">{draft.ownerFirstName} {draft.ownerLastName}</span> (@{draft.ownerUsername.trim().toLowerCase()}) sees orders, stock, billing and dispatch for {draft.businessId ? `every ${businessBranchWord(draft.branches.length)} and the existing ones` : draft.branches.length === 1 ? 'this branch' : `all ${draft.branches.length} branches`}.</span>
               : <span>No owner login. An admin can add one later from Staff.</span>}
           </li>
           {draft.branches.map((branch, index) => branch.staff.length > 0 && (
@@ -89,3 +89,5 @@ export default function ReviewStep({ draft, businessName, catalog, existing, go 
     </div>
   )
 }
+
+function businessBranchWord(count: number) { return count === 1 ? 'new branch' : `one of the ${count} new branches` }

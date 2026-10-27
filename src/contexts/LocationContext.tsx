@@ -46,7 +46,9 @@ export function LocationProvider({ children }: { children: ReactNode }) {
     enabled: Boolean(profile?.id),
     queryFn: async () => {
       let query = supabase.from('pickup_locations')
-        .select('id,name,slug,address_line1,address_city,address_state,address_zip,phone,fulfillment_mode,partner_type,is_active,business:businesses(id,name,settings:pharmacy_settings(phone,email))')
+        .select('id,name,slug,address_line1,address_city,address_state,address_zip,phone,fulfillment_mode,partner_type,is_active,business:businesses!inner(id,name,is_active,settings:pharmacy_settings(phone,email))')
+        // Stores of archived businesses (e.g. finished QA runs) never appear in the switcher.
+        .eq('business.is_active', true)
         .order('name')
       // RLS lists open stores plus the caller's own not-yet-open ones (admins see all),
       // so staff of a branch still being set up keep their store context.
