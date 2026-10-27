@@ -1,7 +1,6 @@
 'use client'
 
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
-import { SHOP_PURCHASES_ENABLED } from '../../lib/shopFlags'
 import { PRODUCT_FIELDS, productPickupLocations, type PickupLocation, type Product } from '../../lib/shop'
 import { publicSupabase } from '../../lib/publicSupabase'
 
@@ -49,7 +48,7 @@ function sanitizeCart(raw: unknown): CartItem[] {
         typeof cartItem.category === 'string' &&
         typeof cartItem.price === 'number' &&
         Number.isFinite(cartItem.price) &&
-        (cartItem.mode === 'rent' || (SHOP_PURCHASES_ENABLED && cartItem.mode === 'purchase'))
+        (cartItem.mode === 'rent' || cartItem.mode === 'purchase')
       )
     })
     .map((item) => ({
@@ -130,7 +129,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [hydrated, items])
 
   const add: Ctx['add'] = (i) => {
-    if (i.mode === 'purchase' && !SHOP_PURCHASES_ENABLED) return
     setItems((cur) => {
       const ex = cur.find((c) => c.id === i.id && c.mode === i.mode)
       if (ex) {

@@ -7,7 +7,6 @@ import { useQuery } from '@tanstack/react-query'
 import { Search, Check, Truck, Wrench, ShieldCheck, Clock, Phone, ArrowRight } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { PRODUCT_FIELDS, type Product } from '../../lib/shop'
-import { SHOP_PURCHASES_ENABLED } from '../../lib/shopFlags'
 import ShopHeader from '../../components/shop/ShopHeader'
 import ShopFooter from '../../components/shop/ShopFooter'
 import ProductCard from '../../components/shop/ProductCard'
@@ -64,13 +63,13 @@ export default function Shop({ initialProducts }: { initialProducts?: Product[] 
     initialDataUpdatedAt: initialProducts ? 0 : undefined,
   })
   const products = data ?? EMPTY_PRODUCTS
-  // Buy filter only when storefront purchases are enabled (shopFlags).
+  // Buy filter only when something can be bought (owner's retail switch, 094).
   const anyPurchasable =
-    SHOP_PURCHASES_ENABLED && products.some((p) => p.is_purchasable && p.sale_price != null)
+    products.some((p) => p.can_buy)
   const categories = useMemo(() => Array.from(new Set(products.map((p) => p.category).filter(Boolean))), [products])
   const filtered = products.filter((p) => {
     if (mode === 'rent' && !(p.is_rentable && ((p.pickup_enabled && p.pickup_rental_price != null) || (p.delivery_enabled && p.delivery_rental_price != null)))) return false
-    if (mode === 'purchase' && !(SHOP_PURCHASES_ENABLED && p.is_purchasable && p.sale_price != null)) return false
+    if (mode === 'purchase' && !p.can_buy) return false
     if (cat !== 'all' && p.category !== cat) return false
     if (query && !`${p.name} ${p.category} ${p.description ?? ''}`.toLowerCase().includes(query.toLowerCase())) return false
     return true
