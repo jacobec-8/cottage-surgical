@@ -14,7 +14,7 @@ import { useCart } from './CartContext'
 const REASONS: Record<string, string> = {
   missing_name: 'Please enter your name.',
   invalid_item: 'One of your items isn’t available right now. Please remove it and try again.',
-  purchases_disabled: 'Online purchases aren’t available right now. Please call us to buy this item.',
+  purchases_disabled: 'The store that serves this address doesn’t sell online yet. Please call us to buy this item.',
   outside_delivery_area: 'We don’t deliver to that ZIP code yet. Please call us, or choose in-store pickup.',
   no_items: 'Your cart is empty.',
   invalid_fulfillment: 'Choose pickup or delivery.',

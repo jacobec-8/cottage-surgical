@@ -474,6 +474,12 @@ check("store staff and another business cannot switch a store's retail on", [x.g
 r, e = call(OWNER, "SELECT public.set_online_retail(%s,true)", (LOC["west"],))
 check("the owner switches retail on for West only; the item becomes buyable and listed", bool(r and r.get("ok")) and flags() == (True, True)
       and q("SELECT bool_or(online_retail_enabled) FROM pickup_locations WHERE id IN (%s,%s)", (LOC["north"], LOC["east"]))[0][0] is False, (r or e, flags()))
+q("INSERT INTO equipment_location_inventory(equipment_item_id, location_id, quantity_on_hand, pickup_enabled) VALUES (%s,%s,3,true)", (retail, LOC["north"]))
+nzip = q("SELECT delivery_zips[1] FROM pickup_locations WHERE id=%s", (LOC["north"],))[0][0]
+v = call(None, "SELECT public.validate_storefront_fulfillment(%s::jsonb,%s::jsonb)",
+         (json.dumps([{"item_id": retail, "quantity": 1}]), json.dumps({"method": "delivery", "delivery_zip": nzip, "order_type": "purchase"})))[0]
+check("buying for delivery to North's ZIP (North's retail off) says online purchase is off there, not 'no delivery' (101)", (v or {}).get("reason") == "purchases_disabled", v)
+q("DELETE FROM equipment_location_inventory WHERE equipment_item_id=%s AND location_id=%s", (retail, LOC["north"]))
 q("UPDATE equipment_items SET sale_price=0 WHERE id=%s", (retail,))
 check("an unpriced retail item stays off the website even when sales are on", flags() == (False, False), flags())
 r, e = pco([{"item_id": retail, "quantity": 1}], "V094 buyer unpriced")
