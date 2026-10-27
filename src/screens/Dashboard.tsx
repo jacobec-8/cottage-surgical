@@ -64,15 +64,16 @@ export default function Dashboard() {
   const scopedRows = rentals.data ?? []
   // One definition for every view: the same counts whether one store or all are selected (100).
   const scoped = {
-    active_rentals: scopedRows.filter((row) => ['open', 'active', 'delivered'].includes(row.status)).length,
+    // Same status sets as the owner's Stores table (store_overview), so tiles equal its column totals.
+    active_rentals: scopedRows.filter((row) => ['active', 'delivered', 'overdue', 'pickup_scheduled'].includes(row.status)).length,
     overdue_rentals: scopedRows.filter((row) => row.status === 'overdue').length,
-    scheduled_rentals: scopedRows.filter((row) => row.status === 'scheduled').length,
+    scheduled_rentals: scopedRows.filter((row) => ['open', 'scheduled'].includes(row.status)).length,
     active_monthly_rate: scopedRows.filter((row) => !['closed', 'cancelled'].includes(row.status)).reduce((sum, row) => sum + Number(row.monthly_rate ?? 0), 0),
   }
   const tiles = [
-    { label: 'Open Rentals', value: scoped?.active_rentals ?? 0, icon: CheckCircle, color: 'text-emerald-600 bg-emerald-50' },
+    { label: 'Out with customers', value: scoped?.active_rentals ?? 0, icon: CheckCircle, color: 'text-emerald-600 bg-emerald-50' },
     { label: 'Overdue', value: scoped?.overdue_rentals ?? 0, icon: AlertCircle, color: 'text-red-600 bg-red-50' },
-    { label: 'Scheduled', value: scoped?.scheduled_rentals ?? 0, icon: CalendarClock, color: 'text-blue-600 bg-blue-50' },
+    { label: 'Approved, not handed over', value: scoped?.scheduled_rentals ?? 0, icon: CalendarClock, color: 'text-blue-600 bg-blue-50' },
     { label: 'Monthly Rev', value: `$${Number(scoped?.active_monthly_rate ?? 0).toLocaleString()}`, icon: DollarSign, color: 'text-violet-600 bg-violet-50' },
   ]
 
