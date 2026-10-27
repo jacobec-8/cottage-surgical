@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'r
 import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
 import { X, ShoppingCart, Trash2, Plus, Minus, CheckCircle, CreditCard, Store, Truck, MapPin, Zap } from 'lucide-react'
-import { dispatchCustomerEmails } from '../../lib/customerEmails'
+import { dispatchOrderEmails } from '../../lib/customerEmails'
 import { commonPickupLocations, pickupLocationSelection } from '../../lib/fulfillment'
 import { publicSupabase } from '../../lib/publicSupabase'
 import { shopPrice } from '../../lib/shopPrice'
@@ -185,7 +185,8 @@ export default function CartDrawer() {
           }
           if (!data?.ok) throw new Error(REASONS[data?.reason] || 'We couldn’t submit your rental request. Please call us.')
           rentNo = data.order_no
-          void dispatchCustomerEmails()
+          // Guests may send only their own order's mail (100); the scheduler is the backstop.
+          void dispatchOrderEmails(data.order_id)
         }
       }
 
