@@ -32,6 +32,8 @@ export type Product = {
   /** Effective store prices (override or catalog) across active stores; null when none. */
   pickup_price_range?: PriceRange
   delivery_price_range?: PriceRange
+  /** Some open store can supply at least one right now (088). Counts stay private. */
+  in_stock?: boolean
   pickup_locations: Array<{
     pickup_location: PickupLocation | null
   }>
@@ -55,7 +57,7 @@ export type PickupLocation = {
 export const PRODUCT_FIELDS =
   'id,name,description,category,monthly_rental_price,pickup_rental_price,delivery_rental_price,sale_price,image_url,shopify_handle,' +
   'is_rentable,is_purchasable,pickup_enabled,delivery_enabled,same_day_pickup,installation_required,' +
-  'pickup_price_range,delivery_price_range,' +
+  'pickup_price_range,delivery_price_range,in_stock,' +
   'pickup_locations:equipment_item_pickup_locations(' +
   'pickup_location:pickup_locations(id,name,address_line1,address_line2,address_city,address_state,address_zip,phone,instructions,fulfillment_mode,partner_type))'
 

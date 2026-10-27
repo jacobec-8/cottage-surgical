@@ -295,7 +295,7 @@ route = lambda z, n=1: call(None, "SELECT public.validate_storefront_fulfillment
 check("delivery skips the nearest branch when it has no stock (11747 -> stocked East, not empty North)", route("11747")["pickup_location_id"] == LOC["east"], route("11747"))
 check("delivery prefers the stocked branch nearest the ZIP (11803 -> West)", route("11803")["pickup_location_id"] == LOC["west"], route("11803"))
 check("with no ZIP the choice is deterministic", route(None)["pickup_location_id"] == route(None)["pickup_location_id"])
-check("when no branch has enough, a listing branch still takes the request for review", route("11747", 50)["ok"] is True, route("11747", 50))
+check("when no branch has enough, delivery is refused as out of stock (088)", route("11747", 50).get("reason") == "out_of_stock", route("11747", 50))
 quote = call(None, "SELECT public.quote_storefront_rentals(%s::jsonb, %s::jsonb)", (json.dumps([{"item_id": item, "quantity": 1}]), json.dumps({"method": "delivery", "delivery_zip": "11803"})))[0]
 check("the cart quote prices at the routed branch (West 13)", float(quote["prices"][item]) == 13.0, quote)
 r, e = call(None, "SET CONSTRAINTS ALL DEFERRED; SELECT public.submit_rental_request_with_fulfillment('rental', %s::jsonb, %s::jsonb, %s::jsonb, NULL, %s::jsonb)",
@@ -303,6 +303,59 @@ r, e = call(None, "SET CONSTRAINTS ALL DEFERRED; SELECT public.submit_rental_req
              json.dumps({"line1": "9 Route Rd", "city": "Hicksville", "state": "NY", "zip": "11803"}), json.dumps({"method": "delivery", "payment_method": "on_delivery"})))
 routed = q("SELECT location_id::text, monthly_rate FROM rental_orders WHERE id=%s", (r["order_id"],))[0] if r and r.get("ok") else None
 check("checkout routes by the address ZIP and charges the quoted price", routed and routed[0] == LOC["west"] and float(routed[1]) == 13.0, routed or e)
+
+# ── Checkout holds stock; never sell what can't be filled (088) ──
+one = q("INSERT INTO equipment_items(name, sku, category, is_serialized, is_rentable, is_purchasable, delivery_enabled, pickup_enabled, delivery_rental_price, pickup_rental_price, is_active) VALUES (%s,%s,'mobility',true,true,false,true,true,40,30,true) RETURNING id::text", (f"V088 last unit {tag}", f"V088-ONE-{tag}"))[0][0]
+q("INSERT INTO equipment_location_inventory(equipment_item_id, location_id, quantity_on_hand, pickup_enabled, delivery_rental_price, pickup_rental_price) VALUES (%s,%s,0,true,40,30)", (one, LOC["west"]))
+UNIT = q("INSERT INTO equipment_units(item_id, location_id, asset_tag, status) VALUES (%s,%s,%s,'available') RETURNING id::text", (one, LOC["west"], f"V088-{tag}"))[0][0]
+check_v = lambda items, f: call(None, "SELECT public.validate_storefront_fulfillment(%s::jsonb,%s::jsonb)", (json.dumps(items), json.dumps(f)))[0]
+pick = {"method": "pickup", "pickup_location_id": LOC["west"]}
+check("pickup of the last unit is allowed; asking for 2 is out of stock with the shortage named",
+      check_v([{"item_id": one, "quantity": 1}], pick)["ok"] is True and check_v([{"item_id": one, "quantity": 2}], pick).get("shortages", [{}])[0].get("available") == 1)
+check("delivery of more than any branch has is out of stock", check_v([{"item_id": one, "quantity": 2}], {"method": "delivery", "delivery_zip": "11801"}).get("reason") == "out_of_stock")
+unit_status = lambda: q("SELECT status FROM equipment_units WHERE id=%s", (UNIT,))[0][0]
+def pending(item, qty, name):
+    cust = q("INSERT INTO customers(full_name, location_id) VALUES (%s,%s) RETURNING id::text", (name, LOC["west"]))[0][0]
+    o = q("INSERT INTO rental_orders(customer_id, order_type, status, source, payment_status, payment_preference, fulfillment_method, location_id, monthly_rate) VALUES (%s,'rental','pending_payment','storefront','unpaid','online','pickup',%s,30) RETURNING id::text", (cust, LOC["west"]))[0][0]
+    q("INSERT INTO rental_line_items(order_id, equipment_item_id, line_type, quantity, monthly_rate, is_active) VALUES (%s,%s,'rental',%s,30,false)", (o, item, qty))
+    return o
+OA = pending(one, 1, "V088 buyer A")
+r = q("SELECT public._hold_checkout_stock(%s)", (OA,))[0][0]
+check("buyer A's checkout holds the last unit", r.get("ok") is True and unit_status() == "reserved" and q("SELECT count(*) FROM rental_line_items WHERE order_id=%s AND is_active AND equipment_unit_id=%s", (OA, UNIT))[0][0] == 1, r)
+check("once held, the last unit is out of stock for everyone else", check_v([{"item_id": one, "quantity": 1}], pick).get("reason") == "out_of_stock")
+OB = pending(one, 1, "V088 buyer B")
+r = q("SELECT public._hold_checkout_stock(%s)", (OB,))[0][0]
+check("buyer B's hold is refused and leaves B's order untouched", r.get("reason") == "out_of_stock" and q("SELECT count(*), bool_and(NOT is_active) FROM rental_line_items WHERE order_id=%s", (OB,))[0] == (1, True), r)
+bulk_qty = lambda: q("SELECT quantity_on_hand FROM equipment_location_inventory WHERE equipment_item_id=%s AND location_id=%s", (item, LOC["west"]))[0][0]
+before = bulk_qty(); OC = pending(item, 2, "V088 bulk buyer")
+r = q("SELECT public._hold_checkout_stock(%s)", (OC,))[0][0]; held = bulk_qty()
+q("SELECT public._abandon_checkout(%s)", (OC,))
+check("a bulk checkout holds 2, and an abandoned checkout gives them back", r.get("ok") is True and held == before - 2 and bulk_qty() == before and q("SELECT status FROM rental_orders WHERE id=%s", (OC,))[0][0] == "cancelled", (before, held, bulk_qty()))
+q("UPDATE rental_orders SET status='requested', payment_status='paid' WHERE id=%s", (OA,))
+r, e = call(WEST, "SELECT public.confirm_rental_request(%s)", (OA,))
+check("approving a paid order keeps its held unit (no re-check, no second unit)", bool(r and r.get("ok")) and r.get("unallocated") == 0 and unit_status() == "reserved"
+      and q("SELECT count(*), min(equipment_unit_id::text) FROM rental_line_items WHERE order_id=%s AND is_active", (OA,))[0] == (1, UNIT) and q("SELECT count(*) FROM deliveries WHERE order_id=%s", (OA,))[0][0] == 1, r or e)
+# The checkout functions themselves, with a fake Stripe key so no real session is created.
+q("SELECT vault.update_secret(id, 'sk_test_verify_088_invalid') FROM vault.secrets WHERE name='stripe_secret_key'")
+co = lambda items, who: call(None, "SET CONSTRAINTS ALL DEFERRED; SELECT public.create_stripe_rental_checkout_with_fulfillment(%s::jsonb,%s::jsonb,%s::jsonb,NULL,'https://www.cottagesurgical.com',%s::jsonb)",
+    (json.dumps(items), json.dumps({"full_name": who, "phone": "5550188", "email": "v088@example.com"}), json.dumps({"line1": "1 Hold St", "city": "Hicksville", "state": "NY", "zip": "11801"}), json.dumps(pick)))
+r, e = co([{"item_id": one, "quantity": 1}], "V088 checkout late")
+check("checkout of a held last unit is refused before Stripe, with no order written", (r or {}).get("reason") == "out_of_stock" and q("SELECT count(*) FROM customers WHERE full_name='V088 checkout late'")[0][0] == 0, r or e)
+q("UPDATE equipment_location_inventory SET quantity_on_hand=quantity_on_hand+3 WHERE equipment_item_id=%s AND location_id=%s", (item, LOC["west"])); q("UPDATE equipment_location_inventory SET pickup_enabled=true WHERE equipment_item_id=%s AND location_id=%s", (item, LOC["west"])); q("UPDATE equipment_items SET pickup_enabled=true, pickup_rental_price=12 WHERE id=%s", (item,))
+stock_before = bulk_qty()
+r, e = co([{"item_id": item, "quantity": 1}], "V088 checkout stripe down")
+oid = q("SELECT o.id::text, o.status FROM rental_orders o JOIN customers c ON c.id=o.customer_id WHERE c.full_name='V088 checkout stripe down'")
+check("when Stripe refuses the session, the checkout is cancelled and its hold released", (r or {}).get("reason") == "stripe_error" and oid and oid[0][1] == "cancelled" and bulk_qty() == stock_before, (r or e, oid, stock_before, bulk_qty()))
+q("UPDATE equipment_items SET is_purchasable=true, sale_price=99 WHERE id IN (%s,%s)", (one, item))
+pco = lambda items, who: call(None, "SET CONSTRAINTS ALL DEFERRED; SELECT public.create_stripe_checkout_with_fulfillment(%s::jsonb,%s::jsonb,%s::jsonb,'https://www.cottagesurgical.com',%s::jsonb)",
+    (json.dumps(items), json.dumps({"full_name": who, "phone": "", "email": ""}), json.dumps({"line1": "", "city": "", "state": "NY", "zip": ""}), json.dumps(pick)))
+r, e = pco([{"item_id": one, "quantity": 1}], "V088 purchase late")
+check("a purchase of the held last unit is refused, with no order written", (r or {}).get("reason") == "out_of_stock" and q("SELECT count(*) FROM customers WHERE full_name='V088 purchase late'")[0][0] == 0, r or e)
+stock_before = bulk_qty(); r, e = pco([{"item_id": item, "quantity": 2}], "V088 purchase stripe down")
+po = q("SELECT o.status, o.location_id::text FROM rental_orders o JOIN customers c ON c.id=o.customer_id WHERE c.full_name='V088 purchase stripe down'")
+check("a purchase checkout is written at the routed store, and cancelled with its hold released when Stripe refuses", (r or {}).get("reason") == "stripe_error" and po == [("cancelled", LOC["west"])] and bulk_qty() == stock_before, (r or e, po))
+quote = call(None, "SELECT public.quote_storefront_rentals(%s::jsonb,%s::jsonb)", (json.dumps([{"item_id": one, "quantity": 1}]), json.dumps(pick)))[0]
+check("the cart quote reports out of stock with the item name", quote.get("reason") == "out_of_stock" and quote["shortages"][0]["name"].startswith("V088 last unit"), quote)
 
 # ── single-branch onboarding still works ──
 single = {"business": {"id": q("SELECT business_id::text FROM pickup_locations WHERE id=%s", (LOC["north"],))[0][0]},

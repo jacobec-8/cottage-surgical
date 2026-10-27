@@ -7,7 +7,8 @@ export type RequestItem = {
   is_serialized: boolean | null
 } | null
 
-export type RequestLine = { quantity: number | null; equipment: RequestItem }
+// held: an online checkout already reserved this line's unit or bulk count (088).
+export type RequestLine = { quantity: number | null; equipment: RequestItem; held?: boolean }
 
 export type Shortage = { name: string; requested: number; available: number }
 
@@ -19,6 +20,7 @@ function requestedQty(l: RequestLine): number {
 
 /** Shortage for a single line, or null when it can be fulfilled. */
 export function lineShortage(l: RequestLine): Shortage | null {
+  if (l.held) return null
   const requested = requestedQty(l)
   if (!l.equipment) return { name: UNKNOWN_ITEM, requested, available: 0 }
   // quantity_on_hand is the request store's count for both serialized units and
@@ -30,7 +32,7 @@ export function lineShortage(l: RequestLine): Shortage | null {
 /** Shortages for a whole request, aggregated per item (two lines of one item share stock). */
 export function requestShortages(lines: RequestLine[]): Shortage[] {
   const byItem = new Map<string, { line: RequestLine; requested: number }>()
-  for (const l of lines) {
+  for (const l of lines.filter((line) => !line.held)) {
     const key = l.equipment?.id ?? `unknown:${byItem.size}`
     const prev = byItem.get(key)
     byItem.set(key, { line: l, requested: (prev?.requested ?? 0) + requestedQty(l) })

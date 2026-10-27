@@ -107,10 +107,13 @@ export default function ProductPage({
                 </div>
               </div>
 
+              {p.in_stock === false && (rentable || purchasable) && <div role="status" className="mt-6 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">Out of stock right now. Call us and we’ll let you know when it’s back.</div>}
               <div className="flex gap-3 mt-6">
+                {p.in_stock === false && (rentable || purchasable) ? <a href="tel:+15163679030" className="flex-1 text-center bg-navy text-white rounded-lg py-3 font-semibold">Call us</a> : <>
                 {rentable && <button onClick={() => addToCart('rent')} className="flex-1 bg-navy hover:bg-navy-800 text-white rounded-lg py-3 font-semibold">Rent Now</button>}
                 {purchasable && <button onClick={() => addToCart('purchase')} className="flex-1 border border-terracotta text-terracotta hover:bg-terracotta hover:text-white rounded-lg py-3 font-semibold transition">Purchase</button>}
                 {!rentable && !purchasable && <a href="tel:+15163679030" className="flex-1 text-center bg-navy text-white rounded-lg py-3 font-semibold">Call to order</a>}
+                </>}
               </div>
               <p className="text-xs text-slate-400 mt-3">
                 {purchasable
