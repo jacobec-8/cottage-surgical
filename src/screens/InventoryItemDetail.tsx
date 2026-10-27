@@ -455,8 +455,9 @@ function LocationInventoryEditor({ item, inventory, onSaved }: { item: Item; inv
   const [form, setForm] = useState({ quantity: String(inventory.quantity_on_hand), pickup: inventory.pickup_enabled, pickupPrice: inventory.pickup_rental_price?.toString() ?? '', deliveryPrice: inventory.delivery_rental_price?.toString() ?? '' })
   const save = useMutation({
     mutationFn: async () => {
+      // A unit-tracked count follows its available units (089); only bulk counts are typed.
       const { error } = await supabase.from('equipment_location_inventory').update({
-        quantity_on_hand: Math.max(0, Number(form.quantity) || 0), pickup_enabled: form.pickup,
+        ...(item.is_serialized ? {} : { quantity_on_hand: Math.max(0, Number(form.quantity) || 0) }), pickup_enabled: form.pickup,
         pickup_rental_price: form.pickupPrice === '' ? null : Number(form.pickupPrice),
         delivery_rental_price: form.deliveryPrice === '' ? null : Number(form.deliveryPrice),
         updated_at: new Date().toISOString(),
@@ -466,7 +467,9 @@ function LocationInventoryEditor({ item, inventory, onSaved }: { item: Item; inv
     onSuccess: onSaved,
   })
   const input = 'w-full rounded-lg border border-slate-300 px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
-  return <div className="grid gap-3 border-t border-slate-200 pt-3 sm:grid-cols-4"><label><span className="mb-1 block text-xs text-slate-500">Quantity on hand</span><input type="number" min="0" value={form.quantity} onChange={(event) => setForm({ ...form, quantity: event.target.value })} className={input} /></label><label><span className="mb-1 block text-xs text-slate-500">Pickup price override</span><input type="number" min="0" step="0.01" placeholder={item.pickup_rental_price?.toString()} value={form.pickupPrice} onChange={(event) => setForm({ ...form, pickupPrice: event.target.value })} className={input} /></label><label><span className="mb-1 block text-xs text-slate-500">Delivery price override</span><input type="number" min="0" step="0.01" placeholder={item.delivery_rental_price?.toString()} value={form.deliveryPrice} onChange={(event) => setForm({ ...form, deliveryPrice: event.target.value })} className={input} /></label><div className="flex items-end gap-2"><label className="mb-2 flex items-center gap-1.5 text-xs"><input type="checkbox" checked={form.pickup} onChange={(event) => setForm({ ...form, pickup: event.target.checked })} /> Pickup</label><button onClick={() => save.mutate()} disabled={save.isPending} className="ml-auto rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white disabled:opacity-50">{save.isPending ? 'Saving…' : 'Save stock'}</button></div>{save.error && <div className="text-xs text-red-600 sm:col-span-4">{(save.error as Error).message}</div>}</div>
+  return <div className="grid gap-3 border-t border-slate-200 pt-3 sm:grid-cols-4">{item.is_serialized
+    ? <div><span className="mb-1 block text-xs text-slate-500">Available units</span><div className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-sm font-medium text-slate-800">{inventory.quantity_on_hand}</div><span className="mt-1 block text-xs text-slate-500">Counted from units. To change it, add a unit or set one to Retired under Serialized units.</span></div>
+    : <label><span className="mb-1 block text-xs text-slate-500">Quantity on hand</span><input type="number" min="0" value={form.quantity} onChange={(event) => setForm({ ...form, quantity: event.target.value })} className={input} /></label>}<label><span className="mb-1 block text-xs text-slate-500">Pickup price override</span><input type="number" min="0" step="0.01" placeholder={item.pickup_rental_price?.toString()} value={form.pickupPrice} onChange={(event) => setForm({ ...form, pickupPrice: event.target.value })} className={input} /></label><label><span className="mb-1 block text-xs text-slate-500">Delivery price override</span><input type="number" min="0" step="0.01" placeholder={item.delivery_rental_price?.toString()} value={form.deliveryPrice} onChange={(event) => setForm({ ...form, deliveryPrice: event.target.value })} className={input} /></label><div className="flex items-end gap-2"><label className="mb-2 flex items-center gap-1.5 text-xs"><input type="checkbox" checked={form.pickup} onChange={(event) => setForm({ ...form, pickup: event.target.checked })} /> Pickup</label><button onClick={() => save.mutate()} disabled={save.isPending} className="ml-auto rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white disabled:opacity-50">{save.isPending ? 'Saving…' : 'Save stock'}</button></div>{save.error && <div className="text-xs text-red-600 sm:col-span-4">{(save.error as Error).message}</div>}</div>
 }
 
 type UnitForm = {
@@ -494,6 +497,7 @@ function UnitsTable({ itemId, locationId, locationName, units, loading }: { item
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['equipment_units', itemId] })
     qc.invalidateQueries({ queryKey: ['equipment_items'] })
+    qc.invalidateQueries({ queryKey: ['equipment_item_pickup_locations', itemId] })
   }
   const closeForm = () => {
     setAdding(false)

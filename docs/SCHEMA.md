@@ -102,6 +102,11 @@ before re-rental) rather than straight to `available`.
   (checked under the per-item advisory lock, so competing confirms can't both
   pass). The Requests screen mirrors this from `equipment_items.quantity_on_hand`
   and disables Confirm with the shortage listed; add units in Inventory first.
+- **Unit-tracked store counts** (089): for a serialized item,
+  `equipment_location_inventory.quantity_on_hand` is always the count of its
+  `available` units at that store. A BEFORE trigger recomputes any direct write,
+  and switching an item to serialized recounts its stores. Only bulk items take
+  a typed quantity.
 
 ### RLS summary
 

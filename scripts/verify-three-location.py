@@ -357,6 +357,22 @@ check("a purchase checkout is written at the routed store, and cancelled with it
 quote = call(None, "SELECT public.quote_storefront_rentals(%s::jsonb,%s::jsonb)", (json.dumps([{"item_id": one, "quantity": 1}]), json.dumps(pick)))[0]
 check("the cart quote reports out of stock with the item name", quote.get("reason") == "out_of_stock" and quote["shortages"][0]["name"].startswith("V088 last unit"), quote)
 
+# ── Unit-tracked stock is counted from units, never typed (089) ──
+two = q("INSERT INTO equipment_items(name, sku, category, is_serialized, is_rentable, is_purchasable, delivery_enabled, pickup_enabled, delivery_rental_price, pickup_rental_price, is_active) VALUES (%s,%s,'mobility',true,true,false,true,true,40,30,true) RETURNING id::text", (f"V089 counted {tag}", f"V089-TWO-{tag}"))[0][0]
+units = [q("INSERT INTO equipment_units(item_id, location_id, asset_tag, status) VALUES (%s,%s,%s,'available') RETURNING id::text", (two, LOC["west"], f"V089-{n}-{tag}"))[0][0] for n in range(2)]
+on_hand = lambda: q("SELECT quantity_on_hand FROM equipment_location_inventory WHERE equipment_item_id=%s AND location_id=%s", (two, LOC["west"]))[0][0]
+short = lambda qty: call(None, "SELECT public._storefront_shortages(%s::jsonb,%s)", (json.dumps([{"item_id": two, "quantity": qty}]), LOC["west"]))[0]
+r, e = call(OWNER, "UPDATE equipment_location_inventory SET quantity_on_hand=0 WHERE equipment_item_id=%s AND location_id=%s", (two, LOC["west"]))
+check("typing 0 for a unit-tracked item cannot hide units the shop still sells", on_hand() == 2 and short(2) == [], (on_hand(), short(2), e))
+r, e = call(OWNER, "UPDATE equipment_location_inventory SET quantity_on_hand=9 WHERE equipment_item_id=%s AND location_id=%s", (two, LOC["west"]))
+check("typing 9 for a unit-tracked item cannot invent stock", on_hand() == 2 and short(3)[0]["available"] == 2, (on_hand(), short(3), e))
+r, e = call(OWNER, "UPDATE equipment_units SET status='retired' WHERE id = ANY(%s::uuid[])", (units,))
+check("retiring the units takes the item out of stock at once (count, quote, in_stock)", on_hand() == 0 and short(1)[0]["available"] == 0 and q("SELECT public.in_stock(i) FROM equipment_items i WHERE id=%s", (two,))[0][0] is False, (on_hand(), short(1), e))
+r, e = call(OWNER, "UPDATE equipment_units SET status='available' WHERE id=%s", (units[0],))
+check("restoring a unit puts it back on sale at once", on_hand() == 1 and short(1) == [] and q("SELECT public.in_stock(i) FROM equipment_items i WHERE id=%s", (two,))[0][0] is True, (on_hand(), short(1), e))
+drift = q("SELECT count(*) FROM equipment_location_inventory li JOIN equipment_items i ON i.id=li.equipment_item_id WHERE i.is_serialized AND li.quantity_on_hand <> (SELECT count(*) FROM equipment_units u WHERE u.item_id=i.id AND u.location_id=li.location_id AND u.status='available')")[0][0]
+check("every unit-tracked store count matches its available units", drift == 0, drift)
+
 # ── single-branch onboarding still works ──
 single = {"business": {"id": q("SELECT business_id::text FROM pickup_locations WHERE id=%s", (LOC["north"],))[0][0]},
           "location": {"name": f"V074 single {tag}", "line1": "3 Elm St", "city": "Melville", "state": "NY", "zip": "11747", "fulfillment_mode": "pickup_only", "partner_type": "owned"}, "stock": [], "team": []}

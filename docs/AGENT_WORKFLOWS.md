@@ -146,10 +146,13 @@ verify the effective order price as well as the displayed catalog price.
    consumed, and a return, cancellation, close-out or release puts it back
    (064). Overview counts bulk from these store rows, not unit rows.
 
-The Locations editor exposes a quantity field even for serialized items, but
-serialized allocation checks the actual available `equipment_units` rows.
-Changing only that number can produce misleading stock. Use physical units
-for serialized additions.
+For serialized items the Locations editor shows **Available units** read-only:
+the store count is always the number of `available` unit rows (089), and a
+direct write to it is recomputed. To take a serialized item out of stock, set
+its units to **Retired**; to put it back, set them **Available** or add units.
+The shop, cart quote and checkout follow the change immediately; a customer
+whose page was loaded earlier is refused at submit with an out-of-stock
+message (088).
 
 Pickup availability needs an active product/location, enabled pickup on both,
 and positive store stock. Multi-item carts offer only locations shared by every
