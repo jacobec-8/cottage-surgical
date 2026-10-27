@@ -37,13 +37,15 @@ export default function CartDrawer() {
   // The server charges the chosen store's rental price; quote it with the same
   // store selection checkout uses (066). Catalog prices show until it loads.
   const quoteItems = rentItems.map((i) => ({ item_id: i.id, quantity: i.qty }))
+  // Delivery goes to a stocked branch nearest this ZIP (086); quote with the same ZIP checkout sends.
+  const deliveryZip = fulfillmentChoice === 'delivery' && /^\d{5}/.test(form.zip.trim()) ? form.zip.trim().slice(0, 5) : null
   const quote = useQuery({
-    queryKey: ['storefront_rental_quote', fulfillmentChoice, pickupLocationId, quoteItems],
+    queryKey: ['storefront_rental_quote', fulfillmentChoice, pickupLocationId, deliveryZip, quoteItems],
     enabled: open && quoteItems.length > 0 && (fulfillmentChoice === 'delivery' || Boolean(pickupLocationId)),
     queryFn: async () => {
       const { data, error } = await publicSupabase.rpc('quote_storefront_rentals', {
         p_items: quoteItems,
-        p_fulfillment: { method: fulfillmentChoice, pickup_location_id: fulfillmentChoice === 'pickup' ? pickupLocationId : null },
+        p_fulfillment: { method: fulfillmentChoice, pickup_location_id: fulfillmentChoice === 'pickup' ? pickupLocationId : null, delivery_zip: deliveryZip },
       })
       if (error) throw error
       return (data?.ok ? data.prices : {}) as Record<string, number | null>
@@ -99,6 +101,7 @@ export default function CartDrawer() {
       const fulfillment = {
         method: fulfillmentChoice,
         pickup_location_id: fulfillmentChoice === 'pickup' ? pickupLocationId : null,
+        delivery_zip: deliveryZip,
         payment_method: paymentChoice,
       }
 
