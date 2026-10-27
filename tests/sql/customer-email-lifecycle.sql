@@ -86,3 +86,15 @@ SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000002'
 SELECT test_assert(record_rental_payment('70000000-0000-0000-0000-000000000001')->>'reason'='ended','ended charge still refused');
 SELECT set_config('request.jwt.claim.sub','',false);
 SELECT 'customer email lifecycle assertions passed' AS result;
+-- Another business's customers see that business's name and phone, never Cottage's (083).
+INSERT INTO businesses(id,name) VALUES ('70000000-0000-0000-0000-000000000001','Harbor Medical');
+INSERT INTO pharmacy_settings(business_id,display_name,phone) VALUES ('70000000-0000-0000-0000-000000000001','Harbor <Medical>','555-0100');
+INSERT INTO pickup_locations(id,name,business_id,address_line1) VALUES ('10000000-0000-0000-0000-000000000070','Harbor North','70000000-0000-0000-0000-000000000001','1 Harbor St');
+INSERT INTO customers(id,full_name,email,location_id) VALUES ('20000000-0000-0000-0000-000000000070','Harbor Customer','harbor@example.test','10000000-0000-0000-0000-000000000070');
+INSERT INTO rental_orders(id,customer_id,location_id,status,source) VALUES
+ ('30000000-0000-0000-0000-000000000070','20000000-0000-0000-0000-000000000070','10000000-0000-0000-0000-000000000070','open','staff');
+INSERT INTO rental_line_items(order_id,equipment_item_id,line_type,quantity,monthly_rate) VALUES
+ ('30000000-0000-0000-0000-000000000070','40000000-0000-0000-0000-000000000001','rental',1,90);
+SELECT test_assert((SELECT bool_and(html_body LIKE '%HARBOR &lt;MEDICAL&gt;%' AND text_body LIKE '%Questions? Call 555-0100.%'
+  AND html_body NOT LIKE '%COTTAGE SURGICAL%' AND text_body NOT LIKE '%516-367-9030%') FROM customer_email_outbox
+  WHERE order_id='30000000-0000-0000-0000-000000000070'),'other business email uses its own escaped name and phone');
