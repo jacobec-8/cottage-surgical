@@ -373,6 +373,23 @@ check("restoring a unit puts it back on sale at once", on_hand() == 1 and short(
 drift = q("SELECT count(*) FROM equipment_location_inventory li JOIN equipment_items i ON i.id=li.equipment_item_id WHERE i.is_serialized AND li.quantity_on_hand <> (SELECT count(*) FROM equipment_units u WHERE u.item_id=i.id AND u.location_id=li.location_id AND u.status='available')")[0][0]
 check("every unit-tracked store count matches its available units", drift == 0, drift)
 
+# ── Pay-in-store / pay-on-delivery requests hold stock too (090) ──
+req = lambda who: call(None, "SET CONSTRAINTS ALL DEFERRED; SELECT public.submit_rental_request_with_fulfillment('rental',%s::jsonb,%s::jsonb,%s::jsonb,NULL,%s::jsonb)",
+    (json.dumps([{"item_id": two, "quantity": 1}]), json.dumps({"full_name": who, "phone": "5550190", "email": "v090@example.com"}),
+     json.dumps({"line1": "1 Hold St", "city": "Hicksville", "state": "NY", "zip": "11801"}), json.dumps({**pick, "payment_method": "in_store"})))
+held_unit = lambda oid: q("SELECT u.id::text, u.status FROM rental_line_items li JOIN equipment_units u ON u.id=li.equipment_unit_id WHERE li.order_id=%s AND li.is_active", (oid,))
+r, e = req("V090 first"); R1 = (r or {}).get("order_id")
+check("a pay-in-store request holds the unit as soon as it is submitted", bool(R1) and [s for _, s in held_unit(R1)] == ["reserved"] and on_hand() == 0, r or e)
+r, e = req("V090 second")
+check("a second request for the held last unit is refused, with no customer or order written",
+      (r or {}).get("reason") == "out_of_stock" and q("SELECT count(*) FROM customers WHERE full_name='V090 second'")[0][0] == 0, r or e)
+r, e = call(WEST, "SELECT public.cancel_order(%s,'Declined from the Requests inbox')", (R1,))
+check("declining the request frees the unit for the next customer", bool(r and r.get("ok")) and r.get("units_released") == 1 and short(1) == [], r or e)
+r, e = req("V090 third"); R3 = (r or {}).get("order_id"); before_approve = held_unit(R3) if R3 else None
+r2, e2 = call(WEST, "SELECT public.confirm_rental_request(%s)", (R3,))
+check("approving a held request keeps the same unit and creates the pickup",
+      bool(r2 and r2.get("ok")) and held_unit(R3) == before_approve and q("SELECT count(*) FROM deliveries WHERE order_id=%s", (R3,))[0][0] == 1, (r or e, r2 or e2))
+
 # ── single-branch onboarding still works ──
 single = {"business": {"id": q("SELECT business_id::text FROM pickup_locations WHERE id=%s", (LOC["north"],))[0][0]},
           "location": {"name": f"V074 single {tag}", "line1": "3 Elm St", "city": "Melville", "state": "NY", "zip": "11747", "fulfillment_mode": "pickup_only", "partner_type": "owned"}, "stock": [], "team": []}
