@@ -14,6 +14,8 @@ import { useLocationScope } from '../contexts/LocationContext'
 import { PaymentBadge } from './orders/badges'
 import { DRIVER_BRANCH_FIELDS, servesBranch, type BranchDriver } from '../lib/driverBranches'
 import { dispatchErrorMessage, windowProblem } from '../lib/dispatchErrors'
+import MissedStop from './delivery/MissedStop'
+import { businessToday, fmtStopDate, isLate, latestAttempt, reasonLabel, sortStops, type StopAttempt } from './delivery/stopStatus'
 
 type Photo = { storage_path: string; captured_at: string; notes: string | null }
 
@@ -61,12 +63,13 @@ type Deliv = {
     rental_line_items: { quantity: number; equipment: { name: string } | null }[]
   } | null
   delivery_photos: Photo[]
+  attempts: StopAttempt[]
 }
 
 const SELECT =
   'id,leg_type,status,scheduled_date,window_start,window_end,completed_at,address_line1,address_city,address_state,address_zip,driver_id,requires_driver,location_id,location:pickup_locations!deliveries_location_id_fkey(name),' +
   'order:rental_orders(id,order_no,payment_status,payment_preference,customer:customers(full_name),rental_line_items(quantity,equipment:equipment_items(name))),' +
-  'delivery_photos(storage_path,captured_at,notes)'
+  'delivery_photos(storage_path,captured_at,notes),attempts:stop_attempts(reason,note,created_at)'
 
 export default function Delivery() {
   const { profile } = useAuth()
@@ -119,7 +122,8 @@ export default function Delivery() {
         : q.eq('status', 'completed').order('completed_at', { ascending: false })
       const { data, error } = await q.overrideTypes<Deliv[], { merge: false }>()
       if (error) throw error
-      return data
+      // Late stops first, then ones still needing a date (097).
+      return view === 'active' ? sortStops(data, businessToday()) : data
     },
   })
 
@@ -253,6 +257,8 @@ function DeliveryRow({
   const addressEditable = !isStorePickup && (d.status === 'pending' || d.status === 'scheduled' || (missingAddress && d.status === 'en_route'))
   const [addr, setAddr] = useState({ line1: d.address_line1 ?? '', city: d.address_city ?? '', state: d.address_state ?? 'NY', zip: d.address_zip ?? '' })
   const card = clickableCard(d, onOpen, selected)
+  const missed = latestAttempt(d.attempts)
+  const canMiss = d.requires_driver && (d.status === 'scheduled' || d.status === 'en_route')
   const qc = useQueryClient()
   const [driver, setDriver] = useState(d.driver_id ?? '')
   const [date, setDate] = useState(d.scheduled_date ?? '')
@@ -383,8 +389,14 @@ function DeliveryRow({
               <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 capitalize">{d.leg_type}</span>
             )}
             <span className={`text-xs px-2 py-0.5 rounded-full capitalize ${statusClass(d.status)}`}>{statusLabel(d.status)}</span>
+            {isLate(d, businessToday()) && <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">Late · was {fmtStopDate(d.scheduled_date!)}</span>}
             {d.order && <PaymentBadge paymentStatus={d.order.payment_status} paymentPreference={d.order.payment_preference} />}
           </div>
+          {missed && (
+            <div className="mt-1 text-sm font-medium text-amber-800">
+              Missed {new Date(missed.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}: {reasonLabel(missed.reason)}{missed.note ? ` — “${missed.note}”` : ''}{d.status === 'pending' ? '. Needs a new date and driver.' : ''}
+            </div>
+          )}
           {missingAddress ? (
             <div className="mt-0.5 text-sm font-medium text-amber-700">No address on file{isDriver ? ' — contact the store before leaving' : ' — add one below before dispatch'}</div>
           ) : (
@@ -405,7 +417,7 @@ function DeliveryRow({
             </div>
           )}
         </div>
-        <div className={`flex shrink-0 items-center gap-2 ${isDriver ? 'w-full sm:w-auto' : ''}`} onClick={stopOpen}>
+        <div className={`flex shrink-0 flex-wrap items-center justify-end gap-2 ${isDriver ? 'w-full sm:w-auto' : ''}`} onClick={stopOpen}>
           <DetailsHint show={Boolean(onOpen)} />
           {d.status === 'scheduled' && isDriver && activeStop && (
             <span className="w-full text-xs text-slate-500 sm:w-auto">Finish #{activeStop.order?.order_no} first</span>
@@ -436,6 +448,8 @@ function DeliveryRow({
               </button>
             )
           )}
+          {/* Drivers report a miss at the door; staff can also for a scheduled stop (097). */}
+          {canMiss && (!isDriver || d.status === 'en_route') && <MissedStop deliveryId={d.id} isPickup={d.leg_type === 'pickup'} compact={!isDriver} />}
           {isStorePickup && d.status !== 'completed' && d.status !== 'cancelled' && (
             <button onClick={() => completeStorePickup.mutate()} disabled={completeStorePickup.isPending}
               className="min-h-10 rounded-lg bg-purple-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-50">

@@ -471,5 +471,26 @@ check("with sales on, a purchase gets past the switch to Stripe (fake key → st
 tags = [r[0] for r in q("SELECT asset_tag FROM equipment_units WHERE location_id = ANY(%s::uuid[]) AND asset_tag NOT LIKE 'V0%%'", (list(LOC.values()),))]
 check("onboarding gives units short readable tags (SKU-XXXXXX)", bool(tags) and all(re.fullmatch(r"[A-Z0-9-]+-[0-9A-F]{6}", t) for t in tags), tags[:4])
 
+# ── Missed stops (097) ──
+q("UPDATE equipment_location_inventory SET quantity_on_hand=quantity_on_hand+5 WHERE equipment_item_id=%s AND location_id=%s", (BULK, LOC["west"]))
+r, e = order(WEST, LOC["west"], WDRV, date="2026-11-09", ws="09:00", we="10:00", item=BULK)
+if not (r and r.get("ok")): print("missed-stop order failed:", r or e)
+m_order = r["order_id"]; m = leg(m_order)
+q("UPDATE customers SET email='v097@example.com' WHERE id=(SELECT customer_id FROM rental_orders WHERE id=%s)", (m_order,))
+r, e = call(WDRV_USER, "SELECT public.start_delivery(%s)", (m,)); check("driver starts the stop that will be missed", bool(r and r.get("ok")), r or e)
+r, e = call(WDRV_USER, "SELECT public.report_missed_stop(%s,'other',NULL)", (m,)); check("'Other' needs a note", (r or {}).get("reason") == "note_required", r or e)
+r, e = call(EAST, "SELECT public.report_missed_stop(%s,'no_one_home',NULL)", (m,)); check("staff of another branch cannot report it", (r or {}).get("reason") == "forbidden", r or e)
+r, e = call(WDRV_USER, "SELECT public.report_missed_stop(%s,'no_one_home','Rang twice')", (m,))
+st = q("SELECT status, driver_id, scheduled_date FROM deliveries WHERE id=%s", (m,))[0]
+check("the driver reports 'no one home': stop back to needs-scheduling, driver freed", bool(r and r.get("ok")) and st == ("pending", None, None)
+      and q("SELECT active_delivery_id FROM drivers WHERE id=%s", (WDRV,))[0][0] is None, (r or e, st))
+check("the attempt is recorded with reason, note and the original date", q("SELECT reason, note, scheduled_date::text FROM stop_attempts WHERE delivery_id=%s", (m,)) == [("no_one_home", "Rang twice", "2026-11-09")])
+check("the order goes back to Approved", q("SELECT status FROM rental_orders WHERE id=%s", (m_order,))[0][0] == "open", q("SELECT status FROM rental_orders WHERE id=%s", (m_order,)))
+check("the customer is emailed to rebook", q("SELECT count(*) FROM customer_email_outbox WHERE order_id=%s AND event_key LIKE 'stop_missed:%%'", (m_order,))[0][0] == 1)
+check("store staff see the attempt; another branch's staff don't", call(WEST, "SELECT count(*) FROM stop_attempts WHERE delivery_id=%s", (m,))[0] == 1 and call(EAST, "SELECT count(*) FROM stop_attempts WHERE delivery_id=%s", (m,))[0] == 0)
+r, e = call(WEST, "UPDATE deliveries SET driver_id=%s, scheduled_date='2026-11-10' WHERE id=%s RETURNING status", (WDRV, m)); check("staff reschedule the missed stop", r == "scheduled", r or e)
+r, e = call(WEST, "SELECT public.report_missed_stop(%s,'wrong_address',NULL)", (m,)); check("staff can also report a scheduled stop missed", bool(r and r.get("ok")), r or e)
+check("guests cannot report stops", q("SELECT has_function_privilege('anon','public.report_missed_stop(uuid,text,text)','EXECUTE')")[0][0] is False)
+
 conn.rollback(); print("-- ROLLED BACK")
 f = [n for n, ok in results if not ok]; print(f"{len(results)-len(f)}/{len(results)} passed"); sys.exit(1 if f else 0)
