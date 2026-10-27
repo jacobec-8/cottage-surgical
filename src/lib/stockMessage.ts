@@ -12,3 +12,8 @@ export function outOfStockMessage(shortages: readonly Shortage[] | undefined, me
   const fix = method === 'pickup' ? 'Lower the quantity, choose another store, or call us.' : 'Lower the quantity or call us.'
   return `Not enough ${where}: ${parts.join(', ')}. ${fix}`
 }
+
+/** A stock refusal stands until a stock check newer than the one it followed (refusedAt) passes. */
+export function refusalStands(refusedAt: number | null, quote: { ok?: boolean; updatedAt: number }): boolean {
+  return refusedAt !== null && !(quote.ok === true && quote.updatedAt > refusedAt)
+}

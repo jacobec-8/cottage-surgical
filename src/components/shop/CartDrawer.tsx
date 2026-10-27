@@ -7,7 +7,7 @@ import { X, ShoppingCart, Trash2, Plus, Minus, CheckCircle, CreditCard, Store, T
 import { dispatchCustomerEmails } from '../../lib/customerEmails'
 import { commonPickupLocations, pickupLocationSelection } from '../../lib/fulfillment'
 import { publicSupabase } from '../../lib/publicSupabase'
-import { outOfStockMessage, type Shortage } from '../../lib/stockMessage'
+import { outOfStockMessage, refusalStands, type Shortage } from '../../lib/stockMessage'
 import { useCart } from './CartContext'
 
 const REASONS: Record<string, string> = {
@@ -21,6 +21,8 @@ const REASONS: Record<string, string> = {
   out_of_stock: 'Sorry — something in your cart just sold out. Update your cart or call us.',
   invalid_payment_method: 'Choose a payment method that matches pickup or delivery.',
 }
+// While the cart is open, recheck stock so it follows staff changes both ways.
+const STOCK_RECHECK_MS = 15_000
 
 export default function CartDrawer() {
   const { items, open, setOpen, setQty, remove, clear, count } = useCart()
@@ -32,6 +34,7 @@ export default function CartDrawer() {
   const [busy, setBusy] = useState(false)
   const submittingRef = useRef(false)
   const [error, setError] = useState('')
+  const [stockRefusal, setStockRefusal] = useState<{ message: string; at: number } | null>(null)
   const [done, setDone] = useState<{ numbers: number[]; fulfillment: 'pickup' | 'delivery' } | null>(null)
 
   const rentItems = items.filter((i) => i.mode === 'rent')
@@ -44,6 +47,7 @@ export default function CartDrawer() {
   const quote = useQuery({
     queryKey: ['storefront_rental_quote', fulfillmentChoice, pickupLocationId, deliveryZip, quoteItems],
     enabled: open && quoteItems.length > 0 && (fulfillmentChoice === 'delivery' || Boolean(pickupLocationId)),
+    refetchInterval: STOCK_RECHECK_MS,
     queryFn: async () => {
       const { data, error } = await publicSupabase.rpc('quote_storefront_rentals', {
         p_items: quoteItems,
@@ -55,7 +59,12 @@ export default function CartDrawer() {
   })
   const quotedPrices = quote.data?.ok ? quote.data.prices ?? {} : {}
   // The server refuses quantities it can't hold right now (088); say so before checkout.
-  const stockProblem = quote.data?.reason === 'out_of_stock' ? outOfStockMessage(quote.data.shortages, fulfillmentChoice) : null
+  const quotedShortage = quote.data?.reason === 'out_of_stock' ? outOfStockMessage(quote.data.shortages, fulfillmentChoice) : null
+  // A refused submit clears itself once a newer check finds the stock again (e.g. staff restocked).
+  const refusedForStock = stockRefusal && refusalStands(stockRefusal.at, { ok: quote.data?.ok, updatedAt: quote.dataUpdatedAt })
+    ? stockRefusal.message
+    : null
+  const stockProblem = quotedShortage ?? refusedForStock
   const effectivePrice = (item: typeof items[number]) => item.mode === 'purchase'
     ? item.price
     : Number(quotedPrices[item.id] ?? (fulfillmentChoice === 'pickup'
@@ -92,6 +101,7 @@ export default function CartDrawer() {
     submittingRef.current = true
     setBusy(true)
     setError('')
+    setStockRefusal(null)
     try {
       if (fulfillmentChoice === 'pickup' && !selectedPickupLocation) {
         throw new Error('Choose an available pickup location.')
@@ -133,8 +143,9 @@ export default function CartDrawer() {
               throw new Error('Please enter a valid email for payment and order updates.')
             }
             if (data?.reason === 'out_of_stock') {
+              setStockRefusal({ message: outOfStockMessage(data.shortages, fulfillmentChoice), at: quote.dataUpdatedAt })
               void quote.refetch()
-              throw new Error(outOfStockMessage(data.shortages, fulfillmentChoice))
+              return
             }
             throw new Error(REASONS[data?.reason] || 'We couldn’t start your payment. Please call us.')
           }
@@ -149,8 +160,9 @@ export default function CartDrawer() {
           })
           if (error) throw new Error('Something went wrong. Please try again or call us.')
           if (data?.reason === 'out_of_stock') {
+            setStockRefusal({ message: outOfStockMessage(data.shortages, fulfillmentChoice), at: quote.dataUpdatedAt })
             void quote.refetch()
-            throw new Error(outOfStockMessage(data.shortages, fulfillmentChoice))
+            return
           }
           if (!data?.ok) throw new Error(REASONS[data?.reason] || 'We couldn’t submit your rental request. Please call us.')
           rentNo = data.order_no
@@ -190,7 +202,7 @@ export default function CartDrawer() {
     }
   }
 
-  const close = () => { setOpen(false); setError('') }
+  const close = () => { setOpen(false); setError(''); setStockRefusal(null) }
   const inp = 'border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-navy/20'
 
   return (
