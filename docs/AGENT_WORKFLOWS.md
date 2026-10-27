@@ -326,6 +326,11 @@ would be left behind. Store logins are owner, staff or driver only (080); create
 platform admins from Staff. Regression check against a database with 074–080 applied (one transaction, always
 rolled back): `VERIFY_DB_URL=... python3 scripts/verify-three-location.py`.
 
+Owners and admins see a **Stores** table on the Dashboard when **All my stores**
+is selected (`store_overview`, 093): per store, new requests, approved but not
+handed over, stops today, late stops, rentals out, overdue payments and items
+out of stock (red = needs action). Clicking a row switches to that store.
+
 ## 5. Requests, fulfillment, payments, and returns
 
 | Operation | Action and resulting state | Verify |

@@ -433,5 +433,14 @@ check("direct profile writes still cannot promote anyone", q("SELECT role FROM p
 r, e = call(ADMIN, "SELECT public.add_branch_login(%s,'staff','Admin Added QA','',%s,'verify-087-pass')", (LOC_A, f"v087-adm-{tag}"))
 check("admins can add a login at any branch", bool(r and r.get("ok")), r or e)
 
+# ── Owner sees one row per own store; staff and other owners see nothing extra (093) ──
+ov = lambda who: call(who, "SELECT coalesce(json_agg(t), '[]'::json) FROM public.store_overview() t")[0] or []
+mine = {r["location_id"] for r in ov(OWNER)}
+check("the owner's store overview lists exactly their business's stores", mine == {r[0] for r in q("SELECT id::text FROM pickup_locations WHERE business_id=(SELECT business_id FROM profiles WHERE id=%s)", (OWNER,))}, mine)
+check("store staff get no store overview", ov(NORTH) == [], ov(NORTH))
+row = next((r for r in ov(OWNER) if r["location_id"] == LOC["west"]), {})
+check("the overview counts that store's waiting requests", row.get("requests") == q("SELECT count(*) FROM rental_orders WHERE location_id=%s AND status='requested'", (LOC["west"],))[0][0], row)
+check("guests cannot call the store overview", q("SELECT has_function_privilege('anon','public.store_overview()','EXECUTE')")[0][0] is False)
+
 conn.rollback(); print("-- ROLLED BACK")
 f = [n for n, ok in results if not ok]; print(f"{len(results)-len(f)}/{len(results)} passed"); sys.exit(1 if f else 0)
