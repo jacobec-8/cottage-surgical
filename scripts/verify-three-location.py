@@ -11,7 +11,8 @@ checks owner and branch scope across both, shared-driver assignment on every
 write path, overlap and one-en-route rules, catalog/notes/photo/GPS/notification
 isolation, and onboarding atomicity and replay. Exit status 1 on any failure.
 """
-import json, os, sys, uuid, psycopg2
+import json
+import re, os, sys, uuid, psycopg2
 
 dsn = os.environ.get("VERIFY_DB_URL")
 if not dsn:
@@ -466,6 +467,9 @@ check("an out-of-stock retail item is not listed", flags() == (False, False), fl
 q("UPDATE equipment_location_inventory SET quantity_on_hand=3 WHERE equipment_item_id=%s", (retail,))
 r, e = pco([{"item_id": retail, "quantity": 1}], "V094 buyer on")
 check("with sales on, a purchase gets past the switch to Stripe (fake key → stripe_error)", (r or {}).get("reason") == "stripe_error", r or e)
+# ── Onboarding asset tags are readable (096) ──
+tags = [r[0] for r in q("SELECT asset_tag FROM equipment_units WHERE location_id = ANY(%s::uuid[]) AND asset_tag NOT LIKE 'V0%%'", (list(LOC.values()),))]
+check("onboarding gives units short readable tags (SKU-XXXXXX)", bool(tags) and all(re.fullmatch(r"[A-Z0-9-]+-[0-9A-F]{6}", t) for t in tags), tags[:4])
 
 conn.rollback(); print("-- ROLLED BACK")
 f = [n for n, ok in results if not ok]; print(f"{len(results)-len(f)}/{len(results)} passed"); sys.exit(1 if f else 0)
