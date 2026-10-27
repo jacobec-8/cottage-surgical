@@ -92,9 +92,9 @@ export default function Layout({ children }: { children: ReactNode }) {
   const businessName = business?.name ?? 'All stores'
   // Cottage's own contact is only the fallback for the all-stores admin view;
   // another business never shows Cottage's details.
-  // A single store shows its own phone (its staff answer it), else the business's.
+  // A single store shows its own phone and reply-to (its staff answer them), else the business's.
   const contactPhone = business ? selectedLocation?.phone || business.settings?.phone || null : null
-  const contactEmail = business ? business.settings?.email ?? null : null
+  const contactEmail = business ? selectedLocation?.reply_to_email || business.settings?.email || null : null
   const initials = name.split(' ').map((s) => s[0]).slice(0, 2).join('').toUpperCase()
   const workspaces = getVisibleWorkspaces(profile?.role, access.canAccess)
   const activeWorkspace = workspaces.find((workspace) => workspace.tabs.some((tab) => matchesWorkspaceTab(pathname, tab.to)))
