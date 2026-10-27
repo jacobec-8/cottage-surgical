@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { AlertCircle, Loader2, RefreshCw } from 'lucide-react'
+import { AlertCircle, Loader2, RefreshCw, Search } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useStripeReconcile } from '../lib/useStripeReconcile'
 import { ORDER_LIST_SELECT, type Order } from './orders/types'
@@ -12,6 +12,7 @@ import OrderDetailPanel from './orders/OrderDetailPanel'
 import { useSchedulePickup } from './orders/useSchedulePickup'
 import { useSelectedOrder } from './orders/useSelectedOrder'
 import { useLocationScope } from '../contexts/LocationContext'
+import { matchesOrderSearch } from './orders/format'
 
 /** Confirmed / in-progress work — excludes inbox and unpaid checkouts; cancelled has its own tab. */
 const WORK_TABS = ['all', 'open', 'scheduled', 'pickup_scheduled', 'closed', 'cancelled'] as const
@@ -22,6 +23,7 @@ export default function Orders() {
   const { selectedLocationId } = useLocationScope()
   const [tab, setTab] = useState<Tab>('open')
   const [actionMsg, setActionMsg] = useState('')
+  const [search, setSearch] = useState('')
   const [selected, setSelected] = useSelectedOrder()
   // Opportunistic server sweep: promotes paid-but-unverified Stripe sessions
   // so they reach Requests without the buyer's browser (C1 backstop).
@@ -64,20 +66,23 @@ export default function Orders() {
     },
   })
 
+  // Search narrows every tab, including its count.
+  const workRows = useMemo(() => (work.data ?? []).filter((o) => matchesOrderSearch(o, search)), [work.data, search])
+  const unpaidRows = useMemo(() => (unpaid.data ?? []).filter((o) => matchesOrderSearch(o, search)), [unpaid.data, search])
   const counts = useMemo(() => {
     // "All" = live work; cancelled orders only count under their own tab.
-    const live = (work.data ?? []).filter((o) => o.status !== 'cancelled')
-    const c: Record<string, number> = { all: live.length, unpaid: unpaid.data?.length ?? 0 }
-    for (const o of work.data ?? []) {
+    const live = workRows.filter((o) => o.status !== 'cancelled')
+    const c: Record<string, number> = { all: live.length, unpaid: unpaidRows.length }
+    for (const o of workRows) {
       const group = OPEN_RENTAL_STATUSES.has(o.status) ? 'open' : o.status
       c[group] = (c[group] ?? 0) + 1
     }
     return c
-  }, [work.data, unpaid.data])
+  }, [workRows, unpaidRows])
 
   const shown = tab === 'unpaid'
-    ? (unpaid.data ?? [])
-    : (work.data ?? []).filter((o) => (
+    ? unpaidRows
+    : workRows.filter((o) => (
         tab === 'all' ? o.status !== 'cancelled'
           : tab === 'open' ? OPEN_RENTAL_STATUSES.has(o.status)
             : o.status === tab
@@ -105,6 +110,13 @@ export default function Orders() {
       {actionMsg && (
         <div className="mb-3 text-sm rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-slate-700">{actionMsg}</div>
       )}
+
+      <label className="relative mb-3 block max-w-md">
+        <span className="sr-only">Search orders</span>
+        <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+        <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by order #, customer, phone or address"
+          className="w-full rounded-lg border border-slate-300 py-2.5 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      </label>
 
       <div className="flex gap-1 mb-4 flex-wrap">
         {tabs.map((t) => {
@@ -178,7 +190,7 @@ export default function Orders() {
       {error && <div className="text-red-600 text-sm">Couldn’t load orders. Please try again.</div>}
       {!isLoading && !error && shown.length === 0 && (
         <div className="text-slate-500 text-sm">
-          {tab === 'unpaid' ? 'No unpaid checkouts right now.' : 'No orders here yet.'}
+          {search.trim() ? 'No orders match this search.' : tab === 'unpaid' ? 'No unpaid checkouts right now.' : 'No orders here yet.'}
         </div>
       )}
 

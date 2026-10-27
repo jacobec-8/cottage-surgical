@@ -160,3 +160,10 @@ test('sourceLabel maps codes to staff-facing words', () => {
   assert.equal(sourceLabel('staff'), 'Staff')
   assert.equal(sourceLabel(null), null)
 })
+
+test('order search matches number, name, phone digits, email and address', async () => {
+  const { matchesOrderSearch } = await import('../../src/screens/orders/format.ts')
+  const o = { order_no: 426, address_line1: '73 Harbor Ln', address_city: 'Woodbury', customer: { full_name: 'Pat Lee', phone: '(516) 555-0199', email: 'pat@example.test' } }
+  for (const term of ['', '426', '#426', 'pat', 'LEE', '555-0199', '5550199', 'harbor', 'woodbury', 'example.test']) assert.equal(matchesOrderSearch(o, term), true, term)
+  for (const term of ['427', 'sam', '12']) assert.equal(matchesOrderSearch(o, term), false, term)
+})

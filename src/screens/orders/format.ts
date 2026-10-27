@@ -128,3 +128,18 @@ export function paymentStateLabel(state: OrderPaymentState): string {
   if (state === 'refunded') return 'Refunded'
   return 'Not Paid'
 }
+
+/** Order search: order number (with or without #), customer name, phone, email or address. */
+export function matchesOrderSearch(
+  o: Pick<Order, 'order_no' | 'address_line1' | 'address_city'> & { customer: { full_name: string | null; phone?: string | null; email?: string | null } | null },
+  term: string,
+): boolean {
+  const q = term.trim().toLowerCase()
+  if (!q) return true
+  const digits = q.replace(/\D/g, '')
+  if (/^#?\d+$/.test(q) && String(o.order_no) === q.replace('#', '')) return true
+  const text = [o.customer?.full_name, o.customer?.email, o.address_line1, o.address_city, `#${o.order_no}`].filter(Boolean).join(' ').toLowerCase()
+  if (text.includes(q)) return true
+  const phone = (o.customer?.phone ?? '').replace(/\D/g, '')
+  return digits.length >= 3 && phone.includes(digits)
+}
