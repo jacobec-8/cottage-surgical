@@ -125,7 +125,7 @@ function Stock({ branch, others, catalog, onChange }: Omit<Props, 'index'>) {
                 </label>
                 {row && <label className="w-24"><span className="mb-1 block text-xs text-slate-500">In stock</span><input aria-label={`Quantity for ${item.name}`} type="number" onWheel={(e) => e.currentTarget.blur()} min="0" max="500" step="1" className={INPUT} value={row.quantity} onChange={(e) => update(item.id, { quantity: e.target.value })} /></label>}
               </div>
-              {row && (
+              {row && item.is_rentable !== false && (
                 <details className="mt-3 text-sm">
                   <summary className="cursor-pointer text-blue-700">Pickup and rental prices</summary>
                   <div className="mt-3 grid gap-3 sm:grid-cols-2">

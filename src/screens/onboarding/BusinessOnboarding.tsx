@@ -57,8 +57,18 @@ export default function BusinessOnboarding() {
     if (error) throw error
     return data as { id: string; name: string }[]
   } })
+  const owners = useQuery({
+    queryKey: ['onboarding_owners', draft.businessId],
+    enabled: Boolean(draft.businessId),
+    queryFn: async () => {
+      const { data, error } = await supabase.from('profiles').select('id,full_name').eq('role', 'owner').eq('is_active', true).eq('business_id', draft.businessId)
+      if (error) throw error
+      return data as { id: string; full_name: string | null }[]
+    },
+  })
+  const ownerNames = draft.businessId ? (owners.data ?? []).map((owner) => owner.full_name || 'Owner') : []
   const catalog = useQuery({ queryKey: ['onboarding_catalog'], queryFn: async () => {
-    const { data, error } = await supabase.from('equipment_items').select('id,name,category,sku,is_serialized,pickup_enabled,delivery_enabled,pickup_rental_price,delivery_rental_price').eq('is_active', true).order('name')
+    const { data, error } = await supabase.from('equipment_items').select('id,name,category,sku,is_serialized,is_rentable,pickup_enabled,delivery_enabled,pickup_rental_price,delivery_rental_price').eq('is_active', true).order('name')
     if (error) throw error
     return data as CatalogItem[]
   } })
@@ -157,7 +167,7 @@ export default function BusinessOnboarding() {
         <fieldset disabled={locked} className="min-w-0 p-5 sm:p-7">
           <h2 ref={title} tabIndex={-1} className="scroll-mt-6 text-xl font-semibold outline-none">{TITLES[step]}</h2>
           <p className="mb-6 mt-1 text-sm text-slate-500">{HINTS[step]}</p>
-          {step === 0 && <BusinessStep draft={draft} set={set} businesses={businesses} businessName={businessName} />}
+          {step === 0 && <BusinessStep draft={draft} set={set} businesses={businesses} businessName={businessName} ownerNames={ownerNames} />}
           {step === 1 && current && <div>
             <div className="mb-5 flex flex-wrap items-center gap-2">
               {draft.branches.map((branch, index) => (
@@ -179,7 +189,7 @@ export default function BusinessOnboarding() {
             </div>
           </div>}
           {step === 2 && <DriversStep draft={draft} existing={existing} onChange={(drivers) => set('drivers', drivers)} />}
-          {step === 3 && <ReviewStep draft={draft} businessName={businessName} catalog={catalog.data ?? []} existing={existing} go={go} />}
+          {step === 3 && <ReviewStep draft={draft} businessName={businessName} catalog={catalog.data ?? []} existing={existing} go={go} ownerNames={ownerNames} />}
         </fieldset>
         {(error || save.error) && <div role="alert" className="mx-5 mb-5 rounded-lg bg-red-50 p-3 text-sm text-red-700 sm:mx-7">{error || save.error?.message}</div>}
         <footer className="sticky bottom-0 z-10 flex items-center justify-between gap-3 rounded-b-2xl border-t border-slate-200 bg-white p-5 sm:px-7">
@@ -190,7 +200,7 @@ export default function BusinessOnboarding() {
       <aside className="rounded-2xl border border-slate-200 bg-slate-50 p-5 xl:sticky xl:top-6">
         <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Your setup</p>
         <h2 className="mt-3 break-words font-semibold text-slate-900">{businessName || 'New business'}</h2>
-        <p className="mt-1 text-sm text-slate-500">{draft.ownerLogin && draft.ownerUsername ? `Owner @${draft.ownerUsername.trim().toLowerCase()}` : 'No owner login yet'}</p>
+        <p className="mt-1 text-sm text-slate-500">{draft.ownerLogin && draft.ownerUsername ? `Owner @${draft.ownerUsername.trim().toLowerCase()}` : ownerNames.length ? `Owner: ${ownerNames.join(', ')}` : 'No owner login yet'}</p>
         <dl className="my-5 space-y-3 text-sm">
           <Summary label="Branches" value={draft.branches.length} />
           <Summary label="Items in stock" value={totalItems} />
@@ -208,10 +218,11 @@ type BusinessStepProps = {
   set: <K extends keyof BusinessDraft>(key: K, value: BusinessDraft[K]) => void
   businesses: { data?: { id: string; name: string }[]; isLoading: boolean; error: unknown; refetch: () => void }
   businessName: string
+  ownerNames: string[]
 }
-function BusinessStep({ draft, set, businesses, businessName }: BusinessStepProps) {
+function BusinessStep({ draft, set, businesses, businessName, ownerNames }: BusinessStepProps) {
   return <div className="space-y-5">
-    <Field label="Business"><select className={INPUT} value={draft.businessId} onChange={(e) => { set('businessId', e.target.value); set('drivers', []) }}><option value="">New business</option>{(businesses.data ?? []).map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></Field>
+    <Field label="Business"><select className={INPUT} value={draft.businessId} onChange={(e) => { set('businessId', e.target.value); set('drivers', []); set('ownerLogin', !e.target.value) }}><option value="">New business</option>{(businesses.data ?? []).map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></Field>
     {businesses.isLoading && <p className="text-sm text-slate-500">Loading existing businesses…</p>}
     {Boolean(businesses.error) && <p role="alert" className="text-sm text-red-600">Couldn’t load existing businesses. <button type="button" onClick={businesses.refetch} className="underline">Try again</button></p>}
     {draft.businessId ? <Note>New branches will belong to {businessName}. Its contact details and current branches stay as they are; its existing owner automatically covers the new branches.</Note> : <>
@@ -229,7 +240,7 @@ function BusinessStep({ draft, set, businesses, businessName }: BusinessStepProp
     </>}
     <div className="rounded-xl border border-slate-200 p-4">
       <label className="flex items-start gap-3"><input type="checkbox" className="mt-1 h-4 w-4" checked={draft.ownerLogin} onChange={(e) => set('ownerLogin', e.target.checked)} />
-        <span><span className="block font-medium text-slate-900">{draft.businessId ? 'Add an owner login' : 'Create the owner login'}</span><span className="mt-1 block text-sm text-slate-500">One username for every branch: orders, customers, stock, billing and dispatch. No access to other businesses or admin settings.</span></span>
+        <span><span className="block font-medium text-slate-900">{draft.businessId ? (ownerNames.length ? 'Add another owner login' : 'Add an owner login') : 'Create the owner login'}</span>{draft.businessId && <span className={`mt-1 block text-sm ${ownerNames.length ? 'text-slate-600' : 'font-medium text-amber-700'}`}>{ownerNames.length ? `${ownerNames.join(', ')} already sees every branch, including the new ones.` : 'This business has no owner login yet. Add one so the owner can oversee every branch.'}</span>}<span className="mt-1 block text-sm text-slate-500">One username for every branch: orders, customers, stock, billing and dispatch. No access to other businesses or admin settings.</span></span>
       </label>
       {draft.ownerLogin && <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <TextField label="First name" required value={draft.ownerFirstName} onChange={(v) => set('ownerFirstName', v)} />

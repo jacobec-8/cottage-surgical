@@ -35,8 +35,8 @@ export default function Locations() {
       const { data, error } = await supabase.from('pickup_locations').select(
         'id,name,address_line1,address_line2,address_city,address_state,address_zip,phone,instructions,' +
         'fulfillment_mode,partner_type,is_active,' +
-        'users:profiles!profiles_location_id_fkey(id,email,role,is_active)',
-      ).order('name')
+        'users:profiles!profiles_location_id_fkey(id,email,role,is_active),business:businesses!inner(is_active)',
+      ).eq('business.is_active', true).order('name')
       if (error) throw error
       return data as unknown as Location[]
     },

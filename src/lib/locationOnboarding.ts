@@ -1,4 +1,6 @@
 export type CatalogItem = {
+  /** For-sale (retail) items have no rental prices to set per branch. */
+  is_rentable?: boolean
   id: string; name: string; category: string; sku: string | null; is_serialized: boolean
   pickup_enabled: boolean; delivery_enabled: boolean
   pickup_rental_price: number | null; delivery_rental_price: number | null
