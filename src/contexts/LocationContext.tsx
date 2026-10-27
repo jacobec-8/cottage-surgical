@@ -15,6 +15,7 @@ export type StaffLocation = {
   address_state: string
   address_zip: string
   phone: string | null
+  reply_to_email: string | null
   fulfillment_mode: 'pickup_and_delivery' | 'pickup_only'
   partner_type: 'owned' | 'partner'
   is_active: boolean
@@ -46,7 +47,7 @@ export function LocationProvider({ children }: { children: ReactNode }) {
     enabled: Boolean(profile?.id),
     queryFn: async () => {
       let query = supabase.from('pickup_locations')
-        .select('id,name,slug,address_line1,address_city,address_state,address_zip,phone,fulfillment_mode,partner_type,is_active,business:businesses!inner(id,name,is_active,settings:pharmacy_settings(phone,email))')
+        .select('id,name,slug,address_line1,address_city,address_state,address_zip,phone,reply_to_email,fulfillment_mode,partner_type,is_active,business:businesses!inner(id,name,is_active,settings:pharmacy_settings(phone,email))')
         // Stores of archived businesses (e.g. finished QA runs) never appear in the switcher.
         .eq('business.is_active', true)
         .order('name')
