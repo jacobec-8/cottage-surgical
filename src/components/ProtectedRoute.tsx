@@ -28,10 +28,20 @@ export default function ProtectedRoute({ children }: { children: ReactNode }) {
     )
   }
 
+  // An owner or admin can turn a staff or driver login off (087); say so plainly.
+  if (!profile.is_active && STAFF_APP_ROLES.includes(profile.role)) {
+    return (
+      <Notice title="Login turned off">
+        Your login has been turned off. Ask your manager or business owner to turn it back on.
+        <SignOutLink signOut={signOut} />
+      </Notice>
+    )
+  }
+
   if (!profile.is_active || !STAFF_APP_ROLES.includes(profile.role)) {
     return (
       <Notice title="Access denied">
-        This area is for Cottage Surgical staff. Your account doesn’t have access.
+        This area is for store staff. Your account doesn’t have access.
         <SignOutLink signOut={signOut} />
       </Notice>
     )
