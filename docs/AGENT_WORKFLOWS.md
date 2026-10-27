@@ -130,6 +130,20 @@ Selecting a store does not turn **Edit item** into a store-only catalog edit.
 Use the item's **Locations** controls for store stock and price overrides, and
 verify the effective order price as well as the displayed catalog price.
 
+### A store adds products from the shared catalog
+
+With a store selected (staff always have theirs), **Inventory** has two tabs:
+**In [store]** and **Add from catalog**. The catalog tab lists every active
+product the store does not carry yet, with search and a category filter;
+**Add to [store]** assigns it, then **Added · set stock** opens the item to
+enter the quantity (counted items) or add units (unit-tracked items).
+
+The catalog includes the Cottage Pharmacy retail list (246 products, loaded by
+`scripts/import_retail_catalog.py`, 091). They are counted, for-sale items at
+$0 ("call for pricing"). The website lists a product only when
+`storefront_listed` is true: rentals as before (even out of stock), retail
+items only once a store has stock and a sale price is set (**Edit item**).
+
 ### More units of an existing product
 
 1. Search and open the correct product. Select the correct store in the header.

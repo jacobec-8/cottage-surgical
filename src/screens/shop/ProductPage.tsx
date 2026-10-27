@@ -25,10 +25,10 @@ export default function ProductPage({
     queryKey: ['shop_product', handle],
     queryFn: async () => {
       let { data } = await supabase.from('equipment_items').select(PRODUCT_FIELDS)
-        .eq('shopify_handle', handle).eq('is_active', true).maybeSingle()
+        .eq('shopify_handle', handle).eq('is_active', true).eq('storefront_listed', true).maybeSingle()
       if (!data) {
         const r = await supabase.from('equipment_items').select(PRODUCT_FIELDS)
-          .eq('id', handle).eq('is_active', true).maybeSingle()
+          .eq('id', handle).eq('is_active', true).eq('storefront_listed', true).maybeSingle()
         data = r.data
       }
       return (data as unknown as Product) ?? null

@@ -11,6 +11,8 @@ import { canSwitchStores } from '../lib/roles'
 import { useCatalogManager } from '../lib/useCatalogManager'
 import { useAuth } from '../contexts/AuthContext'
 import StockStatusBadges, { LOW_STOCK_THRESHOLD } from '../components/StockStatusBadges'
+import { CATEGORIES } from '../lib/categories'
+import CatalogPicker from './inventory/CatalogPicker'
 
 type Item = {
   id: string
@@ -35,7 +37,6 @@ type Item = {
   location_inventory: { location_id: string; quantity_on_hand: number; pickup_enabled: boolean }[]
 }
 
-const CATEGORIES = ['mobility', 'seating', 'bedroom', 'respiratory']
 const SELECT = 'id,name,description,category,sku,monthly_rental_price,pickup_rental_price,delivery_rental_price,sale_price,quantity_on_hand,image_url,is_serialized,is_active,is_rentable,is_purchasable,pickup_enabled,delivery_enabled,same_day_pickup,installation_required,location_inventory:equipment_location_inventory(location_id,quantity_on_hand,pickup_enabled)'
 
 export default function Inventory() {
@@ -46,6 +47,8 @@ export default function Inventory() {
   const [editing, setEditing] = useState<Partial<Item> | null>(null) // null=closed, {} = new
   const catalogManager = useCatalogManager()
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [view, setView] = useState<'store' | 'catalog'>('store')
+  const [category, setCategory] = useState('all')
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['equipment_items', selectedLocationId],
@@ -65,13 +68,14 @@ export default function Inventory() {
     onError: (e) => alert(`Couldn’t remove item: ${(e as Error).message}`),
   })
 
-  const filtered = (data ?? []).filter((it) => {
-    const matchesStore = !selectedLocationId
-      || it.location_inventory?.some((entry) => entry.location_id === selectedLocationId)
-    const matchesSearch = [it.name, it.description, it.sku]
-      .filter(Boolean).join(' ').toLowerCase().includes(q.toLowerCase())
-    return matchesStore && matchesSearch
-  })
+  const inStore = (it: Item) => Boolean(selectedLocationId && it.location_inventory?.some((entry) => entry.location_id === selectedLocationId))
+  const matches = (it: Item) => (category === 'all' || it.category === category)
+    && [it.name, it.description, it.sku, it.category].filter(Boolean).join(' ').toLowerCase().includes(q.toLowerCase())
+  const filtered = (data ?? []).filter((it) => matches(it) && (!selectedLocationId || inStore(it)))
+  // A store adds products from the shared catalog itself ("Add from catalog").
+  const addable = selectedLocationId ? (data ?? []).filter((it) => it.is_active && !inStore(it) && matches(it)) : []
+  const showCatalog = Boolean(selectedLocation) && view === 'catalog'
+  const usedCategories = CATEGORIES.filter((c) => (data ?? []).some((it) => it.category === c))
 
   return (
     <div>
@@ -92,16 +96,21 @@ export default function Inventory() {
         {!catalogManager && ' The shared catalog is maintained by Cottage Surgical; set your stores’ stock and prices on each item.'}
       </p>
 
-      <div className={`mb-4 grid gap-3 ${canSwitchStores(profile?.role) ? 'sm:grid-cols-[minmax(0,1fr)_minmax(15rem,20rem)]' : ''}`}>
+      <div className={`mb-4 grid gap-3 ${canSwitchStores(profile?.role) ? 'sm:grid-cols-[minmax(0,1fr)_auto_minmax(15rem,20rem)]' : 'sm:grid-cols-[minmax(0,1fr)_auto]'}`}>
         <div className="relative">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search inventory..."
+            placeholder={showCatalog ? 'Search the catalog…' : 'Search inventory...'}
             className="w-full border border-slate-300 rounded-lg pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
+        <select aria-label="Filter by category" value={category} onChange={(event) => setCategory(event.target.value)}
+          className="rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm capitalize text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="all">All categories</option>
+          {usedCategories.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
         {canSwitchStores(profile?.role) && (
           <label className="relative block">
             <span className="sr-only">Filter inventory by store</span>
@@ -119,10 +128,23 @@ export default function Inventory() {
         )}
       </div>
 
+      {selectedLocation && (
+        <div role="tablist" aria-label="Inventory view" className="mb-4 inline-flex rounded-xl border border-slate-200 bg-white p-1">
+          {([['store', `In ${selectedLocation.name}`, filtered.length], ['catalog', 'Add from catalog', addable.length]] as const).map(([key, label, count]) => (
+            <button key={key} role="tab" aria-selected={view === key} onClick={() => setView(key)}
+              className={`min-h-10 rounded-lg px-4 text-sm font-medium ${view === key ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
+              {label} · {count}
+            </button>
+          ))}
+        </div>
+      )}
+
       {isLoading && <div className="text-slate-500">Loading…</div>}
       {error && <div className="text-red-600 text-sm">{(error as Error).message}</div>}
 
-      <div className="space-y-3">
+      {showCatalog && selectedLocation && <CatalogPicker items={addable} locationId={selectedLocation.id} locationName={selectedLocation.name} />}
+
+      <div className={`space-y-3 ${showCatalog ? 'hidden' : ''}`}>
         {filtered.map((it) => {
           const open = expandedId === it.id
           const scopedInventory = selectedLocationId
@@ -216,9 +238,11 @@ export default function Inventory() {
         })}
       </div>
 
-      {!isLoading && !error && filtered.length === 0 && (
+      {!showCatalog && !isLoading && !error && filtered.length === 0 && (
         <div className="rounded-xl border border-slate-200 bg-white py-10 text-center text-sm text-slate-500">
-          No inventory matches this store and search.
+          {selectedLocation && !q && category === 'all'
+            ? <>Nothing is stocked at {selectedLocation.name} yet. <button type="button" onClick={() => setView('catalog')} className="font-medium text-blue-600 hover:underline">Add products from the catalog</button>.</>
+            : 'No inventory matches this store and search.'}
         </div>
       )}
 

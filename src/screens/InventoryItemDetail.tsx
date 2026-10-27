@@ -15,6 +15,7 @@ import { useLocationScope } from '../contexts/LocationContext'
 import { useCatalogManager } from '../lib/useCatalogManager'
 import { bulkCounts } from '../lib/bulkStock'
 import StockStatusBadges from '../components/StockStatusBadges'
+import { CATEGORIES } from '../lib/categories'
 
 type Item = {
   id: string
@@ -97,7 +98,6 @@ type ItemNote = {
 }
 
 type Tab = 'overview' | 'units' | 'rentals' | 'pickup' | 'notes'
-const CATEGORIES = ['mobility', 'seating', 'bedroom', 'respiratory']
 const ITEM_SELECT = 'id,name,description,category,sku,image_url,monthly_rental_price,pickup_rental_price,delivery_rental_price,sale_price,quantity_on_hand,is_serialized,is_rentable,is_purchasable,is_active,created_at,updated_at,pickup_enabled,delivery_enabled,same_day_pickup,installation_required'
 
 export default function InventoryItemDetail({ itemId }: { itemId: string }) {

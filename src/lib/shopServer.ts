@@ -52,6 +52,8 @@ export const getPublicCatalog = cache(async (): Promise<Product[]> => {
     .from('equipment_items')
     .select(PRODUCT_FIELDS)
     .eq('is_active', true)
+    // Retail items show only once a store stocks them with a price (091).
+    .eq('storefront_listed', true)
     .order('category')
     .order('name')
 
@@ -74,6 +76,8 @@ export const getPublicProduct = cache(async (handle: string): Promise<PublicProd
     .select(PRODUCT_FIELDS)
     .eq('shopify_handle', normalizedHandle)
     .eq('is_active', true)
+    // Retail items show only once a store stocks them with a price (091).
+    .eq('storefront_listed', true)
     .maybeSingle()
 
   if (byHandle.error) {
@@ -90,6 +94,8 @@ export const getPublicProduct = cache(async (handle: string): Promise<PublicProd
     .select(PRODUCT_FIELDS)
     .eq('id', normalizedHandle)
     .eq('is_active', true)
+    // Retail items show only once a store stocks them with a price (091).
+    .eq('storefront_listed', true)
     .maybeSingle()
 
   if (byId.error) {
