@@ -337,6 +337,8 @@ is selected (`store_overview`, 093): per store, new requests, approved but not
 handed over, stops today, late stops, rentals out, overdue payments and items
 out of stock (red = needs action). Clicking a row switches to that store.
 
+**Store separation (100).** One owner owns all the pharmacies; no store sees or affects another, only the owner and admins see across. Products: the owner's products (`equipment_items.location_id` null) are changed by the owner or admins only; a store's own products (`location_id` set, "Add Item" as staff) are seen and changed by that store only. Stock, units, store prices, item notes, module switches, retail on/off, email name/reply-to and order numbers are per store. Website delivery goes only to a stocked store whose **Delivery ZIP codes** list the customer's ZIP (set at onboarding or on the store page); "Also deliver to ZIP codes no store lists" marks a fallback store. Overdue status, payment reconciliation and the email queue run from the scheduler; staff only send their own store's pending emails. `scripts/check_store_separation.py` fails if any table, rule, unique index or function shares store data.
+
 ## 5. Requests, fulfillment, payments, and returns
 
 | Operation | Action and resulting state | Verify |

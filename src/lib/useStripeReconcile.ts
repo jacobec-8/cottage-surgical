@@ -34,7 +34,8 @@ export function useStripeReconcile() {
   const { profile } = useAuth()
   return useQuery({
     queryKey: ['stripe_reconcile'],
-    enabled: profile?.role === 'admin' || profile?.role === 'owner' || profile?.role === 'staff',
+    // Network-wide: the scheduler runs it every 10 minutes; only admins may also trigger it (100).
+    enabled: profile?.role === 'admin',
     staleTime: 60_000,
     refetchInterval: 300_000,
     refetchIntervalInBackground: true,

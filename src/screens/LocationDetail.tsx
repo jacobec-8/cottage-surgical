@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { parseZips } from '../lib/businessOnboarding'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, Building2, ChevronRight, MapPin, Package, Plus, Save,
@@ -35,6 +36,10 @@ type Location = {
   fulfillment_mode: 'pickup_and_delivery' | 'pickup_only'
   partner_type: 'owned' | 'partner'
   is_active: boolean
+  delivery_zips: string[]
+  delivers_anywhere: boolean
+  email_display_name: string | null
+  reply_to_email: string | null
   business: { id: string; name: string } | null
   users: LocationUser[]
 }
@@ -63,6 +68,7 @@ export default function LocationDetail({ locationId }: { locationId: string }) {
     name: '', line1: '', line2: '', city: '', state: 'NY', zip: '', phone: '', notes: '',
     fulfillmentMode: 'pickup_and_delivery' as Location['fulfillment_mode'],
     partnerType: 'owned' as Location['partner_type'], active: true,
+    deliveryZips: '', deliversAnywhere: false, emailName: '', replyTo: '',
   })
   const [userDrafts, setUserDrafts] = useState<UserDraft[]>([])
 
@@ -71,7 +77,7 @@ export default function LocationDetail({ locationId }: { locationId: string }) {
     queryFn: async () => {
       const { data, error } = await supabase.from('pickup_locations').select(
         'id,name,address_line1,address_line2,address_city,address_state,address_zip,phone,instructions,' +
-        'fulfillment_mode,partner_type,is_active,business:businesses(id,name),' +
+        'fulfillment_mode,partner_type,is_active,delivery_zips,delivers_anywhere,email_display_name,reply_to_email,business:businesses(id,name),' +
         'users:profiles!profiles_location_id_fkey(id,email,full_name,phone,role,is_active)',
       ).eq('id', locationId).maybeSingle()
       if (error) throw error
@@ -99,6 +105,8 @@ export default function LocationDetail({ locationId }: { locationId: string }) {
       phone: value.phone ?? '', notes: value.instructions ?? '',
       fulfillmentMode: value.fulfillment_mode, partnerType: value.partner_type,
       active: value.is_active,
+      deliveryZips: (value.delivery_zips ?? []).join(', '), deliversAnywhere: value.delivers_anywhere ?? false,
+      emailName: value.email_display_name ?? '', replyTo: value.reply_to_email ?? '',
     })
   }, [location.data])
 
@@ -111,6 +119,10 @@ export default function LocationDetail({ locationId }: { locationId: string }) {
       if (!/^\d{5}(-\d{4})?$/.test(form.zip.trim())) throw new Error('Enter a five-digit ZIP code (or ZIP+4).')
       if (!/^[A-Za-z]{2}$/.test(form.state.trim())) throw new Error('Enter the two-letter state code.')
       if (/,/.test(form.line1) && /\d{5}/.test(form.line1)) throw new Error('Enter only the street in Street; put city, state and ZIP in their own fields.')
+      const zips = parseZips(form.deliveryZips)
+      if (zips === null) throw new Error('Delivery ZIP codes must be five digits, separated by commas.')
+      if (form.fulfillmentMode === 'pickup_and_delivery' && !zips.length && !form.deliversAnywhere) throw new Error('Enter the ZIP codes this store delivers to.')
+      if (form.replyTo.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.replyTo.trim())) throw new Error('Enter a valid reply-to email.')
       const { error } = await supabase.from('pickup_locations').update({
         name: form.name.trim(), address_line1: form.line1.trim(),
         address_line2: form.line2.trim() || null, address_city: form.city.trim(),
@@ -118,6 +130,9 @@ export default function LocationDetail({ locationId }: { locationId: string }) {
         phone: form.phone.trim() || null, instructions: form.notes.trim() || null,
         fulfillment_mode: form.fulfillmentMode, partner_type: form.partnerType,
         is_active: form.active,
+        delivery_zips: form.fulfillmentMode === 'pickup_and_delivery' ? zips : [],
+        delivers_anywhere: form.fulfillmentMode === 'pickup_and_delivery' && form.deliversAnywhere,
+        email_display_name: form.emailName.trim() || null, reply_to_email: form.replyTo.trim() || null,
       }).eq('id', locationId)
       if (error) throw error
     },
@@ -199,6 +214,9 @@ export default function LocationDetail({ locationId }: { locationId: string }) {
             <Field label="Location capability"><select className={INPUT} value={form.fulfillmentMode} onChange={(event) => setForm({ ...form, fulfillmentMode: event.target.value as Location['fulfillment_mode'] })}><option value="pickup_and_delivery">Pickup and delivery</option><option value="pickup_only">Pickup only</option></select></Field>
             <Field label="Store relationship"><select className={INPUT} value={form.partnerType} onChange={(event) => setForm({ ...form, partnerType: event.target.value as Location['partner_type'] })}><option value="owned">Owned store</option><option value="partner">Partner pickup store</option></select></Field>
             <Field label="Location status"><select className={INPUT} value={form.active ? 'active' : 'inactive'} onChange={(event) => setForm({ ...form, active: event.target.value === 'active' })}><option value="active">Active</option><option value="inactive">Inactive</option></select></Field>
+            {form.fulfillmentMode === 'pickup_and_delivery' && <div className="sm:col-span-2"><Field label="Delivery ZIP codes"><input className={INPUT} value={form.deliveryZips} placeholder="e.g. 11954, 11930" onChange={(event) => setForm({ ...form, deliveryZips: event.target.value })} /></Field><p className="mt-1 text-xs text-slate-500">Website deliveries for these ZIP codes go to this store only.</p><label className="mt-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={form.deliversAnywhere} onChange={(event) => setForm({ ...form, deliversAnywhere: event.target.checked })} /> Also deliver to ZIP codes no store lists</label></div>}
+            <Field label="Name on customer emails"><input className={INPUT} value={form.emailName} placeholder="Store name" onChange={(event) => setForm({ ...form, emailName: event.target.value })} /></Field>
+            <Field label="Reply-to email"><input type="email" className={INPUT} value={form.replyTo} placeholder="store@example.com" onChange={(event) => setForm({ ...form, replyTo: event.target.value })} /></Field>
             <div className="sm:col-span-2"><Field label="Notes"><textarea rows={3} className={INPUT} value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></Field></div>
           </div>
           {save.error && <div className="mt-3 text-sm text-red-600">{(save.error as Error).message}</div>}

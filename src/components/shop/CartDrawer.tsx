@@ -15,6 +15,7 @@ const REASONS: Record<string, string> = {
   missing_name: 'Please enter your name.',
   invalid_item: 'One of your items isn’t available right now. Please remove it and try again.',
   purchases_disabled: 'Online purchases aren’t available right now. Please call us to buy this item.',
+  outside_delivery_area: 'We don’t deliver to that ZIP code yet. Please call us, or choose in-store pickup.',
   no_items: 'Your cart is empty.',
   invalid_fulfillment: 'Choose pickup or delivery.',
   invalid_pickup_location: 'Choose an available pickup location.',
@@ -56,7 +57,7 @@ export default function CartDrawer() {
         p_fulfillment: { method: fulfillmentChoice, pickup_location_id: fulfillmentChoice === 'pickup' ? pickupLocationId : null, delivery_zip: deliveryZip },
       })
       if (error) throw error
-      return data as { ok: boolean; reason?: string; prices?: Record<string, number | null>; shortages?: Shortage[] }
+      return data as { ok: boolean; reason?: string; zip?: string; prices?: Record<string, number | null>; shortages?: Shortage[] }
     },
   })
   const quotedPrices = quote.data?.ok ? quote.data.prices ?? {} : {}
@@ -66,7 +67,23 @@ export default function CartDrawer() {
   const refusedForStock = stockRefusal && refusalStands(stockRefusal.at, { ok: quote.data?.ok, updatedAt: quote.dataUpdatedAt })
     ? stockRefusal.message
     : null
-  const stockProblem = quotedShortage ?? refusedForStock
+  const areaProblem = quote.data?.reason === 'outside_delivery_area'
+    ? `We don’t deliver to ${quote.data.zip ?? 'that ZIP code'} yet. Please call us, or choose in-store pickup.` : null
+  const stockProblem = quotedShortage ?? refusedForStock ?? areaProblem
+  // Tell the customer when an open cart's price changes (store restocked, price updated) — never silently (100).
+  const lastPrices = useRef<Record<string, number | null> | null>(null)
+  const [priceNotice, setPriceNotice] = useState('')
+  useEffect(() => {
+    const prices = quote.data?.ok ? quote.data.prices ?? null : null
+    if (!prices) return
+    const before = lastPrices.current
+    lastPrices.current = prices
+    if (!before) return
+    const changed = rentItems.filter((i) => before[i.id] != null && prices[i.id] != null && Number(before[i.id]) !== Number(prices[i.id]))
+    if (changed.length) {
+      setPriceNotice(changed.map((i) => `${i.name}: now ${shopPrice(Number(prices[i.id]))}/mo (was ${shopPrice(Number(before[i.id]))})`).join('; '))
+    }
+  }, [quote.data, rentItems])
   const effectivePrice = (item: typeof items[number]) => item.mode === 'purchase'
     ? item.price
     : Number(quotedPrices[item.id] ?? (fulfillmentChoice === 'pickup'
@@ -312,6 +329,7 @@ export default function CartDrawer() {
                 </div>
               </fieldset>
             )}
+            {priceNotice && <div role="status" className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">Price updated — {priceNotice}</div>}
             {stockProblem && !error && <div role="alert" className="text-sm text-red-600">{stockProblem}</div>}
             {error && <div role="alert" className="text-sm text-red-600">{error}</div>}
             <button disabled={busy || Boolean(stockProblem)} className="w-full bg-terracotta hover:opacity-90 text-white rounded-lg py-3 font-semibold disabled:opacity-50">
