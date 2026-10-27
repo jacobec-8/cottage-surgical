@@ -143,6 +143,12 @@ The catalog includes the Cottage Pharmacy retail list (246 products, loaded by
 $0 ("call for pricing"). The website lists a product only when
 `storefront_listed` is true: rentals as before (even out of stock), retail
 items only once a store has stock and a sale price is set (**Edit item**).
+Retail items can be bought on the website only while **Retail sales on the
+website** is **On** (Dashboard, All my stores; Cottage Surgical's owner or an
+admin; 094/095). Off by default: then only rentals are listed and purchase
+checkout is refused (`purchases_disabled`). On: a retail product is listed and
+buyable (`can_buy`) once it is for sale, priced above $0 and in stock at an
+open store; customers pay by card through Stripe.
 
 ### More units of an existing product
 

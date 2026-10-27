@@ -13,6 +13,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { statusClass, statusLabel } from '../lib/status'
 import { useLocationScope } from '../contexts/LocationContext'
 import StoreOverview from './dashboard/StoreOverview'
+import RetailSalesSwitch from './dashboard/RetailSalesSwitch'
 
 const MODULES = [
   { to: '/customers', icon: Users, title: 'Customers', desc: 'Directory with rental history and payment methods on file' },
@@ -127,6 +128,7 @@ export default function Dashboard() {
           <p className="text-slate-500 text-sm mb-5">Centralized control for rentals, inventory, billing, and delivery routes.</p>
 
           {!selectedLocationId && (profile?.role === 'owner' || profile?.role === 'admin') && <StoreOverview />}
+          {!selectedLocationId && (profile?.role === 'owner' || profile?.role === 'admin') && <RetailSalesSwitch />}
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
             {tiles.map((t) => {

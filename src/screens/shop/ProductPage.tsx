@@ -6,7 +6,6 @@ import { useQuery } from '@tanstack/react-query'
 import { Check, Truck, Plus, Minus, ArrowLeft, MapPin, Wrench, Zap } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { PRODUCT_FIELDS, productPickupLocations, rentalPriceText, type Product } from '../../lib/shop'
-import { SHOP_PURCHASES_ENABLED } from '../../lib/shopFlags'
 import ShopHeader from '../../components/shop/ShopHeader'
 import ShopFooter from '../../components/shop/ShopFooter'
 import { useCart } from '../../components/shop/CartContext'
@@ -42,12 +41,12 @@ export default function ProductPage({
     (p.pickup_enabled && p.pickup_rental_price != null)
     || (p.delivery_enabled && p.delivery_rental_price != null)
   ))
-  const purchasable = !!(SHOP_PURCHASES_ENABLED && p && p.is_purchasable && p.sale_price != null)
+  const purchasable = Boolean(p?.can_buy && p.sale_price != null)
   const pickupPrice = p ? rentalPriceText(p.pickup_price_range, p.pickup_rental_price) : null
   const deliveryPrice = p ? rentalPriceText(p.delivery_price_range, p.delivery_rental_price) : null
   const addToCart = (mode: 'rent' | 'purchase') => {
     if (!p) return
-    if (mode === 'purchase' && !SHOP_PURCHASES_ENABLED) return
+    if (mode === 'purchase' && !purchasable) return
     const price = mode === 'rent' ? Number(p.delivery_rental_price ?? p.pickup_rental_price) : Number(p.sale_price)
     const n = Math.min(Math.max(1, qty), 20)
     const fulfillment = {

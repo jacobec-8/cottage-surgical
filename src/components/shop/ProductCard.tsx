@@ -3,7 +3,6 @@
 import Link from 'next/link'
 import { Check, MapPin, Truck, Wrench, Zap } from 'lucide-react'
 import { productPickupLocations, rentalPriceText, type Product } from '../../lib/shop'
-import { SHOP_PURCHASES_ENABLED } from '../../lib/shopFlags'
 import { useCart } from './CartContext'
 
 export default function ProductCard({ p }: { p: Product }) {
@@ -15,8 +14,8 @@ export default function ProductCard({ p }: { p: Product }) {
   )
   const pickupPrice = rentalPriceText(p.pickup_price_range, p.pickup_rental_price)
   const deliveryPrice = rentalPriceText(p.delivery_price_range, p.delivery_rental_price)
-  // Purchase stays implemented; hidden until sales launch (shopFlags).
-  const purchasable = SHOP_PURCHASES_ENABLED && p.is_purchasable && p.sale_price != null
+  // Buyable only while the owner's retail switch is on and it is priced and in stock (094).
+  const purchasable = Boolean(p.can_buy && p.sale_price != null)
   const soldOut = p.in_stock === false && (rentable || purchasable)
   const base = {
     id: p.id,

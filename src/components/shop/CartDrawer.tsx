@@ -13,6 +13,7 @@ import { useCart } from './CartContext'
 const REASONS: Record<string, string> = {
   missing_name: 'Please enter your name.',
   invalid_item: 'One of your items isn’t available right now. Please remove it and try again.',
+  purchases_disabled: 'Online purchases aren’t available right now. Please call us to buy this item.',
   no_items: 'Your cart is empty.',
   invalid_fulfillment: 'Choose pickup or delivery.',
   invalid_pickup_location: 'Choose an available pickup location.',
@@ -170,7 +171,7 @@ export default function CartDrawer() {
         }
       }
 
-      // Purchases → Stripe Checkout (kept for when SHOP_PURCHASES_ENABLED is true).
+      // Purchases → Stripe Checkout; the server refuses them while retail sales are off (094).
       if (buyItems.length) {
         const { data, error } = await publicSupabase.rpc('create_stripe_checkout_with_fulfillment', {
           p_items: buyItems.map((i) => ({ item_id: i.id, quantity: i.qty })),

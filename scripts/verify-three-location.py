@@ -347,6 +347,8 @@ r, e = co([{"item_id": item, "quantity": 1}], "V088 checkout stripe down")
 oid = q("SELECT o.id::text, o.status FROM rental_orders o JOIN customers c ON c.id=o.customer_id WHERE c.full_name='V088 checkout stripe down'")
 check("when Stripe refuses the session, the checkout is cancelled and its hold released", (r or {}).get("reason") == "stripe_error" and oid and oid[0][1] == "cancelled" and bulk_qty() == stock_before, (r or e, oid, stock_before, bulk_qty()))
 q("UPDATE equipment_items SET is_purchasable=true, sale_price=99 WHERE id IN (%s,%s)", (one, item))
+# Purchases need the owner's retail switch on (094).
+q("UPDATE pharmacy_settings SET online_retail_enabled=true WHERE business_id=(SELECT id FROM businesses WHERE slug='cottage-surgical')")
 pco = lambda items, who: call(None, "SET CONSTRAINTS ALL DEFERRED; SELECT public.create_stripe_checkout_with_fulfillment(%s::jsonb,%s::jsonb,%s::jsonb,'https://www.cottagesurgical.com',%s::jsonb)",
     (json.dumps(items), json.dumps({"full_name": who, "phone": "", "email": ""}), json.dumps({"line1": "", "city": "", "state": "NY", "zip": ""}), json.dumps(pick)))
 r, e = pco([{"item_id": one, "quantity": 1}], "V088 purchase late")
@@ -441,6 +443,29 @@ check("store staff get no store overview", ov(NORTH) == [], ov(NORTH))
 row = next((r for r in ov(OWNER) if r["location_id"] == LOC["west"]), {})
 check("the overview counts that store's waiting requests", row.get("requests") == q("SELECT count(*) FROM rental_orders WHERE location_id=%s AND status='requested'", (LOC["west"],))[0][0], row)
 check("guests cannot call the store overview", q("SELECT has_function_privilege('anon','public.store_overview()','EXECUTE')")[0][0] is False)
+
+# ── Online retail sales switch (094) ──
+retail = q("INSERT INTO equipment_items(name, sku, category, is_serialized, is_rentable, is_purchasable, sale_price, delivery_enabled, pickup_enabled, is_active, list_when_out_of_stock) VALUES (%s,%s,'braces & supports',false,false,true,12,true,true,true,false) RETURNING id::text", (f"V094 brace {tag}", f"V094-{tag}"))[0][0]
+q("INSERT INTO equipment_location_inventory(equipment_item_id, location_id, quantity_on_hand, pickup_enabled) VALUES (%s,%s,3,true)", (retail, LOC["west"]))
+flags = lambda: q("SELECT public.can_buy(i), public.storefront_listed(i) FROM equipment_items i WHERE id=%s", (retail,))[0]
+q("UPDATE pharmacy_settings SET online_retail_enabled=false WHERE business_id=(SELECT id FROM businesses WHERE slug='cottage-surgical')")
+check("with retail sales off, a priced, stocked retail item is not buyable or listed", flags() == (False, False), flags())
+r, e = pco([{"item_id": retail, "quantity": 1}], "V094 buyer off")
+check("with retail sales off, purchase checkout is refused", (r or {}).get("reason") == "purchases_disabled", r or e)
+refused = [call(NORTH, "SELECT public.set_online_retail(true)")[0], call(OWNER, "SELECT public.set_online_retail(true)")[0]]
+check("only admins (not staff, not another business's owner) may manage the switch", [call(w, "SELECT public.can_manage_online_retail()")[0] for w in (ADMIN, OWNER, NORTH)] == [True, False, False])
+check("store staff and another business's owner cannot switch retail sales on", [x.get("reason") for x in refused] == ["forbidden", "forbidden"], refused)
+r, e = call(ADMIN, "SELECT public.set_online_retail(true)")
+check("an admin switches retail sales on; the item becomes buyable and listed", bool(r and r.get("ok")) and flags() == (True, True), (r or e, flags()))
+q("UPDATE equipment_items SET sale_price=0 WHERE id=%s", (retail,))
+check("an unpriced retail item stays off the website even when sales are on", flags() == (False, False), flags())
+r, e = pco([{"item_id": retail, "quantity": 1}], "V094 buyer unpriced")
+check("purchase checkout refuses an unpriced item", (r or {}).get("reason") == "invalid_item", r or e)
+q("UPDATE equipment_items SET sale_price=12 WHERE id=%s", (retail,)); q("UPDATE equipment_location_inventory SET quantity_on_hand=0 WHERE equipment_item_id=%s", (retail,))
+check("an out-of-stock retail item is not listed", flags() == (False, False), flags())
+q("UPDATE equipment_location_inventory SET quantity_on_hand=3 WHERE equipment_item_id=%s", (retail,))
+r, e = pco([{"item_id": retail, "quantity": 1}], "V094 buyer on")
+check("with sales on, a purchase gets past the switch to Stripe (fake key → stripe_error)", (r or {}).get("reason") == "stripe_error", r or e)
 
 conn.rollback(); print("-- ROLLED BACK")
 f = [n for n, ok in results if not ok]; print(f"{len(results)-len(f)}/{len(results)} passed"); sys.exit(1 if f else 0)
