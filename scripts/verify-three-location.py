@@ -277,6 +277,33 @@ check("no guest-applicable policy calls a function guests cannot execute", bad =
 r, e = call(None, "SELECT count(*) FROM equipment_items WHERE is_active"); r2, e2 = call(None, "SELECT count(*) FROM pickup_locations WHERE is_active")
 check("guests read the active catalog and open stores", (r or 0) > 0 and (r2 or 0) > 0 and e is None and e2 is None, (r or e, r2 or e2))
 
+# ── First due date at handoff (085) ──
+done_charge = q("SELECT c.status, c.billing_start, c.next_due_date FROM recurring_charges c WHERE c.order_id=(SELECT order_id FROM deliveries WHERE id=%s)", (east_stop,))
+check("handoff sets the first due date to the billing start (unpaid)", bool(done_charge) and done_charge[0][0] == "current" and done_charge[0][2] == done_charge[0][1], done_charge)
+r, e = order(WEST, LOC["west"], WDRV, date="2026-11-12", ws="09:00", we="10:00", item=BULK); paid_stop = leg(r["order_id"])
+q("UPDATE rental_orders SET payment_status='paid' WHERE id=%s", (r["order_id"],))
+call(WDRV_USER, "SELECT public.start_delivery(%s)", (paid_stop,)); call(WEST, "SELECT public.complete_delivery(%s,NULL)", (paid_stop,))
+paid_charge = q("SELECT billing_start, next_due_date FROM recurring_charges WHERE order_id=%s", (r["order_id"],))
+check("a first month already paid makes the first due date one month after the start", bool(paid_charge) and paid_charge[0][1] is not None and paid_charge[0][1] > paid_charge[0][0], paid_charge)
+
+# ── Storefront delivery routing (086) ──
+item = q("INSERT INTO equipment_items(name, sku, category, is_serialized, is_rentable, is_purchasable, delivery_enabled, pickup_enabled, delivery_rental_price, is_active) VALUES (%s,%s,'mobility',false,true,false,true,false,10,true) RETURNING id::text", (f"V074 route {tag}", f"V074-ROUTE-{tag}"))[0][0]
+for loc, zipc, qty, price in [("north", "11747", 0, 11), ("east", "11743", 5, 12), ("west", "11801", 5, 13)]:
+    q("UPDATE pickup_locations SET address_zip=%s WHERE id=%s", (zipc, LOC[loc]))
+    q("INSERT INTO equipment_location_inventory(equipment_item_id, location_id, quantity_on_hand, pickup_enabled, delivery_rental_price) VALUES (%s,%s,%s,false,%s)", (item, LOC[loc], qty, price))
+route = lambda z, n=1: call(None, "SELECT public.validate_storefront_fulfillment(%s::jsonb, %s::jsonb)", (json.dumps([{"item_id": item, "quantity": n}]), json.dumps({"method": "delivery", "delivery_zip": z})))[0]
+check("delivery skips the nearest branch when it has no stock (11747 -> stocked East, not empty North)", route("11747")["pickup_location_id"] == LOC["east"], route("11747"))
+check("delivery prefers the stocked branch nearest the ZIP (11803 -> West)", route("11803")["pickup_location_id"] == LOC["west"], route("11803"))
+check("with no ZIP the choice is deterministic", route(None)["pickup_location_id"] == route(None)["pickup_location_id"])
+check("when no branch has enough, a listing branch still takes the request for review", route("11747", 50)["ok"] is True, route("11747", 50))
+quote = call(None, "SELECT public.quote_storefront_rentals(%s::jsonb, %s::jsonb)", (json.dumps([{"item_id": item, "quantity": 1}]), json.dumps({"method": "delivery", "delivery_zip": "11803"})))[0]
+check("the cart quote prices at the routed branch (West 13)", float(quote["prices"][item]) == 13.0, quote)
+r, e = call(None, "SET CONSTRAINTS ALL DEFERRED; SELECT public.submit_rental_request_with_fulfillment('rental', %s::jsonb, %s::jsonb, %s::jsonb, NULL, %s::jsonb)",
+            (json.dumps([{"item_id": item, "quantity": 1}]), json.dumps({"full_name": "V074 Route", "phone": "5550100"}),
+             json.dumps({"line1": "9 Route Rd", "city": "Hicksville", "state": "NY", "zip": "11803"}), json.dumps({"method": "delivery", "payment_method": "on_delivery"})))
+routed = q("SELECT location_id::text, monthly_rate FROM rental_orders WHERE id=%s", (r["order_id"],))[0] if r and r.get("ok") else None
+check("checkout routes by the address ZIP and charges the quoted price", routed and routed[0] == LOC["west"] and float(routed[1]) == 13.0, routed or e)
+
 # ── single-branch onboarding still works ──
 single = {"business": {"id": q("SELECT business_id::text FROM pickup_locations WHERE id=%s", (LOC["north"],))[0][0]},
           "location": {"name": f"V074 single {tag}", "line1": "3 Elm St", "city": "Melville", "state": "NY", "zip": "11747", "fulfillment_mode": "pickup_only", "partner_type": "owned"}, "stock": [], "team": []}
