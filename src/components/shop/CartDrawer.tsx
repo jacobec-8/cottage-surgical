@@ -60,7 +60,15 @@ export default function CartDrawer() {
       return data as { ok: boolean; reason?: string; zip?: string; prices?: Record<string, number | null>; shortages?: Shortage[] }
     },
   })
-  const quotedPrices = quote.data?.ok ? quote.data.prices ?? {} : {}
+  // A shortage reply carries no prices; keep this store's last quote rather than fall back to list price.
+  const quoteKey = `${fulfillmentChoice}|${pickupLocationId ?? ''}|${deliveryZip ?? ''}`
+  const [lastQuote, setLastQuote] = useState<{ key: string; prices: Record<string, number | null> } | null>(null)
+  useEffect(() => {
+    if (quote.data?.ok) setLastQuote({ key: quoteKey, prices: quote.data.prices ?? {} })
+  }, [quote.data, quoteKey])
+  const quotedPrices = quote.data?.ok
+    ? quote.data.prices ?? {}
+    : quote.data?.reason === 'out_of_stock' && lastQuote?.key === quoteKey ? lastQuote.prices : {}
   // The server refuses quantities it can't hold right now (088); say so before checkout.
   const quotedShortage = quote.data?.reason === 'out_of_stock' ? outOfStockMessage(quote.data.shortages, fulfillmentChoice) : null
   // A refused submit clears itself once a newer check finds the stock again (e.g. staff restocked).
