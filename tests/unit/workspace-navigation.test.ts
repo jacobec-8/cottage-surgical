@@ -35,9 +35,9 @@ test('staff detail belongs to Staff & Users while Staff Access is a distinct tab
   assert.equal(matchesWorkspaceTab('/drivers', '/delivery'), false)
 })
 
-test('3LOC-001: business owners get every order and delivery tab, and manage their team but not Staff Access', () => {
+test('3LOC-001 + 100: business owners get every order and delivery tab, their team, and their stores\' Staff Access', () => {
   const groups = getVisibleWorkspaces('owner', () => false)
   assert.deepEqual(groups.map((group) => group.tabs.map((tab) => tab.to)), [
-    ['/orders', '/requests', '/new-order'], ['/delivery', '/drivers'], ['/staff'],
+    ['/orders', '/requests', '/new-order'], ['/delivery', '/drivers'], ['/staff', '/staff-access'],
   ])
 })

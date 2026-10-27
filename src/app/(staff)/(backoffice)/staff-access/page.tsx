@@ -1,7 +1,8 @@
 import StaffAccess from '../../../../screens/StaffAccess'
-import { requireAdmin } from '../../../../lib/staffAccessServer'
+import { requireTeamManager } from '../../../../lib/staffAccessServer'
 
 export default async function StaffAccessPage() {
-  await requireAdmin()
+  // Module switches are per store (100); owners set them for their own stores.
+  await requireTeamManager()
   return <StaffAccess />
 }

@@ -5,8 +5,8 @@ type Props = { searchParams: Promise<{ [key: string]: string | string[] | undefi
 
 // Admin-only areas are a role restriction, not a module an admin switched off.
 const COPY = {
-  admin_only: 'This area is for administrators only. Your staff account can’t open it. Use an available navigation item or ask an administrator.',
-  module_off: 'An administrator has turned this module off for store staff. Use an available navigation item or ask an administrator to turn it on.',
+  admin_only: 'This area is for administrators only. Your account can’t open it. Use an available navigation item or ask an administrator.',
+  module_off: 'This module is turned off for this store’s staff. Use an available navigation item or ask the owner to turn it on.',
 }
 
 export default async function AccessLimitedPage({ searchParams }: Props) {
