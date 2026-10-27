@@ -492,5 +492,16 @@ r, e = call(WEST, "UPDATE deliveries SET driver_id=%s, scheduled_date='2026-11-1
 r, e = call(WEST, "SELECT public.report_missed_stop(%s,'wrong_address',NULL)", (m,)); check("staff can also report a scheduled stop missed", bool(r and r.get("ok")), r or e)
 check("guests cannot report stops", q("SELECT has_function_privilege('anon','public.report_missed_stop(uuid,text,text)','EXECUTE')")[0][0] is False)
 
+# ── Cancellation email wording (098) ──
+def mailed(oid): return q("SELECT coalesce(string_agg(text_body, ' '), '') FROM customer_email_outbox WHERE order_id=%s AND event_key LIKE 'order_cancelled%%'", (oid,))[0][0]
+q("UPDATE equipment_location_inventory SET quantity_on_hand=quantity_on_hand+4 WHERE equipment_item_id=%s AND location_id=%s", (BULK, LOC["west"]))
+def mail_order(name):
+    r, e = order(WEST, LOC["west"], item=BULK); oid = r["order_id"]
+    q("UPDATE customers SET email='v098@example.com', full_name=%s WHERE id=(SELECT customer_id FROM rental_orders WHERE id=%s)", (name, oid)); return oid
+o1 = mail_order("V098 changed mind"); call(WEST, "SELECT public.cancel_order(%s,'Customer changed their mind at the counter')", (o1,))
+check("a customer's own cancellation is not called 'denied'", "was cancelled" in mailed(o1) and "denied" not in mailed(o1), mailed(o1)[:120])
+o2 = mail_order("V098 declined"); q("UPDATE rental_orders SET status='requested' WHERE id=%s", (o2,)); call(WEST, "SELECT public.cancel_order(%s,'Declined from the Requests inbox')", (o2,))
+check("a request the store declines still says 'denied'", "denied" in mailed(o2), mailed(o2)[:120])
+
 conn.rollback(); print("-- ROLLED BACK")
 f = [n for n, ok in results if not ok]; print(f"{len(results)-len(f)}/{len(results)} passed"); sys.exit(1 if f else 0)
