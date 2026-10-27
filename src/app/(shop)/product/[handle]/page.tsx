@@ -1,5 +1,4 @@
 import type { Metadata } from 'next'
-import { notFound } from 'next/navigation'
 import ProductPage from '../../../../screens/shop/ProductPage'
 import { getPublicProduct } from '../../../../lib/shopServer'
 
@@ -16,9 +15,10 @@ export async function generateMetadata({ params }: ProductRouteProps): Promise<M
   const { handle } = await params
   const result = await getPublicProduct(handle)
 
-  // Resolve missing products through the route's not-found boundary before
-  // rendering product metadata.
-  if (result.status === 'not-found') notFound()
+  // A product can become listed between the one-minute rebuilds (retail sales
+  // switched on, priced, restocked), so an unlisted product is not cached as a
+  // 404: the page checks live in the browser instead. Keep it out of search.
+  if (result.status === 'not-found') return { title: 'Cottage Surgical', robots: { index: false } }
   if (result.status === 'unavailable') {
     return {
       title: 'Medical Equipment Rental | Cottage Surgical',
@@ -44,7 +44,6 @@ export async function generateMetadata({ params }: ProductRouteProps): Promise<M
 export default async function ProductRoute({ params }: ProductRouteProps) {
   const { handle } = await params
   const result = await getPublicProduct(handle)
-  if (result.status === 'not-found') notFound()
 
   return (
     <ProductPage
