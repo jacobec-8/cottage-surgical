@@ -33,7 +33,16 @@ export async function requireStaffModule(module: StaffModule, allowDriver = fals
   if (error || !setting?.enabled) redirect(`/access-limited?module=${module}`)
 }
 
+/** Admins, plus business owners managing their own team's logins (migration 087). */
+export async function requireTeamManager() {
+  await requireRole(['admin', 'owner'])
+}
+
 export async function requireAdmin() {
+  await requireRole(['admin'])
+}
+
+async function requireRole(roles: readonly string[]) {
   const supabase = await createClient()
   const claims = await supabase.auth.getClaims().catch(() => null)
   const userId = claims?.data?.claims?.sub
@@ -47,5 +56,5 @@ export async function requireAdmin() {
 
   if (!profile?.is_active) redirect('/admin-login')
   if (profile.role === 'driver') redirect('/delivery')
-  if (profile.role !== 'admin') redirect('/access-limited?reason=admin_only')
+  if (!roles.includes(profile.role)) redirect('/access-limited?reason=admin_only')
 }

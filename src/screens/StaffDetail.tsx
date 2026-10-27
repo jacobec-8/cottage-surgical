@@ -7,6 +7,9 @@ import { ArrowLeft, History, MessageSquarePlus, Save, ShieldCheck, Truck, UserCo
 import { useAuth } from '../contexts/AuthContext'
 import { authEmailToUsername } from '../lib/staffLogin'
 import { roleLabel } from '../lib/roles'
+import { canOwnerManage } from '../lib/branchLogins'
+import { useLocationScope } from '../contexts/LocationContext'
+import { LoginAccessSettings, ResetPassword } from './staff/LoginAccess'
 import { supabase } from '../lib/supabase'
 
 type Profile = { id: string; email: string; full_name: string | null; phone: string | null; role: 'admin' | 'owner' | 'staff' | 'driver'; is_active: boolean; created_at: string; updated_at: string; location_id: string | null }
@@ -16,6 +19,8 @@ type Delivery = { id: string; leg_type: string; status: string; scheduled_date: 
 
 export default function StaffDetail({ profileId }: { profileId: string }) {
   const { profile: currentProfile } = useAuth()
+  const { locations } = useLocationScope()
+  const viewerIsAdmin = currentProfile?.role === 'admin'
   const qc = useQueryClient()
   const [note, setNote] = useState('')
   const person = useQuery({
@@ -36,6 +41,7 @@ export default function StaffDetail({ profileId }: { profileId: string }) {
   })
   const notes = useQuery({
     queryKey: ['staff_profile_notes', profileId],
+    enabled: viewerIsAdmin,
     queryFn: async () => {
       const { data, error } = await supabase.from('staff_profile_notes').select('id,body,created_at,author:profiles!staff_profile_notes_created_by_fkey(full_name,email)').eq('profile_id', profileId).order('created_at', { ascending: false })
       if (error) throw error
@@ -68,6 +74,10 @@ export default function StaffDetail({ profileId }: { profileId: string }) {
   const profile = person.data
   const name = profile.full_name || authEmailToUsername(profile.email)
   const initials = name.split(/\s+/).map((part) => part[0]).slice(0, 2).join('').toUpperCase()
+  const isSelf = profile.id === currentProfile?.id
+  const ownerManages = currentProfile?.role === 'owner' && canOwnerManage(profile, currentProfile?.id)
+  const canResetPassword = !isSelf && (profile.role === 'staff' || profile.role === 'driver') && (viewerIsAdmin || ownerManages)
+  const refresh = () => { qc.invalidateQueries({ queryKey: ['profiles'] }); qc.invalidateQueries({ queryKey: ['drivers'] }) }
   const completed = deliveries.data?.filter((entry) => entry.status === 'completed').length ?? 0
   const upcoming = deliveries.data?.filter((entry) => !['completed', 'cancelled'].includes(entry.status)).length ?? 0
 
@@ -85,8 +95,13 @@ export default function StaffDetail({ profileId }: { profileId: string }) {
 
       <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(380px,0.85fr)] gap-5">
         <div className="space-y-5">
-          <ProfileSettings profile={profile} currentUserId={currentProfile?.id ?? ''} driver={driver.data ?? null} onSaved={() => { qc.invalidateQueries({ queryKey: ['profiles'] }); qc.invalidateQueries({ queryKey: ['drivers'] }) }} />
-          {(profile.role === 'driver' || driver.data) && <DriverSettings profile={profile} driver={driver.data ?? null} onSaved={() => qc.invalidateQueries({ queryKey: ['drivers'] })} />}
+          {ownerManages
+            ? <LoginAccessSettings key={profile.id}person={profile} locations={locations} onSaved={refresh} />
+            : (viewerIsAdmin || isSelf)
+              ? <ProfileSettings profile={profile} currentUserId={currentProfile?.id ?? ''} driver={driver.data ?? null} onSaved={refresh} />
+              : <section className="bg-white border border-slate-200 rounded-2xl p-5 text-sm text-slate-500">Only an admin can change this account.</section>}
+          {canResetPassword && <ResetPassword profileId={profile.id} />}
+          {(viewerIsAdmin || ownerManages) && (profile.role === 'driver' || driver.data) && <DriverSettings profile={profile} driver={driver.data ?? null} onSaved={() => qc.invalidateQueries({ queryKey: ['drivers'] })} />}
         </div>
         <div className="space-y-5">
           <section className="bg-white border border-slate-200 rounded-2xl p-5">
@@ -94,8 +109,8 @@ export default function StaffDetail({ profileId }: { profileId: string }) {
             <dl className="grid grid-cols-2 gap-4 text-sm"><Detail label="Username" value={authEmailToUsername(profile.email)} /><Detail label="Role" value={roleLabel(profile.role)} /><Detail label="Created" value={new Date(profile.created_at).toLocaleDateString()} /><Detail label="Updated" value={new Date(profile.updated_at).toLocaleString()} /></dl>
           </section>
           {driver.data && <section className="bg-white border border-slate-200 rounded-2xl p-5"><div className="flex items-center gap-2 mb-4"><Truck size={18} className="text-emerald-600" /><h2 className="font-semibold text-lg">Driver activity</h2></div><div className="grid grid-cols-3 gap-3"><Metric label="Assigned" value={deliveries.data?.length ?? 0} /><Metric label="Upcoming" value={upcoming} /><Metric label="Completed" value={completed} /></div></section>}
-          <NoteComposer note={note} setNote={setNote} submit={() => addNote.mutate()} pending={addNote.isPending} error={addNote.error as Error | null} />
-          <Notes notes={notes.data ?? []} loading={notes.isLoading} />
+          {viewerIsAdmin && <NoteComposer note={note} setNote={setNote} submit={() => addNote.mutate()} pending={addNote.isPending} error={addNote.error as Error | null} />}
+          {viewerIsAdmin && <Notes notes={notes.data ?? []} loading={notes.isLoading} />}
         </div>
       </div>
     </div>
@@ -156,6 +171,6 @@ function Notes({ notes, loading }: { notes: Note[]; loading: boolean }) {
 }
 
 function Badge({ children, tone = 'blue' }: { children: React.ReactNode; tone?: 'blue' | 'green' | 'gray' }) { const color = tone === 'green' ? 'bg-emerald-100 text-emerald-700' : tone === 'gray' ? 'bg-slate-200 text-slate-600' : 'bg-blue-100 text-blue-700'; return <span className={`text-xs rounded-full px-2.5 py-1 capitalize ${color}`}>{children}</span> }
-function Detail({ label, value }: { label: string; value: string }) { return <div><dt className="text-xs text-slate-400 uppercase tracking-wide mb-1">{label}</dt><dd className="font-medium capitalize">{value}</dd></div> }
+function Detail({ label, value }: { label: string; value: string }) { return <div><dt className="text-xs text-slate-400 uppercase tracking-wide mb-1">{label}</dt><dd className="font-medium">{value}</dd></div> }
 function Metric({ label, value }: { label: string; value: number }) { return <div className="rounded-xl bg-slate-50 p-3 text-center"><div className="text-2xl font-semibold">{value}</div><div className="text-xs text-slate-500">{label}</div></div> }
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="block"><span className="block text-xs font-medium text-slate-500 mb-1">{label}</span>{children}</label> }

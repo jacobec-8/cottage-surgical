@@ -32,7 +32,7 @@ const WORKSPACES: readonly Workspace[] = [
   },
   {
     id: 'staff', label: 'Staff', tabs: [
-      { to: '/staff', label: 'Staff & Users', roles: ['admin'] },
+      { to: '/staff', label: 'Staff & Users', roles: ['admin', 'owner'] },
       { to: '/staff-access', label: 'Staff Access', roles: ['admin'] },
     ],
   },

@@ -19,7 +19,8 @@ Run with the no-ledger, idempotent runner (mirrors rank1seo):
 pip install psycopg2-binary
 # put DB_CONNECTION=... in .env.local (session pooler URI), then:
 python3 scripts/run_migrations.py --test     # verify connection
-python3 scripts/run_migrations.py            # apply all (excludes seed)
+python3 scripts/run_migrations.py --only 087_owner_team_logins.sql   # apply one new migration
+python3 scripts/run_migrations.py --all      # re-run all (excludes seed; replays old backfills)
 python3 scripts/run_migrations.py --only seed_demo_data.sql   # dev demo data
 ```
 

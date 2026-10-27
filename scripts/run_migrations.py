@@ -7,10 +7,14 @@ sorted order on each invocation, so every migration MUST be individually
 idempotent (CREATE ... IF NOT EXISTS / CREATE OR REPLACE / DROP ... IF EXISTS).
 
 Usage:
-    python3 scripts/run_migrations.py            # run all migrations in order
+    python3 scripts/run_migrations.py --all      # re-run every migration in order
     python3 scripts/run_migrations.py --test     # connect only; print version + tables
     python3 scripts/run_migrations.py --list     # list discovered migration files
     python3 scripts/run_migrations.py --only 007_rental_orders.sql   # run one file
+
+Running with no flag, or an unknown one, prints this help and touches nothing.
+A full re-run replays old backfills and function bodies in order, so prefer
+--only for the new file.
 
 DB_CONNECTION resolution order:
     1. $DB_CONNECTION
@@ -18,8 +22,9 @@ DB_CONNECTION resolution order:
 
 Dependency: pip install psycopg2-binary
 
-NOTE: seed_demo_data.sql is EXCLUDED from the default sweep (it is dev-only and
-guarded). Run it explicitly with --only seed_demo_data.sql.
+NOTE: seed_demo_data.sql, catalog_import.sql, seed_accounts.sql, and
+seed_ui_scenarios.sql are EXCLUDED from the default sweep. Run a seed
+explicitly with --only seed_ui_scenarios.sql.
 """
 import os
 import sys
@@ -33,7 +38,12 @@ except ImportError:
 HERE = os.path.dirname(os.path.abspath(__file__))
 MIGRATION_DIR = os.path.join(HERE, "..", "supabase", "migrations")
 ENV_LOCAL = os.path.join(HERE, "..", ".env.local")
-SKIP_FROM_SWEEP = {"seed_demo_data.sql", "catalog_import.sql", "seed_accounts.sql"}
+SKIP_FROM_SWEEP = {
+    "seed_demo_data.sql",
+    "catalog_import.sql",
+    "seed_accounts.sql",
+    "seed_ui_scenarios.sql",
+}
 
 
 def resolve_db_connection():
@@ -60,8 +70,14 @@ def discovered(include_seed=False):
     return files
 
 
+KNOWN_FLAGS = {"--all", "--test", "--list", "--only"}
+
+
 def main():
     args = sys.argv[1:]
+    flags = [a for a in args if a.startswith("-")]
+    if not flags or any(f not in KNOWN_FLAGS for f in flags):
+        sys.exit(__doc__)
 
     if "--list" in args:
         for f in discovered(include_seed=True):
