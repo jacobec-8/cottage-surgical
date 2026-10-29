@@ -12,7 +12,7 @@ import OrderDetailPanel from './orders/OrderDetailPanel'
 import { useSelectedOrder } from './orders/useSelectedOrder'
 import { useLocationScope } from '../contexts/LocationContext'
 import { PaymentBadge } from './orders/badges'
-import { DRIVER_BRANCH_FIELDS, servesBranch, type BranchDriver } from '../lib/driverBranches'
+import { DRIVER_LOCATION_FIELDS, servesLocation, type DriverWithLocations } from '../lib/driverLocations'
 import { dispatchErrorMessage, windowProblem } from '../lib/dispatchErrors'
 import MissedStop from './delivery/MissedStop'
 import { businessToday, fmtStopDate, isLate, latestAttempt, reasonLabel, sortStops, type StopAttempt } from './delivery/stopStatus'
@@ -93,14 +93,14 @@ export default function Delivery() {
   const contacts = useDriverStopContacts(isDriver)
 
   // Every driver this scope can assign, home or shared. Each stop lists only
-  // the drivers who serve its branch (3LOC-002).
+  // the drivers set up for its location (3LOC-002).
   const drivers = useQuery({
-    queryKey: ['drivers', 'active', 'branches'],
+    queryKey: ['drivers', 'active', 'locations'],
     enabled: !isDriver,
     queryFn: async () => {
       const { data } = await supabase
         .from('drivers')
-        .select(`id,first_name,last_name,user_id,${DRIVER_BRANCH_FIELDS}`)
+        .select(`id,first_name,last_name,user_id,${DRIVER_LOCATION_FIELDS}`)
         .eq('status', 'active')
         .order('first_name')
       return (data ?? []) as DriverOption[]
@@ -114,7 +114,7 @@ export default function Delivery() {
     refetchIntervalInBackground: true, // …that keeps ticking even in a background tab
     queryFn: async () => {
       let q = supabase.from('deliveries').select(SELECT)
-      // A driver's queue is every stop assigned to them, at any branch they serve.
+      // A driver's queue is every stop assigned to them, at any location they work at.
       if (selectedLocationId && !isDriver) q = q.eq('location_id', selectedLocationId)
       if (!isDriver && stopKind !== 'all') q = q.eq('leg_type', stopKind)
       q = view === 'active'
@@ -179,7 +179,7 @@ export default function Delivery() {
           view === 'active'
             ? <DeliveryRow key={d.id} d={d} drivers={drivers.data ?? []} isDriver={isDriver} contact={contacts.byDeliveryId.get(d.id)} onOpen={onOpen} selected={selected === d.order?.id}
                 activeStop={isDriver ? data.find((other) => other.status === 'en_route' && other.id !== d.id) : undefined}
-                showBranch={isDriver && new Set(data.map((stop) => stop.location_id)).size > 1} />
+                showLocation={isDriver && new Set(data.map((stop) => stop.location_id)).size > 1} />
             : <CompletedRow key={d.id} d={d} contact={isDriver ? contacts.byDeliveryId.get(d.id) : undefined} onOpen={onOpen} selected={selected === d.order?.id} />,
         )}
       </div>
@@ -200,7 +200,7 @@ function TruckEmptyState() {
 }
 
 type OpenStop = (orderId: string, deliveryId: string) => void
-type DriverOption = BranchDriver & { id: string; first_name: string; last_name: string; user_id: string | null }
+type DriverOption = DriverWithLocations & { id: string; first_name: string; last_name: string; user_id: string | null }
 
 /** Props that turn a stop card into a click-to-open surface (staff only). */
 function clickableCard(d: Deliv, onOpen: OpenStop | undefined, selected: boolean) {
@@ -240,7 +240,7 @@ function customerLabel(d: Deliv, contact?: StopContact): string {
 }
 
 function DeliveryRow({
-  d, drivers: allDrivers, isDriver, contact, onOpen, selected, activeStop, showBranch,
+  d, drivers: allDrivers, isDriver, contact, onOpen, selected, activeStop, showLocation,
 }: {
   d: Deliv
   drivers: DriverOption[]
@@ -249,7 +249,7 @@ function DeliveryRow({
   onOpen?: OpenStop
   selected: boolean
   activeStop?: Deliv
-  showBranch?: boolean
+  showLocation?: boolean
 }) {
   const isStorePickup = d.leg_type === 'pickup' && !d.requires_driver
   // Driver stops need somewhere to go; staff can fill a missing address here (BUG-011).
@@ -265,8 +265,8 @@ function DeliveryRow({
   const [appointmentTime, setAppointmentTime] = useState((d.window_start ?? '').slice(0, 5))
   // Keep the saved end time; a stop with no end occupies one hour (3LOC-003).
   const [appointmentEnd, setAppointmentEnd] = useState((d.window_end ?? '').slice(0, 5))
-  // Keep the saved driver listed even if their branches changed since.
-  const drivers = allDrivers.filter((dr) => dr.id === d.driver_id || servesBranch(dr, d.location_id))
+  // Keep the saved driver listed even if their locations changed since.
+  const drivers = allDrivers.filter((dr) => dr.id === d.driver_id || servesLocation(dr, d.location_id))
   const busy = useQuery({
     queryKey: ['busy_drivers', date, appointmentTime, appointmentEnd],
     enabled: !isDriver && !isStorePickup && Boolean(date && appointmentTime) && !windowProblem(appointmentTime, appointmentEnd),
@@ -412,7 +412,7 @@ function DeliveryRow({
               {[
                 d.scheduled_date ? new Date(d.scheduled_date + 'T00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : 'Date TBD',
                 d.window_start ? `${d.window_start.slice(0, 5)}${d.window_end ? `–${d.window_end.slice(0, 5)}` : ''}` : null,
-                showBranch ? d.location?.name : null,
+                showLocation ? d.location?.name : null,
               ].filter(Boolean).join(' · ')}
             </div>
           )}

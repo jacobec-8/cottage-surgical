@@ -45,7 +45,7 @@ export default function CartDrawer() {
   // The server charges the chosen store's rental price; quote it with the same
   // store selection checkout uses (066). Catalog prices show until it loads.
   const quoteItems = rentItems.map((i) => ({ item_id: i.id, quantity: i.qty }))
-  // Delivery goes to a stocked branch nearest this ZIP (086); quote with the same ZIP checkout sends.
+  // Delivery goes only to a stocked location that lists this ZIP (100); quote with the same ZIP checkout sends.
   const deliveryZip = fulfillmentChoice === 'delivery' && /^\d{5}/.test(form.zip.trim()) ? form.zip.trim().slice(0, 5) : null
   const quote = useQuery({
     queryKey: ['storefront_rental_quote', fulfillmentChoice, pickupLocationId, deliveryZip, quoteItems],

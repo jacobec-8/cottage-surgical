@@ -7,7 +7,7 @@ import { ArrowLeft, History, MessageSquarePlus, Save, ShieldCheck, Truck, UserCo
 import { useAuth } from '../contexts/AuthContext'
 import { authEmailToUsername } from '../lib/staffLogin'
 import { roleLabel } from '../lib/roles'
-import { canOwnerManage } from '../lib/branchLogins'
+import { canOwnerManage } from '../lib/storeLogins'
 import { useLocationScope } from '../contexts/LocationContext'
 import { LoginAccessSettings, ResetPassword } from './staff/LoginAccess'
 import { supabase } from '../lib/supabase'
@@ -124,7 +124,7 @@ function ProfileSettings({ profile, currentUserId, driver, onSaved }: { profile:
     mutationFn: async () => {
       if (!form.fullName.trim()) throw new Error('Full name is required.')
       const role = isSelf ? profile.role : form.role
-      // An owner covers every branch of their store's business (migration 074).
+      // An owner sees every location they own (migration 074).
       let business_id: string | null = null
       if (role === 'owner') {
         if (!profile.location_id) throw new Error('Assign this user to a store before making them a business owner.')
@@ -150,7 +150,7 @@ function ProfileSettings({ profile, currentUserId, driver, onSaved }: { profile:
   })
   const set = (key: keyof typeof form, value: string | boolean) => setForm((current) => ({ ...current, [key]: value }))
   const input = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
-  return <section className="bg-white border border-slate-200 rounded-2xl p-5"><div className="flex items-center gap-2 mb-5"><ShieldCheck size={18} className="text-blue-600" /><h2 className="font-semibold text-lg">Profile &amp; access</h2></div><div className="grid sm:grid-cols-2 gap-4"><Field label="Full name"><input className={input} value={form.fullName} onChange={(e) => set('fullName', e.target.value)} /></Field><Field label="Phone"><input className={input} value={form.phone} onChange={(e) => set('phone', e.target.value)} /></Field><Field label="Role"><select disabled={isSelf} className={input} value={form.role} onChange={(e) => set('role', e.target.value)}><option value="admin">Admin</option><option value="owner">Business owner (all branches)</option><option value="staff">Store staff</option><option value="driver">Driver</option></select></Field><Field label="Account status"><select disabled={isSelf} className={input} value={form.active ? 'active' : 'inactive'} onChange={(e) => set('active', e.target.value === 'active')}><option value="active">Active</option><option value="inactive">Inactive</option></select></Field></div>{isSelf && <div className="text-xs text-slate-400 mt-3">Your own role and active status are protected to prevent an accidental admin lockout.</div>}{save.error && <div className="text-sm text-red-600 mt-3">{(save.error as Error).message}</div>}<div className="flex justify-end mt-5"><button onClick={() => save.mutate()} disabled={save.isPending} className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 text-sm disabled:opacity-50"><Save size={15} /> {save.isPending ? 'Saving…' : 'Save profile'}</button></div></section>
+  return <section className="bg-white border border-slate-200 rounded-2xl p-5"><div className="flex items-center gap-2 mb-5"><ShieldCheck size={18} className="text-blue-600" /><h2 className="font-semibold text-lg">Profile &amp; access</h2></div><div className="grid sm:grid-cols-2 gap-4"><Field label="Full name"><input className={input} value={form.fullName} onChange={(e) => set('fullName', e.target.value)} /></Field><Field label="Phone"><input className={input} value={form.phone} onChange={(e) => set('phone', e.target.value)} /></Field><Field label="Role"><select disabled={isSelf} className={input} value={form.role} onChange={(e) => set('role', e.target.value)}><option value="admin">Admin</option><option value="owner">Owner (all locations)</option><option value="staff">Store staff</option><option value="driver">Driver</option></select></Field><Field label="Account status"><select disabled={isSelf} className={input} value={form.active ? 'active' : 'inactive'} onChange={(e) => set('active', e.target.value === 'active')}><option value="active">Active</option><option value="inactive">Inactive</option></select></Field></div>{isSelf && <div className="text-xs text-slate-400 mt-3">Your own role and active status are protected to prevent an accidental admin lockout.</div>}{save.error && <div className="text-sm text-red-600 mt-3">{(save.error as Error).message}</div>}<div className="flex justify-end mt-5"><button onClick={() => save.mutate()} disabled={save.isPending} className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 text-sm disabled:opacity-50"><Save size={15} /> {save.isPending ? 'Saving…' : 'Save profile'}</button></div></section>
 }
 
 function DriverSettings({ profile, driver, onSaved }: { profile: Profile; driver: Driver | null; onSaved: () => void }) {

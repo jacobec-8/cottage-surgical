@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { parseZips, validateBusinessStep, emptyBusiness } from '../../src/lib/businessOnboarding.ts'
+import { emptyDraft, parseZips, validateDraft } from '../../src/lib/businessOnboarding.ts'
 
 test('delivery ZIP codes parse from commas or spaces and reject anything else', () => {
   assert.deepEqual(parseZips('11954, 11930 11937;11954'), ['11954', '11930', '11937'])
@@ -9,14 +9,12 @@ test('delivery ZIP codes parse from commas or spaces and reject anything else', 
   assert.equal(parseZips('1195'), null)
 })
 
-test('a delivering branch must say where it delivers', () => {
-  const draft = emptyBusiness()
-  draft.businessId = 'b'
-  draft.ownerLogin = false
-  draft.branches[0] = { ...draft.branches[0], name: 'Montauk', line1: '1 Main St', city: 'Montauk', state: 'NY', zip: '11954' }
-  assert.match(validateBusinessStep(1, draft) ?? '', /ZIP codes this branch delivers to/)
-  draft.branches[0].deliveryZips = '11954, 11930'
-  assert.equal(validateBusinessStep(1, draft), null)
-  draft.branches[0] = { ...draft.branches[0], deliveryZips: '', fulfillmentMode: 'pickup_only' }
-  assert.equal(validateBusinessStep(1, draft), null)
+test('a delivering business must say where it delivers', () => {
+  const draft = emptyDraft('owner-1')
+  draft.locations[0] = { ...draft.locations[0], name: 'Montauk', line1: '1 Main St', city: 'Montauk', state: 'NY', zip: '11954' }
+  assert.match(validateDraft(draft) ?? '', /ZIP codes this business delivers to/)
+  draft.locations[0].deliveryZips = '11954, 11930'
+  assert.equal(validateDraft(draft), null)
+  draft.locations[0] = { ...draft.locations[0], deliveryZips: '', fulfillmentMode: 'pickup_only' }
+  assert.equal(validateDraft(draft), null)
 })

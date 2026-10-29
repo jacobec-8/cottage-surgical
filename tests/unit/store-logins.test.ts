@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { branchLoginMessage, canOwnerManage, newLoginProblem, type NewLoginDraft } from '../../src/lib/branchLogins.ts'
+import { storeLoginMessage, canOwnerManage, newLoginProblem, type NewLoginDraft } from '../../src/lib/storeLogins.ts'
 
 const draft: NewLoginDraft = { locationId: 'loc', role: 'staff', fullName: 'Ana Cruz', phone: '', username: 'ana-north', password: 'x'.repeat(10) }
 
@@ -19,10 +19,10 @@ test('new login drafts name what to fix', () => {
 })
 
 test('database reasons become staff-readable text', () => {
-  assert.match(branchLoginMessage('username_taken'), /already taken/)
-  assert.match(branchLoginMessage('forbidden'), /your own stores/)
-  assert.equal(branchLoginMessage('something_new'), 'Couldn’t save. Please try again.')
-  assert.equal(branchLoginMessage(undefined, 'x'), 'x')
+  assert.match(storeLoginMessage('username_taken'), /already taken/)
+  assert.match(storeLoginMessage('forbidden'), /your own stores/)
+  assert.equal(storeLoginMessage('something_new'), 'Couldn’t save. Please try again.')
+  assert.equal(storeLoginMessage(undefined, 'x'), 'x')
 })
 
 test('owners manage staff and drivers but not admins, owners or themselves', () => {

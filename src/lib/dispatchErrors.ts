@@ -9,7 +9,7 @@ export function dispatchErrorMessage(error: DbError, fallback = 'Couldn’t save
   if (error?.code === '23P01' || text.includes('deliveries_driver_no_overlap')) return DRIVER_BUSY_MSG
   if (text.includes('deliveries_window_order_check')) return 'The end time must be after the start time.'
   if (text.includes('uq_deliveries_one_en_route_per_driver')) return 'That driver is already on another stop. They need to finish it first.'
-  if (text.startsWith('driver_branch:')) return 'That driver isn’t set up to work at this branch. An owner or admin can add the branch on the Drivers page.'
+  if (text.startsWith('driver_location:')) return 'That driver isn’t set up to work at this location. An owner or admin can change where they work on the Drivers page.'
   if (text.startsWith('driver_inactive:')) return 'That driver isn’t active. Choose another driver.'
   return fallback
 }

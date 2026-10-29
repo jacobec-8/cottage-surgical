@@ -7,7 +7,7 @@ import { Search, Plus, Minus, Trash2, CheckCircle } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { invalidateOrderWorkflow } from '../lib/workflowKeys'
 import { useLocationScope } from '../contexts/LocationContext'
-import { DRIVER_BRANCH_FIELDS, driversForBranch, type BranchDriver } from '../lib/driverBranches'
+import { DRIVER_LOCATION_FIELDS, driversForLocation, type DriverWithLocations } from '../lib/driverLocations'
 import { DRIVER_BUSY_MSG, dispatchErrorMessage, windowProblem } from '../lib/dispatchErrors'
 
 type Item = {
@@ -91,15 +91,15 @@ export default function NewOrder() {
   })
   // Home and shared drivers for this store (3LOC-002).
   const drivers = useQuery({
-    queryKey: ['drivers', 'active', 'branches'],
+    queryKey: ['drivers', 'active', 'locations'],
     enabled: Boolean(selectedLocationId),
     queryFn: async () => {
-      const { data } = await supabase.from('drivers').select(`id,first_name,last_name,${DRIVER_BRANCH_FIELDS}`)
+      const { data } = await supabase.from('drivers').select(`id,first_name,last_name,${DRIVER_LOCATION_FIELDS}`)
         .eq('status', 'active').order('first_name')
-      return (data ?? []) as (BranchDriver & { id: string; first_name: string; last_name: string })[]
+      return (data ?? []) as (DriverWithLocations & { id: string; first_name: string; last_name: string })[]
     },
   })
-  const storeDrivers = driversForBranch(drivers.data ?? [], selectedLocationId)
+  const storeDrivers = driversForLocation(drivers.data ?? [], selectedLocationId)
   const busyDrivers = useQuery({
     queryKey: ['busy_drivers', deliv.date, deliv.time, deliv.end],
     enabled: Boolean(deliv.date && deliv.time) && !windowProblem(deliv.time, deliv.end),
