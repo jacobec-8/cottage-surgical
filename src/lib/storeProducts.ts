@@ -51,3 +51,14 @@ export function productEditProblem(p: ProductOffer): string | null {
   if (p.is_rentable && p.delivery_enabled && p.delivery_rental_price == null) return 'Set a delivery price before offering delivery.'
   return null
 }
+
+/** "wc-1, WC-2\nwc-1" → ['WC-1', 'WC-2']: one physical unit per asset tag. */
+export function parseAssetTags(text: string): string[] {
+  return [...new Set(text.split(/[\s,;]+/).map((tag) => tag.trim().toUpperCase()).filter(Boolean))]
+}
+
+/** Null when the Add Item starting stock can be saved; otherwise what to fix. */
+export function startingStockProblem(serialized: boolean, value: string): string | null {
+  if (serialized) return parseAssetTags(value).some((tag) => tag.length > 64) ? 'An asset tag is too long (64 characters at most).' : null
+  return value.trim() === '' || /^\d+$/.test(value.trim()) ? null : 'Starting stock must be a whole number, like 12.'
+}

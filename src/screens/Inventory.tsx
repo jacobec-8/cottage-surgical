@@ -10,7 +10,7 @@ import { useLocationScope } from '../contexts/LocationContext'
 import { canSwitchStores } from '../lib/roles'
 import { useCatalogManager } from '../lib/useCatalogManager'
 import { refreshWebsite } from '../lib/websiteRefresh'
-import { canManageStore, removeProductMessage } from '../lib/storeProducts'
+import { canManageStore, parseAssetTags, removeProductMessage, startingStockProblem } from '../lib/storeProducts'
 import { useAuth } from '../contexts/AuthContext'
 import StockStatusBadges, { LOW_STOCK_THRESHOLD } from '../components/StockStatusBadges'
 import { CATEGORIES } from '../lib/categories'
@@ -95,8 +95,23 @@ export default function Inventory() {
   const canRemoveHere = Boolean(selectedLocationId) && canManageStore(profile, selectedLocation)
 
   const inStore = (it: Item) => Boolean(selectedLocationId && it.location_inventory?.some((entry) => entry.location_id === selectedLocationId))
+  // A scanner types a unit's asset tag or serial number: find the product that unit belongs to.
+  const scanTerm = q.trim()
+  const scanned = useQuery({
+    queryKey: ['inventory_scan', scanTerm, selectedLocationId],
+    enabled: scanTerm.length >= 2,
+    queryFn: async () => {
+      const like = `%${scanTerm.replace(/[%_,()]/g, '')}%`
+      let query = supabase.from('equipment_units').select('item_id').or(`asset_tag.ilike.${like},serial_number.ilike.${like}`).limit(50)
+      if (selectedLocationId) query = query.eq('location_id', selectedLocationId)
+      const { data, error } = await query
+      if (error) throw error
+      return new Set((data ?? []).map((u) => u.item_id as string))
+    },
+  })
   const matches = (it: Item) => (category === 'all' || it.category === category)
-    && [it.name, it.description, it.sku, it.category].filter(Boolean).join(' ').toLowerCase().includes(q.toLowerCase())
+    && ([it.name, it.description, it.sku, it.category].filter(Boolean).join(' ').toLowerCase().includes(q.toLowerCase())
+      || Boolean(scanned.data?.has(it.id)))
   const filtered = (data ?? []).filter((it) => matches(it) && (!selectedLocationId || inStore(it)))
   // A store adds products from the shared catalog itself ("Add from catalog").
   const addable = selectedLocationId ? (data ?? []).filter((it) => it.is_active && (!inStore(it) || justAdded.includes(`${selectedLocationId}:${it.id}`)) && matches(it)) : []
@@ -128,7 +143,7 @@ export default function Inventory() {
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder={showCatalog ? 'Search the catalog…' : 'Search inventory...'}
+            placeholder={showCatalog ? 'Search the catalog…' : 'Search inventory or scan an SN...'}
             className="w-full border border-slate-300 rounded-lg pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
@@ -318,6 +333,9 @@ function ItemModal({ item, onClose }: { item: Partial<Item>; onClose: () => void
   const isNew = !item.id
   // Store staff create products for their own store only (100); owner/admin create the owner's products.
   const storeOwner = profile?.role === 'staff' ? profile.location_id ?? null : null
+  // A new product goes straight into the store in the header, with its starting stock, so it can sell.
+  const { selectedLocationId: stockStore, selectedLocation: stockStoreInfo } = useLocationScope()
+  const [stock, setStock] = useState('')
   const [f, setF] = useState(() => initialForm(item))
   const [initial] = useState(() => JSON.stringify(initialForm(item)))
   const [imageFile, setImageFile] = useState<File | null>(null)
@@ -378,6 +396,8 @@ function ItemModal({ item, onClose }: { item: Partial<Item>; onClose: () => void
       if (payload.is_rentable && payload.delivery_enabled && payload.delivery_rental_price == null) throw new Error('Enter the delivery + return pickup rental price.')
       if (payload.is_purchasable && payload.sale_price == null) throw new Error('Enter a sale price for purchasable items.')
       if (!payload.pickup_enabled && !payload.delivery_enabled) throw new Error('Choose pickup, delivery, or both.')
+      const stockProblem = isNew && stockStore ? startingStockProblem(payload.is_serialized, stock) : null
+      if (stockProblem) throw new Error(stockProblem)
 
       let uploadedPath: string | null = null
       if (imageFile) {
@@ -393,12 +413,13 @@ function ItemModal({ item, onClose }: { item: Partial<Item>; onClose: () => void
       }
 
       const res = isNew
-        ? await supabase.from('equipment_items').insert(storeOwner ? { ...payload, location_id: storeOwner } : payload)
-        : await supabase.from('equipment_items').update(payload).eq('id', item.id!)
+        ? await supabase.from('equipment_items').insert(storeOwner ? { ...payload, location_id: storeOwner } : payload).select('id').single()
+        : await supabase.from('equipment_items').update(payload).eq('id', item.id!).select('id').single()
       if (res.error) {
         if (uploadedPath) await supabase.storage.from('equipment-images').remove([uploadedPath])
         throw res.error
       }
+      if (isNew && stockStore) await addStartingStock(res.data.id, stockStore, payload.is_serialized, payload.pickup_enabled, stock)
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['equipment_items'] })
@@ -449,16 +470,16 @@ function ItemModal({ item, onClose }: { item: Partial<Item>; onClose: () => void
           </div>
           <div>
             <label className="block text-xs text-slate-500 mb-1">Name</label>
-            <input value={f.name} onChange={set('name')} className={inp} />
+            <input aria-label="Name" value={f.name} onChange={set('name')} className={inp} />
           </div>
           <div>
             <label className="block text-xs text-slate-500 mb-1">Description</label>
-            <textarea value={f.description} onChange={set('description')} className={inp} rows={2} />
+            <textarea aria-label="Description" value={f.description} onChange={set('description')} className={inp} rows={2} />
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="block text-xs text-slate-500 mb-1">Category</label>
-              <select value={f.category} onChange={set('category')} className={inp}>
+              <select aria-label="Category" value={f.category} onChange={set('category')} className={inp}>
                 {CATEGORIES.map((c) => (
                   <option key={c} value={c}>
                     {c}
@@ -467,19 +488,27 @@ function ItemModal({ item, onClose }: { item: Partial<Item>; onClose: () => void
               </select>
             </div>
             <div>
-              <label className="block text-xs text-slate-500 mb-1">SKU</label>
-              <input value={f.sku} onChange={set('sku')} className={inp} />
+              <label className="block text-xs text-slate-500 mb-1">SN (scan code)</label>
+              <input aria-label="SN" value={f.sku} onChange={set('sku')} placeholder="Scan or type the barcode" className={inp} />
             </div>
             <div>
               <label className="block text-xs text-slate-500 mb-1">Pickup rental ($/mo)</label>
-              <input value={f.pickup_rental_price} onChange={set('pickup_rental_price')} type="number" min="0" step="0.01" disabled={!f.is_rentable || !f.pickup_enabled} className={inp} />
+              <input aria-label="Pickup rental price" value={f.pickup_rental_price} onChange={set('pickup_rental_price')} type="number" min="0" step="0.01" disabled={!f.is_rentable || !f.pickup_enabled} className={inp} />
             </div>
             <div>
               <label className="block text-xs text-slate-500 mb-1">Delivery + return pickup rental ($/mo)</label>
-              <input value={f.delivery_rental_price} onChange={set('delivery_rental_price')} type="number" min="0" step="0.01" disabled={!f.is_rentable || !f.delivery_enabled} className={inp} />
+              <input aria-label="Delivery rental price" value={f.delivery_rental_price} onChange={set('delivery_rental_price')} type="number" min="0" step="0.01" disabled={!f.is_rentable || !f.delivery_enabled} className={inp} />
             </div>
-            <div><label className="block text-xs text-slate-500 mb-1">Sale price ($) {f.is_purchasable ? '' : '— not required'}</label><input value={f.sale_price} onChange={set('sale_price')} type="number" min="0" step="0.01" disabled={!f.is_purchasable} className={inp} /></div>
-            <div className="space-y-3 sm:mt-6">
+            <div><label className="block text-xs text-slate-500 mb-1">Sale price ($) {f.is_purchasable ? '' : '— not required'}</label><input aria-label="Sale price" value={f.sale_price} onChange={set('sale_price')} type="number" min="0" step="0.01" disabled={!f.is_purchasable} className={inp} /></div>
+            {isNew && stockStore && (
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">{f.is_serialized ? `Units at ${stockStoreInfo?.name ?? 'this store'}: asset tags, one per unit (optional)` : `Starting stock at ${stockStoreInfo?.name ?? 'this store'} (optional)`}</label>
+              {f.is_serialized
+                ? <textarea aria-label="Asset tags" value={stock} onChange={(e) => setStock(e.target.value)} placeholder="e.g. WC-1, WC-2, WC-3" className={inp} rows={2} />
+                : <input aria-label="Starting stock" value={stock} onChange={(e) => setStock(e.target.value)} inputMode="numeric" placeholder="0" className={inp} />}
+            </div>
+          )}
+          <div className="space-y-3 sm:mt-6">
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={f.is_serialized} onChange={set('is_serialized')} disabled={!isNew} /> Track individual units
               </label>
@@ -516,4 +545,23 @@ function ItemModal({ item, onClose }: { item: Partial<Item>; onClose: () => void
       </div>
     </div>
   )
+}
+
+/** Put a new product into a store with its starting stock: a bulk count or one unit per asset tag. */
+async function addStartingStock(itemId: string, locationId: string, serialized: boolean, pickup: boolean, stock: string) {
+  // Store products are attached by the database (100); the owner's products are attached here.
+  const { error: attachError } = await supabase.from('equipment_location_inventory')
+    .upsert({ equipment_item_id: itemId, location_id: locationId, quantity_on_hand: 0, pickup_enabled: pickup }, { onConflict: 'equipment_item_id,location_id', ignoreDuplicates: true })
+  if (attachError) throw new Error('The product was created, but couldn’t be added to this store. Add it from the catalog.')
+  if (serialized) {
+    const tags = parseAssetTags(stock)
+    if (!tags.length) return
+    const { error } = await supabase.from('equipment_units').insert(tags.map((tag) => ({ item_id: itemId, location_id: locationId, asset_tag: tag, status: 'available' })))
+    if (error) throw new Error(error.code === '23505' ? 'The product was created, but an asset tag is already used at this store. Add units from the product.' : 'The product was created, but its units couldn’t be added.')
+    return
+  }
+  if (!stock.trim()) return
+  const { error } = await supabase.from('equipment_location_inventory').update({ quantity_on_hand: Number(stock) })
+    .eq('equipment_item_id', itemId).eq('location_id', locationId)
+  if (error) throw new Error('The product was created, but its stock couldn’t be saved. Set it from the product.')
 }

@@ -23,3 +23,14 @@ test('online shop status says plainly whether customers can see it, and why not'
   const hidden = websiteStatus({ ...base, storefront_listed: false }, true)
   assert.equal(onlineShopLabel(hidden), 'Hidden from the online shop: no open store carries it')
 })
+
+test('make-it-live list names exactly what is missing, from the store’s own values', async () => {
+  const { liveChecklist } = await import('../../src/lib/productPanel.ts')
+  const retail = { active: true, rentable: false, purchasable: true, storeOpen: true, stock: 0, salePrice: 0, rentalPrice: null, retailOn: false }
+  assert.deepEqual(liveChecklist(retail), ['Add stock', 'Set a sale price', 'Turn on online sales'])
+  assert.deepEqual(liveChecklist({ ...retail, stock: 3, salePrice: 25 }), ['Turn on online sales'])
+  assert.deepEqual(liveChecklist({ ...retail, stock: 3, salePrice: 25, retailOn: true }), [])
+  assert.deepEqual(liveChecklist({ ...retail, rentable: true, purchasable: false, rentalPrice: null }), ['Set a rental price'])
+  assert.deepEqual(liveChecklist({ ...retail, rentable: true, purchasable: false, rentalPrice: 40, storeOpen: false }), ['Open this store to customers'])
+  assert.deepEqual(liveChecklist({ ...retail, active: false }), ['Restore it to the catalog'])
+})
