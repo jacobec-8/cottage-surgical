@@ -16,6 +16,8 @@ import StoreOverview from './dashboard/StoreOverview'
 import RetailSalesSwitch from './dashboard/RetailSalesSwitch'
 import { useStaffModuleAccess } from '../lib/useStaffModuleAccess'
 import type { StaffModule } from '../lib/staffModules'
+import OrderDetailPanel from './orders/OrderDetailPanel'
+import { useSelectedOrder } from './orders/useSelectedOrder'
 
 const MODULES: { to: string; module: StaffModule; icon: typeof Users; title: string; desc: string }[] = [
   { to: '/customers', module: 'customers', icon: Users, title: 'Customers', desc: 'Directory with rental history and payment methods on file' },
@@ -32,6 +34,7 @@ export default function Dashboard() {
   // A module the owner locked for this store isn't offered as a tile either.
   const { canAccess } = useStaffModuleAccess()
   const [tab, setTab] = useState<'overview' | 'rentals'>('overview')
+  const [selected, setSelected] = useSelectedOrder()
 
   useEffect(() => {
     if (profile?.role === 'driver') router.replace('/delivery')
@@ -147,14 +150,15 @@ export default function Dashboard() {
           <h3 className="text-sm font-semibold text-slate-700 mb-3">Recent Rentals</h3>
           <div className="space-y-2">
             {rentals.data?.slice(0, 5).map((r) => (
-              <div key={r.id} className="bg-white border border-slate-200 rounded-xl p-4 flex items-center justify-between">
+              <button type="button" key={r.id} onClick={() => setSelected(r.id)} aria-label={`Open order for ${r.customer?.full_name ?? 'Customer'}`}
+                className="w-full text-left bg-white border border-slate-200 rounded-xl p-4 flex items-center justify-between hover:border-blue-300 hover:bg-blue-50/30">
                 <div className="font-medium">{r.customer?.full_name ?? 'Customer'}</div>
                 <div className="flex items-center gap-4 text-sm text-slate-500">
                   <span>{items(r)} items</span>
                   <span className="text-slate-800 font-medium">${Number(r.monthly_rate ?? 0).toFixed(0)}/mo</span>
                   <span className={`text-xs px-2 py-1 rounded-full capitalize ${statusClass(r.status)}`}>{statusLabel(r.status)}</span>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         </>
@@ -163,7 +167,8 @@ export default function Dashboard() {
       {tab === 'rentals' && (
         <div className="space-y-2">
           {rentals.data?.map((r) => (
-            <div key={r.id} className="bg-white border border-slate-200 rounded-xl p-4">
+            <button type="button" key={r.id} onClick={() => setSelected(r.id)} aria-label={`Open order for ${r.customer?.full_name ?? 'Customer'}`}
+              className="w-full text-left bg-white border border-slate-200 rounded-xl p-4 hover:border-blue-300 hover:bg-blue-50/30">
               <div className="flex items-center justify-between mb-1">
                 <div className="font-medium">{r.customer?.full_name ?? 'Customer'}</div>
                 <span className={`text-xs px-2 py-1 rounded-full capitalize ${statusClass(r.status)}`}>{statusLabel(r.status)}</span>
@@ -174,10 +179,11 @@ export default function Dashboard() {
               <div className="text-sm text-slate-500 mt-1">
                 Started {r.start_date} · {items(r)} items · <span className="text-slate-800 font-medium">${Number(r.monthly_rate ?? 0).toFixed(0)}/mo</span>
               </div>
-            </div>
+            </button>
           ))}
         </div>
       )}
+      {selected && <OrderDetailPanel orderId={selected} onClose={() => setSelected(null)} />}
     </div>
   )
 }
