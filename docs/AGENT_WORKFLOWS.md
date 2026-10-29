@@ -510,6 +510,30 @@ whole migration directory for the target name before editing behavior.
 - Keep this guide's inputs, labels, effects, and known limitations synchronized
   with the final implementation.
 
+## Customer equipment assistant
+
+The public storefront has an **Ask Cottage** floating panel, adapted from the
+Sàbí panel in NaijaHub. It is mounted only in the shop route group and resolves
+the browser session before showing a launcher. Admin, owner, staff, driver,
+unknown-role and unresolved authenticated sessions are hidden even on public
+pages. Guests and active customer-role accounts can use it. Opening the cart
+hides the assistant so it cannot cover checkout.
+
+Questions search the current anonymous, active, storefront-listed catalog.
+Replies use catalog matching and follow-up context, with no external AI provider
+or stored chat transcript. Every question refreshes the catalog, including public
+availability and effective rental prices. Exact inventory counts, units, internal
+notes and customer records are never requested. Purchase links follow `can_buy`;
+missing stock stays unknown. Product-page anchors point to the existing rental
+and purchase controls; following a link never places an order automatically.
+
+Implementation: `src/components/shop/CustomerAssistant.tsx`,
+`src/lib/catalogAssistant.ts`, shop layout and product action anchors. Verify
+matching, stock changes, purchase-off behavior, follow-ups, mobile/keyboard use,
+catalog outages and role visibility with `tests/unit/catalog-assistant.test.ts`
+and `tests/e2e/customer-assistant.spec.ts`. Browser tests use only the loopback
+catalog/auth fixture and do not create live users, orders, email or payments.
+
 ## Screen operation notes
 
 `bc screen` on nu-yin can inspect the actual headed browser and different roles.
