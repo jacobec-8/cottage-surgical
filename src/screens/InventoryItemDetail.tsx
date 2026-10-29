@@ -18,6 +18,7 @@ import { removeProductMessage } from '../lib/storeProducts'
 import { bulkCounts } from '../lib/bulkStock'
 import StockStatusBadges from '../components/StockStatusBadges'
 import ProductDetailsList from '../components/ProductDetailsList'
+import { useProductEdits } from '../lib/useProductEdits'
 import { CATEGORIES } from '../lib/categories'
 
 type Item = {
@@ -289,7 +290,7 @@ export default function InventoryItemDetail({ itemId }: { itemId: string }) {
               </div>
             </section>
 
-            <DetailsCard item={product} />
+            <DetailsCard item={product} locationId={selectedLocationId} storeName={selectedLocation?.name ?? null} />
           </div>
           <div className="space-y-5">
             <NoteComposer note={note} setNote={setNote} submit={() => addNote.mutate()} pending={addNote.isPending} error={addNote.error as Error | null} />
@@ -328,11 +329,12 @@ function Metric({ label, value, icon: Icon, tone = 'slate' }: { label: string; v
   return <div className="border border-slate-200 rounded-xl p-3"><div className={`w-8 h-8 rounded-lg grid place-items-center mb-2 ${colors}`}><Icon size={16} /></div><div className="text-2xl font-semibold">{value}</div><div className="text-xs text-slate-500">{label}</div></div>
 }
 
-function DetailsCard({ item }: { item: Item }) {
+function DetailsCard({ item, locationId, storeName }: { item: Item; locationId: string | null; storeName: string | null }) {
+  const edits = useProductEdits(item, locationId, storeName)
   return (
     <section className="bg-white border border-slate-200 rounded-2xl p-5">
       <h2 className="font-semibold text-lg mb-4">Product details</h2>
-      <ProductDetailsList item={item} />
+      <ProductDetailsList item={item} edits={edits} />
     </section>
   )
 }
@@ -413,7 +415,7 @@ function PickupLocationsTab({ item, locations, assignments, loading }: {
 
       {!item.pickup_enabled && (
         <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-          This item is currently delivery only. Enable “In-store pickup” in Edit item before assigned locations appear at checkout.
+          The catalog default is delivery only. A store can still offer pickup: tick Pickup for that store below and give it a pickup price.
         </div>
       )}
 

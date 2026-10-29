@@ -243,9 +243,9 @@ export default function Inventory() {
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
-                    <Link href={`/inventory/${it.id}`} aria-label={`Edit ${it.name}`} className="grid h-10 w-10 place-items-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600">
+                    <button type="button" onClick={() => setExpandedId(it.id)} aria-label={`Edit ${it.name}`} title="Edit" className="grid h-10 w-10 place-items-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600">
                       <Pencil size={16} />
-                    </Link>
+                    </button>
                     {selectedLocationId ? canRemoveHere && <button
                       aria-label={it.location_id ? `Delete ${it.name}` : `Remove ${it.name} from ${storeName}`}
                       title={it.location_id ? 'Delete product' : `Remove from ${storeName}`}
@@ -272,7 +272,7 @@ export default function Inventory() {
                   </div>
                 </div>
               </div>
-              {open && <ProductPanel item={it} stock={scopedStock} locationId={selectedLocationId} storeOpen={selectedLocation?.is_active ?? true} />}
+              {open && <ProductPanel item={it} stock={scopedStock} locationId={selectedLocationId} storeName={selectedLocation?.name ?? null} storeOpen={selectedLocation?.is_active ?? true} />}
             </div>
           )
         })}

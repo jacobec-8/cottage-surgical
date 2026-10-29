@@ -5,13 +5,15 @@ import { Globe, EyeOff } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { monthlyIncome, onlineShopLabel, unitCounts, usagePercent, websiteStatus } from '../../lib/productPanel'
 import ProductDetailsList, { type ProductDetailsItem } from '../../components/ProductDetailsList'
+import { useProductEdits } from '../../lib/useProductEdits'
 import { fmtMoney } from '../orders/format'
 
 type Props = {
-  item: ProductDetailsItem & { id: string; is_serialized: boolean }
+  item: ProductDetailsItem & { id: string; is_serialized: boolean; location_id: string | null }
   /** Store-scoped quantity on hand (bulk items). */
   stock: number
   locationId: string | null
+  storeName: string | null
   /** False when the selected store is not open to customers. */
   storeOpen: boolean
 }
@@ -19,7 +21,8 @@ type Props = {
 const SHOP_SELECT = 'storefront_listed,is_active,is_rentable,is_purchasable,delivery_rental_price,pickup_rental_price,sale_price'
 
 /** The expanded inventory row: stock position, rental income, online shop status, and product details. */
-export default function ProductPanel({ item, stock, locationId, storeOpen }: Props) {
+export default function ProductPanel({ item, stock, locationId, storeName, storeOpen }: Props) {
+  const edits = useProductEdits(item, locationId, storeName)
   const units = useQuery({
     queryKey: ['equipment_units', item.id, locationId, 'panel'],
     enabled: item.is_serialized,
@@ -82,7 +85,7 @@ export default function ProductPanel({ item, stock, locationId, storeOpen }: Pro
           ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 font-medium text-emerald-700"><Globe size={12} /> {onlineShopLabel(status)}</span>
           : <span className="inline-flex items-center gap-1 rounded-full bg-slate-200 px-2.5 py-1 font-medium text-slate-700"><EyeOff size={12} /> {onlineShopLabel(status)}</span>)}
       </div>
-      <ProductDetailsList item={item} />
+      <ProductDetailsList item={item} edits={edits} />
     </div>
   )
 }
