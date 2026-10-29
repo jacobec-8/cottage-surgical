@@ -7,7 +7,7 @@ import { join, relative } from 'node:path'
 // must not say the word. Database names the app has to call are the only
 // exception, and the onboarding RPC's `branches` field stays in its one mapper.
 const SRC = join(import.meta.dirname, '../../src')
-const DB_NAMES = /\b(set_driver_branches|driver_branches|add_branch_login|update_branch_login|reset_branch_login_password)\b/g
+const DB_NAMES = /\b(set_driver_branches|driver_branches|add_branch_login|update_branch_login|reset_branch_login_password|driver_branch:)/g
 const RPC_FIELD_FILE = 'lib/businessOnboarding.ts'
 
 function files(dir: string): string[] {
