@@ -30,7 +30,8 @@ export function Field({ label, children }: { label: string; children: ReactNode 
   )
 }
 
-export function CustomerSection({ o }: { o: OrderDetail }) {
+/** `customerHref`: where "Open customer" goes; omitted for viewers who can't open the Customers page. */
+export function CustomerSection({ o, customerHref }: { o: OrderDetail; customerHref?: string | null }) {
   const c = o.customer
   const address = addressOf(o)
   const pickup = o.pickup_location
@@ -40,7 +41,10 @@ export function CustomerSection({ o }: { o: OrderDetail }) {
   return (
     <Section title="Customer & fulfillment">
       <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-1.5 text-sm">
-        <div className="font-medium">{c?.full_name ?? 'Customer'}</div>
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="font-medium">{c?.full_name ?? 'Customer'}</span>
+          {customerHref && <Link href={customerHref} className="shrink-0 text-xs text-blue-600 hover:underline">Open customer</Link>}
+        </div>
         {c?.phone && (
           <a href={`tel:${c.phone}`} className="flex items-center gap-2 text-slate-600 hover:text-blue-600"><Phone size={14} />{c.phone}</a>
         )}

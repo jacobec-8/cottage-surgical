@@ -225,12 +225,22 @@ storefront supports pickup, but creates a request requiring approval and has
 different contact/payment requirements. Use that path only when it matches
 the authorized task, or identify the missing staff capability.
 
-The `create_staff_order` RPC creates a new customer, order, lines, reservations,
+**One customer record per person (112).** At a store, an order belongs to the
+existing customer whose name matches (ignoring case and spacing) and whose email
+or phone matches; a different name with the same email or phone (a caregiver
+ordering for a parent) is a separate customer. Website requests, online
+checkout and **New Customer** in New Order all reuse that record instead of
+making another. Website orders never change the existing record's details (the
+order keeps its own address); New Order fills in what staff typed. 113 is the
+one-time cleanup that folded earlier duplicates together; it runs only on
+Jacob's go.
+
+The `create_staff_order` RPC creates (or reuses, per 112) the customer, order, lines, reservations,
 delivery, and applicable billing/deposit records together. Preserve that
 transaction rather than reproducing it as unrelated table writes.
 
 Implementation: [NewOrder.tsx](../src/screens/NewOrder.tsx), latest
-`create_staff_order` in [054](../supabase/migrations/054_multi_location_tenancy.sql),
+`create_staff_order` in [112](../supabase/migrations/112_one_customer_per_person.sql),
 [Orders.tsx](../src/screens/Orders.tsx), and
 [workflowKeys.ts](../src/lib/workflowKeys.ts).
 
@@ -242,6 +252,14 @@ Implementation: [NewOrder.tsx](../src/screens/NewOrder.tsx), latest
   or en-route stop shows it after **Change** (**Change date** for in-store
   collection). Verify the saved stop and order status. In-store collection needs
   no driver. A date by itself does not mean equipment has been handed over.
+- **Customer contact only (name, phone, email, date of birth, address, coverage,
+  insurance notes, notes):** **Customers** → tap the customer → pencil next to
+  the field → **Save**. This changes the customer record only, not any order's
+  delivery address or scheduled stops. Staff edit their own store's customers;
+  another store's are refused. The same pane shows rentals out now, overdue and
+  monthly amounts, deposits held, upcoming stops, recorded payments and every
+  order (`?customer=<id>` links to it; **Open customer** on an order opens it).
+  Saved cards are not part of the app: the `payment_methods` table is unused.
 - **Customer/contact/address/rental dates/rate/deposit/notes:** open the order
   detail → **Edit rental**. Equipment allocation and status are managed
   separately. `update_rental_details` also changes the customer record, active

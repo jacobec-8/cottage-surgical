@@ -5,6 +5,9 @@ import { Loader2, Pencil, X } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../lib/supabase'
+import { useDialogFocus } from '../../lib/useDialogFocus'
+import { useStaffModuleAccess } from '../../lib/useStaffModuleAccess'
+import { SELECTED_CUSTOMER_PARAM } from '../customers/useSelectedCustomer'
 import { invalidateOrderWorkflow } from '../../lib/workflowKeys'
 import { isReturnLeg } from '../../lib/legs'
 import { PICKUP_ELIGIBLE, type OrderDetail } from './types'
@@ -29,47 +32,11 @@ type Props = {
 }
 
 /** Right-hand slide-over with the full order. Closes on backdrop click, X, or Esc. */
-const FOCUSABLE = 'a[href],button:not([disabled]),input,select,textarea,[tabindex]:not([tabindex="-1"])'
-
 export default function OrderDetailPanel({ orderId, onClose, actions, focusDeliveryId }: Props) {
   const { data, isLoading, error } = useOrderDetail(orderId)
   const asideRef = useRef<HTMLElement>(null)
-
-  // Esc closes; body scroll locks; focus moves into the dialog and Tab cycles within it,
-  // then returns to the opener on close (aria-modal contract).
-  useEffect(() => {
-    const opener = document.activeElement as HTMLElement | null
-    const aside = asideRef.current
-    aside?.querySelector<HTMLElement>(FOCUSABLE)?.focus()
-
-    const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key === 'Escape') { onClose(); return }
-      if (e.key !== 'Tab' || !aside) return
-      const nodes = Array.from(aside.querySelectorAll<HTMLElement>(FOCUSABLE))
-      if (nodes.length === 0) return
-      const first = nodes[0], last = nodes[nodes.length - 1]
-      const active = document.activeElement
-      if (!aside.contains(active)) { e.preventDefault(); first.focus(); return }
-      if (e.shiftKey && active === first) { e.preventDefault(); last.focus() }
-      else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus() }
-    }
-    window.addEventListener('keydown', onKey)
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      window.removeEventListener('keydown', onKey)
-      document.body.style.overflow = prev
-      opener?.focus?.()
-    }
-  }, [onClose])
-
   // The loading-state close button unmounts when data arrives; re-seat focus inside the dialog.
-  const loaded = Boolean(data)
-  useEffect(() => {
-    if (loaded && !asideRef.current?.contains(document.activeElement)) {
-      asideRef.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus()
-    }
-  }, [loaded, orderId])
+  useDialogFocus(asideRef, onClose, `${Boolean(data)}:${orderId}`)
 
   return (
     <div className="fixed inset-0 z-40" role="presentation">
@@ -107,6 +74,7 @@ type BodyProps = { o: OrderDetail; onClose: () => void; actions?: ReactNode; foc
 
 function PanelBody({ o, onClose, actions, focusDeliveryId }: BodyProps) {
   const { profile } = useAuth()
+  const access = useStaffModuleAccess()
   // Drivers can't reach the back-office routes, so don't offer those links.
   const backofficeLinks = profile?.role !== 'driver'
   const [msg, setMsg] = useState('')
@@ -225,7 +193,7 @@ function PanelBody({ o, onClose, actions, focusDeliveryId }: BodyProps) {
           </div>
         </Section>
 
-        <CustomerSection o={o} />
+        <CustomerSection o={o} customerHref={backofficeLinks && access.canAccess('customers') && o.customer?.id ? `/customers?${SELECTED_CUSTOMER_PARAM}=${o.customer.id}` : null} />
         <LinesSection o={o} pendingConfirm={isRequest} released={o.status === 'cancelled'} canAllocate={backofficeLinks && !isRequest && !isClosed} />
         <DeliveriesSection o={o} focusDeliveryId={focusDeliveryId} showBoardLink={backofficeLinks} />
         <BillingSection o={o} showBillingLink={backofficeLinks} canSettleDeposits={backofficeLinks} />
