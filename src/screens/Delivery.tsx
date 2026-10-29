@@ -1,73 +1,26 @@
 'use client'
 
-import { useCallback, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Camera, ChevronRight, Store, Truck } from 'lucide-react'
+import { Camera, Truck } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { statusClass, statusLabel } from '../lib/status'
-import { invalidateDispatch, invalidateOrderWorkflow } from '../lib/workflowKeys'
+import { invalidateOrderWorkflow } from '../lib/workflowKeys'
 import { useDriverStopContacts, type StopContact } from '../lib/useDriverStopContacts'
 import OrderDetailPanel from './orders/OrderDetailPanel'
 import { useSelectedOrder } from './orders/useSelectedOrder'
 import { useLocationScope } from '../contexts/LocationContext'
 import { PaymentBadge } from './orders/badges'
-import { DRIVER_LOCATION_FIELDS, servesLocation, type DriverWithLocations } from '../lib/driverLocations'
-import { dispatchErrorMessage, windowProblem } from '../lib/dispatchErrors'
+import { DRIVER_LOCATION_FIELDS } from '../lib/driverLocations'
 import MissedStop from './delivery/MissedStop'
-import { businessToday, fmtStopDate, isLate, latestAttempt, reasonLabel, sortStops, type StopAttempt } from './delivery/stopStatus'
-
-type Photo = { storage_path: string; captured_at: string; notes: string | null }
-
-type LifecycleResult = { ok?: boolean; reason?: string; unallocated?: number; active_order_no?: number } | null
-
-/** Staff-readable text for a refused start/complete RPC. */
-function lifecycleError(data: LifecycleResult): string {
-  switch (data?.reason) {
-    case 'no_driver': return 'Assign a driver and Save before starting.'
-    case 'address_required': return 'This stop has no address. Ask the store to add one before starting.'
-    case 'photo_required': return 'A photo is required to complete.'
-    case 'photo_missing': return 'The proof photo didn’t upload. Take the photo again.'
-    case 'photo_invalid': return 'That photo doesn’t belong to this stop. Take the photo again.'
-    case 'bad_state': return 'This stop isn’t in a state that can be completed.'
-    case 'driver_busy': return `Finish your current stop${data?.active_order_no ? ` (#${data.active_order_no})` : ''} before starting another.`
-    case 'unallocated': {
-      const n = data.unallocated ?? 0
-      return `${n || 'Some'} item${n === 1 ? ' has' : 's have'} no equipment unit. Staff must allocate units on the order before fulfillment.`
-    }
-    default: return data?.reason || 'failed'
-  }
-}
-type Deliv = {
-  id: string
-  leg_type: string
-  status: string
-  scheduled_date: string | null
-  window_start: string | null
-  window_end: string | null
-  completed_at: string | null
-  address_line1: string | null
-  address_city: string | null
-  address_state: string | null
-  address_zip: string | null
-  driver_id: string | null
-  requires_driver: boolean
-  location_id: string | null
-  location: { name: string } | null
-  order: {
-    id: string
-    order_no: number
-    payment_status: string | null
-    payment_preference: string | null
-    customer: { full_name: string } | null
-    rental_line_items: { quantity: number; equipment: { name: string } | null }[]
-  } | null
-  delivery_photos: Photo[]
-  attempts: StopAttempt[]
-}
+import StaffStopCard from './delivery/StaffStopCard'
+import { addressLabel, clickableCard, customerLabel, DetailsHint, itemsLabel, lifecycleError, stopOpen, type OpenStop } from './delivery/cardParts'
+import { businessToday, fmtStopDate, isLate, latestAttempt, reasonLabel, sortStops } from './delivery/stopStatus'
+import { hasAddress, type Deliv, type DriverOption } from './delivery/types'
 
 const SELECT =
-  'id,leg_type,status,scheduled_date,window_start,window_end,completed_at,address_line1,address_city,address_state,address_zip,driver_id,requires_driver,location_id,location:pickup_locations!deliveries_location_id_fkey(name),' +
+  'id,leg_type,status,scheduled_date,window_start,window_end,started_at,completed_at,address_line1,address_city,address_state,address_zip,driver_id,requires_driver,location_id,location:pickup_locations!deliveries_location_id_fkey(name),' +
   'order:rental_orders(id,order_no,payment_status,payment_preference,customer:customers(full_name),rental_line_items(quantity,equipment:equipment_items(name))),' +
   'delivery_photos(storage_path,captured_at,notes),attempts:stop_attempts(reason,note,created_at)'
 
@@ -176,11 +129,13 @@ export default function Delivery() {
       )}
       <div className="space-y-3">
         {data?.map((d) =>
-          view === 'active'
-            ? <DeliveryRow key={d.id} d={d} drivers={drivers.data ?? []} isDriver={isDriver} contact={contacts.byDeliveryId.get(d.id)} onOpen={onOpen} selected={selected === d.order?.id}
-                activeStop={isDriver ? data.find((other) => other.status === 'en_route' && other.id !== d.id) : undefined}
-                showLocation={isDriver && new Set(data.map((stop) => stop.location_id)).size > 1} />
-            : <CompletedRow key={d.id} d={d} contact={isDriver ? contacts.byDeliveryId.get(d.id) : undefined} onOpen={onOpen} selected={selected === d.order?.id} />,
+          view !== 'active'
+            ? <CompletedRow key={d.id} d={d} contact={isDriver ? contacts.byDeliveryId.get(d.id) : undefined} onOpen={onOpen} selected={selected === d.order?.id} />
+            : isDriver
+              ? <DriverStopRow key={d.id} d={d} contact={contacts.byDeliveryId.get(d.id)}
+                  activeStop={data.find((other) => other.status === 'en_route' && other.id !== d.id)}
+                  showLocation={new Set(data.map((stop) => stop.location_id)).size > 1} />
+              : <StaffStopCard key={`${d.id}:${d.status}`} d={d} drivers={drivers.data ?? []} onOpen={onOpen} selected={selected === d.order?.id} />,
         )}
       </div>
 
@@ -199,121 +154,15 @@ function TruckEmptyState() {
   )
 }
 
-type OpenStop = (orderId: string, deliveryId: string) => void
-type DriverOption = DriverWithLocations & { id: string; first_name: string; last_name: string; user_id: string | null }
-
-/** Props that turn a stop card into a click-to-open surface (staff only). */
-function clickableCard(d: Deliv, onOpen: OpenStop | undefined, selected: boolean) {
-  if (!onOpen || !d.order) return { className: '', props: {} as Record<string, unknown> }
-  const orderId = d.order.id
-  const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.target !== e.currentTarget) return
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(orderId, d.id) }
-  }
-  return {
-    className: `group cursor-pointer transition-colors ${selected ? 'border-blue-400 ring-2 ring-blue-100' : 'hover:border-slate-300 hover:bg-slate-50/60'}`,
-    props: {
-      role: 'button',
-      tabIndex: 0,
-      'aria-label': `Open order #${d.order.order_no}`,
-      'aria-expanded': selected,
-      onClick: () => onOpen(orderId, d.id),
-      onKeyDown: onKey,
-    },
-  }
-}
-
-/** Stop clicks inside controls from also opening the panel. */
-const stopOpen = (e: MouseEvent) => e.stopPropagation()
-
-function DetailsHint({ show }: { show: boolean }) {
-  if (!show) return null
-  return (
-    <span className="inline-flex items-center gap-0.5 text-xs text-slate-400 group-hover:text-blue-600 shrink-0">
-      Details <ChevronRight size={14} />
-    </span>
-  )
-}
-
-function customerLabel(d: Deliv, contact?: StopContact): string {
-  return contact?.full_name || d.order?.customer?.full_name || 'Customer'
-}
-
-function DeliveryRow({
-  d, drivers: allDrivers, isDriver, contact, onOpen, selected, activeStop, showLocation,
-}: {
-  d: Deliv
-  drivers: DriverOption[]
-  isDriver: boolean
-  contact?: StopContact
-  onOpen?: OpenStop
-  selected: boolean
-  activeStop?: Deliv
-  showLocation?: boolean
-}) {
-  const isStorePickup = d.leg_type === 'pickup' && !d.requires_driver
-  // Driver stops need somewhere to go; staff can fill a missing address here (BUG-011).
-  const missingAddress = !isStorePickup && !(d.address_line1?.trim() && d.address_city?.trim())
-  const addressEditable = !isStorePickup && (d.status === 'pending' || d.status === 'scheduled' || (missingAddress && d.status === 'en_route'))
-  const [addr, setAddr] = useState({ line1: d.address_line1 ?? '', city: d.address_city ?? '', state: d.address_state ?? 'NY', zip: d.address_zip ?? '' })
-  const card = clickableCard(d, onOpen, selected)
-  const missed = latestAttempt(d.attempts)
-  const canMiss = d.requires_driver && (d.status === 'scheduled' || d.status === 'en_route')
+/** A driver's own open stop: start it, then complete with a photo (or report a miss). */
+function DriverStopRow({ d, contact, activeStop, showLocation }: { d: Deliv; contact?: StopContact; activeStop?: Deliv; showLocation: boolean }) {
   const qc = useQueryClient()
-  const [driver, setDriver] = useState(d.driver_id ?? '')
-  const [date, setDate] = useState(d.scheduled_date ?? '')
-  const [appointmentTime, setAppointmentTime] = useState((d.window_start ?? '').slice(0, 5))
-  // Keep the saved end time; a stop with no end occupies one hour (3LOC-003).
-  const [appointmentEnd, setAppointmentEnd] = useState((d.window_end ?? '').slice(0, 5))
-  // Keep the saved driver listed even if their locations changed since.
-  const drivers = allDrivers.filter((dr) => dr.id === d.driver_id || servesLocation(dr, d.location_id))
-  const busy = useQuery({
-    queryKey: ['busy_drivers', date, appointmentTime, appointmentEnd],
-    enabled: !isDriver && !isStorePickup && Boolean(date && appointmentTime) && !windowProblem(appointmentTime, appointmentEnd),
-    queryFn: async () => {
-      const { data } = await supabase.rpc('get_busy_driver_ids', { p_date: date, p_start: appointmentTime, p_end: appointmentEnd || null })
-      return new Set((data ?? []) as string[])
-    },
-  })
+  const missed = latestAttempt(d.attempts)
   const [msg, setMsg] = useState('')
   const [completing, setCompleting] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
-
-  // Assign/save only touches the dispatch board; start/complete flip billing + stock.
-  const invalidateSave = () => invalidateDispatch(qc)
+  // Start/complete flip billing + stock.
   const invalidateLifecycle = () => invalidateOrderWorkflow(qc)
-
-  const save = useMutation({
-    mutationFn: async () => {
-      // Status is normalized server-side (driver_id set → scheduled; cleared → pending).
-      // Reassigning an en-route stop sends it back to scheduled for the new driver (064).
-      const handedOff = d.status === 'en_route' && (driver || null) !== d.driver_id
-      const addressPatch = addressEditable
-        ? { address_line1: addr.line1.trim() || null, address_city: addr.city.trim() || null, address_state: addr.state.trim().toUpperCase() || 'NY', address_zip: addr.zip.trim() || null }
-        : {}
-      if (!isStorePickup && driver && !(addressEditable ? addr.line1.trim() && addr.city.trim() : !missingAddress)) {
-        throw new Error('Add the street and city before assigning a driver.')
-      }
-      const problem = windowProblem(appointmentTime, appointmentEnd)
-      if (problem) throw new Error(problem)
-      const patch = {
-        ...addressPatch,
-        driver_id: isStorePickup ? null : driver || null,
-        scheduled_date: date || null,
-        window_start: appointmentTime || null,
-        window_end: appointmentTime ? appointmentEnd || null : null,
-      }
-      const { error } = await supabase.from('deliveries').update(patch).eq('id', d.id)
-      if (error) throw new Error(dispatchErrorMessage(error))
-      return handedOff
-    },
-    onMutate: () => setMsg(''),
-    onSuccess: (handedOff) => {
-      invalidateSave()
-      setMsg(handedOff ? 'Reassigned — the stop is back to scheduled; the new driver must start it.' : 'Saved')
-    },
-    onError: (e) => setMsg((e as Error).message),
-  })
 
   const start = useMutation({
     mutationFn: async () => {
@@ -326,7 +175,7 @@ function DeliveryRow({
     onError: (e) => setMsg((e as Error).message),
   })
 
-  // Driver flow: capture a proof photo, upload it, then complete (server requires it).
+  // Capture a proof photo, upload it, then complete (server requires it).
   const completeWithPhoto = async (file: File) => {
     setCompleting(true); setMsg('')
     try {
@@ -346,156 +195,63 @@ function DeliveryRow({
     }
   }
 
-  // Staff/admin override: complete without a photo (recorded as no-photo).
-  const completeOverride = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await supabase.rpc('complete_delivery', { p_delivery_id: d.id, p_photo_path: null })
-      if (error) throw error
-      if (!data?.ok) throw new Error(lifecycleError(data))
-    },
-    onMutate: () => setMsg(''),
-    onSuccess: invalidateLifecycle,
-    onError: (e) => setMsg((e as Error).message),
-  })
-
-  const completeStorePickup = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await supabase.rpc('complete_store_pickup', { p_delivery_id: d.id })
-      if (error) throw error
-      if (!data?.ok) throw new Error(lifecycleError(data))
-    },
-    onMutate: () => setMsg(''),
-    onSuccess: invalidateLifecycle,
-    onError: (e) => setMsg((e as Error).message),
-  })
-
-  const inp = 'border border-slate-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
-
+  const items = itemsLabel(d)
   return (
-    <div className={`bg-white border border-slate-200 rounded-xl p-4 ${card.className}`} {...card.props}>
+    <div className="bg-white border border-slate-200 rounded-xl p-4">
       <div className="mb-1 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-medium">{customerLabel(d, contact)}</span>
-            {isDriver && contact?.phone && (
-              <a href={`tel:${contact.phone}`} className="text-xs text-blue-600 hover:underline">{contact.phone}</a>
-            )}
+            {contact?.phone && <a href={`tel:${contact.phone}`} className="text-xs text-blue-600 hover:underline">{contact.phone}</a>}
             <span className="text-xs text-slate-400">#{d.order?.order_no}</span>
-            {isStorePickup ? (
-              <span className="inline-flex items-center gap-1 rounded bg-purple-100 px-1.5 py-0.5 text-xs font-semibold text-purple-700"><Store size={12} /> IN-STORE PICKUP</span>
-            ) : d.leg_type === 'pickup' ? (
-              <span className="text-xs font-semibold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded">RETURN PICKUP</span>
-            ) : (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 capitalize">{d.leg_type}</span>
-            )}
+            {d.leg_type === 'pickup'
+              ? <span className="text-xs font-semibold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded">RETURN PICKUP</span>
+              : <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 capitalize">{d.leg_type}</span>}
             <span className={`text-xs px-2 py-0.5 rounded-full capitalize ${statusClass(d.status)}`}>{statusLabel(d.status)}</span>
             {isLate(d, businessToday()) && <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">Late · was {fmtStopDate(d.scheduled_date!)}</span>}
             {d.order && <PaymentBadge paymentStatus={d.order.payment_status} paymentPreference={d.order.payment_preference} />}
           </div>
           {missed && (
             <div className="mt-1 text-sm font-medium text-amber-800">
-              Missed {new Date(missed.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}: {reasonLabel(missed.reason)}{missed.note ? ` — “${missed.note}”` : ''}{d.status === 'pending' ? '. Needs a new date and driver.' : ''}
+              Missed {new Date(missed.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}: {reasonLabel(missed.reason)}{missed.note ? ` — “${missed.note}”` : ''}
             </div>
           )}
-          {missingAddress ? (
-            <div className="mt-0.5 text-sm font-medium text-amber-700">No address on file{isDriver ? ' — contact the store before leaving' : ' — add one below before dispatch'}</div>
-          ) : (
-            <div className="text-sm text-slate-500 mt-0.5">{[d.address_line1, d.address_city, d.address_state, d.address_zip].filter(Boolean).join(', ')}</div>
-          )}
-          {(d.order?.rental_line_items?.length ?? 0) > 0 && (
-            <div className="text-sm text-slate-700 mt-1">
-              {d.order!.rental_line_items.map((li) => `${li.quantity > 1 ? li.quantity + '× ' : ''}${li.equipment?.name ?? 'Item'}`).join(', ')}
-            </div>
-          )}
-          {isDriver && (
-            <div className="text-xs text-slate-500 mt-1">
-              {[
-                d.scheduled_date ? new Date(d.scheduled_date + 'T00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : 'Date TBD',
-                d.window_start ? `${d.window_start.slice(0, 5)}${d.window_end ? `–${d.window_end.slice(0, 5)}` : ''}` : null,
-                showLocation ? d.location?.name : null,
-              ].filter(Boolean).join(' · ')}
-            </div>
-          )}
+          {hasAddress(d)
+            ? <div className="text-sm text-slate-500 mt-0.5">{addressLabel(d)}</div>
+            : <div className="mt-0.5 text-sm font-medium text-amber-700">No address on file — contact the store before leaving</div>}
+          {items && <div className="text-sm text-slate-700 mt-1">{items}</div>}
+          <div className="text-xs text-slate-500 mt-1">
+            {[
+              d.scheduled_date ? fmtStopDate(d.scheduled_date) : 'Date TBD',
+              d.window_start ? `${d.window_start.slice(0, 5)}${d.window_end ? `–${d.window_end.slice(0, 5)}` : ''}` : null,
+              showLocation ? d.location?.name : null,
+            ].filter(Boolean).join(' · ')}
+          </div>
         </div>
-        <div className={`flex shrink-0 flex-wrap items-center justify-end gap-2 ${isDriver ? 'w-full sm:w-auto' : ''}`} onClick={stopOpen}>
-          <DetailsHint show={Boolean(onOpen)} />
-          {d.status === 'scheduled' && isDriver && activeStop && (
+        <div className="flex w-full shrink-0 flex-wrap items-center justify-end gap-2 sm:w-auto">
+          {d.status === 'scheduled' && activeStop && (
             <span className="w-full text-xs text-slate-500 sm:w-auto">Finish #{activeStop.order?.order_no} first</span>
           )}
-          {d.status === 'scheduled' && isDriver && !activeStop && (
+          {d.status === 'scheduled' && !activeStop && (
             <button onClick={() => start.mutate()} disabled={start.isPending || !d.driver_id}
               title={!d.driver_id ? 'Needs a driver first' : undefined}
               className="min-h-11 w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">Start stop</button>
           )}
-          {d.status === 'scheduled' && !isDriver && !isStorePickup && (
-            <span className="text-xs text-slate-400">waiting for driver to start</span>
-          )}
           {d.status === 'en_route' && (
-            isDriver ? (
-              <>
-                <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden"
-                  onChange={(e) => { const f = e.target.files?.[0]; if (f) completeWithPhoto(f) }} />
-                <button onClick={() => fileRef.current?.click()} disabled={completing}
-                  className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50 sm:w-auto">
-                  <Camera size={15} /> {completing ? 'Uploading…' : 'Complete + photo'}
-                </button>
-              </>
-            ) : (
-              <button onClick={() => completeOverride.mutate()} disabled={completeOverride.isPending}
-                title="Override complete (no photo)"
-                className="text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-3 py-1.5 disabled:opacity-50">
-                {completeOverride.isPending ? 'Completing…' : 'Complete (override)'}
+            <>
+              <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) completeWithPhoto(f) }} />
+              <button onClick={() => fileRef.current?.click()} disabled={completing}
+                className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50 sm:w-auto">
+                <Camera size={15} /> {completing ? 'Uploading…' : 'Complete + photo'}
               </button>
-            )
-          )}
-          {/* Drivers report a miss at the door; staff can also for a scheduled stop (097). */}
-          {canMiss && (!isDriver || d.status === 'en_route') && <MissedStop deliveryId={d.id} isPickup={d.leg_type === 'pickup'} compact={!isDriver} />}
-          {isStorePickup && d.status !== 'completed' && d.status !== 'cancelled' && (
-            <button onClick={() => completeStorePickup.mutate()} disabled={completeStorePickup.isPending}
-              className="min-h-10 rounded-lg bg-purple-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-50">
-              {completeStorePickup.isPending ? 'Saving…' : 'Mark picked up'}
-            </button>
+              {/* Drivers report a miss at the door (097). */}
+              {d.requires_driver && <MissedStop deliveryId={d.id} isPickup={d.leg_type === 'pickup'} />}
+            </>
           )}
         </div>
       </div>
-
-      {isDriver ? (
-        msg && <div className="text-xs text-red-600 mt-2">{msg}</div>
-      ) : (
-        <div className="flex flex-wrap items-end gap-2 mt-3 cursor-default" onClick={stopOpen}>
-          {!isStorePickup && (
-            <div>
-              <div className="text-[11px] text-slate-400 mb-0.5">Driver</div>
-              <select value={driver} onChange={(e) => setDriver(e.target.value)} className={inp}>
-                <option value="">Unassigned</option>
-                {drivers.map((dr) => (
-                  <option key={dr.id} value={dr.id}>
-                    {dr.first_name} {dr.last_name}{dr.user_id ? '' : ' — no login'}{dr.id !== d.driver_id && busy.data?.has(dr.id) ? ' — busy then' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-          {addressEditable && (
-            <div className="flex w-full flex-wrap gap-2">
-              <div className="min-w-48 flex-[2]"><div className="text-[11px] text-slate-400 mb-0.5">Street</div><input value={addr.line1} onChange={(e) => setAddr({ ...addr, line1: e.target.value })} className={`w-full ${inp}`} /></div>
-              <div className="min-w-32 flex-1"><div className="text-[11px] text-slate-400 mb-0.5">City</div><input value={addr.city} onChange={(e) => setAddr({ ...addr, city: e.target.value })} className={`w-full ${inp}`} /></div>
-              <div className="w-16"><div className="text-[11px] text-slate-400 mb-0.5">State</div><input value={addr.state} maxLength={2} onChange={(e) => setAddr({ ...addr, state: e.target.value })} className={`w-full ${inp}`} /></div>
-              <div className="w-24"><div className="text-[11px] text-slate-400 mb-0.5">ZIP</div><input value={addr.zip} inputMode="numeric" onChange={(e) => setAddr({ ...addr, zip: e.target.value })} className={`w-full ${inp}`} /></div>
-            </div>
-          )}
-          <div><div className="text-[11px] text-slate-400 mb-0.5">{isStorePickup ? 'Pickup date' : 'Date'}</div><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inp} /></div>
-          <div><div className="text-[11px] text-slate-400 mb-0.5">{d.leg_type === 'pickup' ? 'Pickup time' : 'Delivery time'}</div><input type="time" value={appointmentTime} onChange={(e) => setAppointmentTime(e.target.value)} className={inp} /></div>
-          {!isStorePickup && (
-            <div><div className="text-[11px] text-slate-400 mb-0.5">Until{appointmentTime && !appointmentEnd ? ' (1 hour if blank)' : ''}</div><input type="time" aria-label="End time" value={appointmentEnd} onChange={(e) => setAppointmentEnd(e.target.value)} className={inp} /></div>
-          )}
-          <button onClick={() => save.mutate()} disabled={save.isPending}
-            className="text-sm border border-slate-300 hover:bg-slate-50 rounded-lg px-3 py-1.5 disabled:opacity-50">
-            {save.isPending ? 'Saving…' : 'Save'}
-          </button>
-          {msg && <span className={`text-xs ${msg === 'Saved' ? 'text-emerald-600' : 'text-red-600'}`}>{msg}</span>}
-        </div>
-      )}
+      {msg && <div className="text-xs text-red-600 mt-2">{msg}</div>}
     </div>
   )
 }
@@ -515,11 +271,7 @@ function CompletedRow({ d, contact, onOpen, selected }: { d: Deliv; contact?: St
           {d.order && <PaymentBadge paymentStatus={d.order.payment_status} paymentPreference={d.order.payment_preference} />}
         </div>
         <div className="text-sm text-slate-500 mt-0.5">{[d.address_line1, d.address_city].filter(Boolean).join(', ')}</div>
-        {(d.order?.rental_line_items?.length ?? 0) > 0 && (
-          <div className="text-sm text-slate-700 mt-1">
-            {d.order!.rental_line_items.map((li) => `${li.quantity > 1 ? li.quantity + '× ' : ''}${li.equipment?.name ?? 'Item'}`).join(', ')}
-          </div>
-        )}
+        {itemsLabel(d) && <div className="text-sm text-slate-700 mt-1">{itemsLabel(d)}</div>}
         <div className="text-xs text-slate-400 mt-1">Completed {d.completed_at ? new Date(d.completed_at).toLocaleString() : ''}</div>
         {photo?.notes && <div className="text-sm text-slate-500 mt-1 italic">“{photo.notes}”</div>}
       </div>

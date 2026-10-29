@@ -13,10 +13,23 @@ const ERRORS: Record<string, string> = {
   not_driver_stop: 'In-store pickups are not driver stops.',
 }
 
-/** "Couldn't deliver": record why, free the driver, put the stop back to be rescheduled (097). */
-export default function MissedStop({ deliveryId, isPickup, compact = false }: { deliveryId: string; isPickup: boolean; compact?: boolean }) {
-  const qc = useQueryClient()
+const missedLabel = (isPickup: boolean) => (isPickup ? 'Couldn’t pick up' : 'Couldn’t deliver')
+
+/** Driver's "Couldn't deliver" button at the door; opens the form below. */
+export default function MissedStop({ deliveryId, isPickup }: { deliveryId: string; isPickup: boolean }) {
   const [open, setOpen] = useState(false)
+  if (open) return <MissedStopForm deliveryId={deliveryId} isPickup={isPickup} onClose={() => setOpen(false)} />
+  return (
+    <button type="button" onClick={() => setOpen(true)}
+      className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100 sm:w-auto">
+      <AlertTriangle size={15} /> {missedLabel(isPickup)}
+    </button>
+  )
+}
+
+/** Record why a stop was missed, free the driver, put the stop back to be rescheduled (097). */
+export function MissedStopForm({ deliveryId, isPickup, onClose }: { deliveryId: string; isPickup: boolean; onClose: () => void }) {
+  const qc = useQueryClient()
   const [reason, setReason] = useState<MissedReason>('no_one_home')
   const [note, setNote] = useState('')
   const report = useMutation({
@@ -26,22 +39,14 @@ export default function MissedStop({ deliveryId, isPickup, compact = false }: { 
       if (!data?.ok) throw new Error(ERRORS[data?.reason] ?? 'Couldn’t record this. Please call the store.')
     },
     onSuccess: () => {
-      setOpen(false)
+      onClose()
       qc.invalidateQueries({ queryKey: ['deliveries'] })
       qc.invalidateQueries({ queryKey: ['orders'] })
       qc.invalidateQueries({ queryKey: ['store_overview'] })
     },
   })
-  const label = isPickup ? 'Couldn’t pick up' : 'Couldn’t deliver'
+  const label = missedLabel(isPickup)
 
-  if (!open) {
-    return (
-      <button type="button" onClick={() => setOpen(true)}
-        className={`inline-flex items-center justify-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 font-medium text-amber-800 hover:bg-amber-100 ${compact ? 'px-3 py-1.5 text-sm' : 'min-h-11 w-full px-4 py-2 text-sm sm:w-auto'}`}>
-        <AlertTriangle size={15} /> {label}
-      </button>
-    )
-  }
   return (
     <div className="w-full rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm sm:w-80" onClick={(e) => e.stopPropagation()}>
       <div className="mb-2 font-medium text-amber-900">{label}: what happened?</div>
@@ -54,7 +59,7 @@ export default function MissedStop({ deliveryId, isPickup, compact = false }: { 
       <p className="mb-2 text-xs text-amber-900">The stop goes back to “needs scheduling”, the driver is freed, and the customer is emailed to choose a new time.</p>
       {report.error && <p role="alert" className="mb-2 text-xs text-red-600">{(report.error as Error).message}</p>}
       <div className="flex justify-end gap-2">
-        <button type="button" onClick={() => setOpen(false)} className="rounded-lg px-3 py-1.5 text-slate-600 hover:bg-white">Cancel</button>
+        <button type="button" onClick={onClose} className="rounded-lg px-3 py-1.5 text-slate-600 hover:bg-white">Cancel</button>
         <button type="button" onClick={() => report.mutate()} disabled={report.isPending}
           className="rounded-lg bg-amber-600 px-3 py-1.5 font-medium text-white hover:bg-amber-700 disabled:opacity-50">
           {report.isPending ? 'Saving…' : 'Confirm'}
