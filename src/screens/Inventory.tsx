@@ -37,12 +37,14 @@ type Item = {
   delivery_enabled: boolean
   same_day_pickup: boolean
   installation_required: boolean
+  created_at: string
+  updated_at: string
   /** Set for a store's own product (100); null for the owner's catalog. */
   location_id: string | null
   location_inventory: { location_id: string; quantity_on_hand: number; pickup_enabled: boolean }[]
 }
 
-const SELECT = 'id,name,description,category,sku,monthly_rental_price,pickup_rental_price,delivery_rental_price,sale_price,quantity_on_hand,image_url,is_serialized,is_active,is_rentable,is_purchasable,pickup_enabled,delivery_enabled,same_day_pickup,installation_required,location_id,location_inventory:equipment_location_inventory(location_id,quantity_on_hand,pickup_enabled)'
+const SELECT = 'id,name,description,category,sku,monthly_rental_price,pickup_rental_price,delivery_rental_price,sale_price,quantity_on_hand,image_url,is_serialized,is_active,is_rentable,is_purchasable,pickup_enabled,delivery_enabled,same_day_pickup,installation_required,created_at,updated_at,location_id,location_inventory:equipment_location_inventory(location_id,quantity_on_hand,pickup_enabled)'
 
 export default function Inventory() {
   const qc = useQueryClient()
@@ -270,7 +272,7 @@ export default function Inventory() {
                   </div>
                 </div>
               </div>
-              {open && <ProductPanel itemId={it.id} isSerialized={it.is_serialized} stock={scopedStock} locationId={selectedLocationId} storeOpen={selectedLocation?.is_active ?? true} />}
+              {open && <ProductPanel item={it} stock={scopedStock} locationId={selectedLocationId} storeOpen={selectedLocation?.is_active ?? true} />}
             </div>
           )
         })}
