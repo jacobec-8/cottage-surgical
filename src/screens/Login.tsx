@@ -82,7 +82,8 @@ export default function Login() {
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8">
             <h2 className="text-xl font-bold">Sign In</h2>
             <p className="text-sm text-slate-500 mb-6">Enter your credentials to continue</p>
-            <form onSubmit={submit}>
+            {/* POST: a submit before hydration must never put credentials in the URL. */}
+            <form method="post" onSubmit={submit}>
               <label htmlFor="username" className="block text-xs font-medium tracking-wide text-slate-500 mb-1">USERNAME OR EMAIL</label>
               <input
                 id="username"
