@@ -9,6 +9,8 @@ import { fulfillmentLabel } from '../lib/fulfillment'
 import { useLocationScope } from '../contexts/LocationContext'
 import { canSwitchStores } from '../lib/roles'
 import { useCatalogManager } from '../lib/useCatalogManager'
+import { refreshWebsite } from '../lib/websiteRefresh'
+import { canManageStore, removeProductMessage } from '../lib/storeProducts'
 import { useAuth } from '../contexts/AuthContext'
 import StockStatusBadges, { LOW_STOCK_THRESHOLD } from '../components/StockStatusBadges'
 import { CATEGORIES } from '../lib/categories'
@@ -34,10 +36,12 @@ type Item = {
   delivery_enabled: boolean
   same_day_pickup: boolean
   installation_required: boolean
+  /** Set for a store's own product (100); null for the owner's catalog. */
+  location_id: string | null
   location_inventory: { location_id: string; quantity_on_hand: number; pickup_enabled: boolean }[]
 }
 
-const SELECT = 'id,name,description,category,sku,monthly_rental_price,pickup_rental_price,delivery_rental_price,sale_price,quantity_on_hand,image_url,is_serialized,is_active,is_rentable,is_purchasable,pickup_enabled,delivery_enabled,same_day_pickup,installation_required,location_inventory:equipment_location_inventory(location_id,quantity_on_hand,pickup_enabled)'
+const SELECT = 'id,name,description,category,sku,monthly_rental_price,pickup_rental_price,delivery_rental_price,sale_price,quantity_on_hand,image_url,is_serialized,is_active,is_rentable,is_purchasable,pickup_enabled,delivery_enabled,same_day_pickup,installation_required,location_id,location_inventory:equipment_location_inventory(location_id,quantity_on_hand,pickup_enabled)'
 
 export default function Inventory() {
   const qc = useQueryClient()
@@ -66,9 +70,26 @@ export default function Inventory() {
       const { error } = await supabase.from('equipment_items').update({ is_active: false }).eq('id', id)
       if (error) throw error
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['equipment_items'] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['equipment_items'] }); void refreshWebsite() },
     onError: (e) => alert(`Couldn’t remove item: ${(e as Error).message}`),
   })
+
+  // A store stops carrying a product; its own product is deleted (103). The website follows.
+  const storeName = selectedLocation?.name ?? 'this store'
+  const removeFromStore = useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase.rpc('remove_product_from_store', { p_item_id: id, p_location_id: selectedLocationId })
+      if (error) throw new Error(removeProductMessage(undefined, storeName))
+      if (!data?.ok) throw new Error(removeProductMessage(data?.reason, storeName))
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['equipment_items'] })
+      qc.invalidateQueries({ queryKey: ['equipment_units'] })
+      void refreshWebsite()
+    },
+    onError: (e) => alert(`Couldn’t remove it: ${(e as Error).message}`),
+  })
+  const canRemoveHere = Boolean(selectedLocationId) && canManageStore(profile, selectedLocation)
 
   const inStore = (it: Item) => Boolean(selectedLocationId && it.location_inventory?.some((entry) => entry.location_id === selectedLocationId))
   const matches = (it: Item) => (category === 'all' || it.category === category)
@@ -222,10 +243,24 @@ export default function Inventory() {
                     <Link href={`/inventory/${it.id}`} aria-label={`Edit ${it.name}`} className="grid h-10 w-10 place-items-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600">
                       <Pencil size={16} />
                     </Link>
-                    {catalogManager && <button
-                      aria-label={`Remove ${it.name}`}
+                    {selectedLocationId ? canRemoveHere && <button
+                      aria-label={it.location_id ? `Delete ${it.name}` : `Remove ${it.name} from ${storeName}`}
+                      title={it.location_id ? 'Delete product' : `Remove from ${storeName}`}
+                      disabled={removeFromStore.isPending}
                       onClick={() => {
-                        if (confirm(`Remove "${it.name}" from the catalog?`)) deactivate.mutate(it.id)
+                        const question = it.location_id
+                          ? `Delete "${it.name}"? It is removed from ${storeName} and from the website.`
+                          : `Remove "${it.name}" from ${storeName}? It stays in the catalog, and the website stops showing it unless another store carries it.`
+                        if (confirm(question)) removeFromStore.mutate(it.id)
+                      }}
+                      className="grid h-10 w-10 place-items-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                    >
+                      <Trash2 size={16} />
+                    </button> : catalogManager && <button
+                      aria-label={`Remove ${it.name} from the catalog`}
+                      title="Remove from the catalog"
+                      onClick={() => {
+                        if (confirm(`Remove "${it.name}" from the catalog? Every store stops carrying it and it leaves the website.`)) deactivate.mutate(it.id)
                       }}
                       className="grid h-10 w-10 place-items-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600"
                     >
@@ -411,6 +446,7 @@ function ItemModal({ item, onClose }: { item: Partial<Item>; onClose: () => void
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['equipment_items'] })
+      void refreshWebsite()
       onClose()
     },
     onError: (e: any) => setErr(e.message),

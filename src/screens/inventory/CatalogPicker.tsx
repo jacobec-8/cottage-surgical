@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { refreshWebsite } from '../../lib/websiteRefresh'
 import { Check, Plus } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
@@ -36,6 +37,7 @@ export default function CatalogPicker({ items, locationId, locationName, added, 
     onSuccess: (id) => {
       onAdded(id)
       qc.invalidateQueries({ queryKey: ['equipment_items'] })
+      void refreshWebsite()
     },
   })
 

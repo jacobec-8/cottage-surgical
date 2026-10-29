@@ -13,6 +13,8 @@ import { statusLabel } from '../lib/status'
 import { fulfillmentLabel } from '../lib/fulfillment'
 import { useLocationScope } from '../contexts/LocationContext'
 import { useCatalogManager } from '../lib/useCatalogManager'
+import { refreshWebsite } from '../lib/websiteRefresh'
+import { removeProductMessage } from '../lib/storeProducts'
 import { bulkCounts } from '../lib/bulkStock'
 import StockStatusBadges from '../components/StockStatusBadges'
 import { CATEGORIES } from '../lib/categories'
@@ -272,7 +274,7 @@ export default function InventoryItemDetail({ itemId }: { itemId: string }) {
       </div>
 
       {editing ? (
-        <EditItemForm item={product} onCancel={() => setEditing(false)} onSaved={() => { setEditing(false); qc.invalidateQueries({ queryKey: ['equipment_items'] }) }} />
+        <EditItemForm item={product} onCancel={() => setEditing(false)} onSaved={() => { setEditing(false); qc.invalidateQueries({ queryKey: ['equipment_items'] }); void refreshWebsite() }} />
       ) : tab === 'overview' ? (
         <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(380px,0.9fr)] gap-5">
           <div className="space-y-5">
@@ -377,16 +379,23 @@ function PickupLocationsTab({ item, locations, assignments, loading }: {
     qc.invalidateQueries({ queryKey: ['equipment_item_pickup_locations', item.id] })
     qc.invalidateQueries({ queryKey: ['shop_catalog'] })
     qc.invalidateQueries({ queryKey: ['shop_product'] })
+    void refreshWebsite()
   }
   const assignment = useMutation({
     mutationFn: async ({ locationId, assigned }: { locationId: string; assigned: boolean }) => {
-      const result = assigned
-        ? await supabase.from('equipment_location_inventory').insert({
-            equipment_item_id: item.id, location_id: locationId, quantity_on_hand: 0,
-            pickup_enabled: item.pickup_enabled,
-          })
-        : await supabase.from('equipment_location_inventory').delete().eq('equipment_item_id', item.id).eq('location_id', locationId)
-      if (result.error) throw result.error
+      if (assigned) {
+        const { error } = await supabase.from('equipment_location_inventory').insert({
+          equipment_item_id: item.id, location_id: locationId, quantity_on_hand: 0,
+          pickup_enabled: item.pickup_enabled,
+        })
+        if (error) throw error
+        return
+      }
+      // Refused while reserved, rented or on an open order; retires the store's available units (103).
+      const { data, error } = await supabase.rpc('remove_product_from_store', { p_item_id: item.id, p_location_id: locationId })
+      const storeName = locations.find((location) => location.id === locationId)?.name ?? 'this store'
+      if (error) throw new Error(removeProductMessage(undefined, storeName))
+      if (!data?.ok) throw new Error(removeProductMessage(data?.reason, storeName))
     },
     onSuccess: refresh,
   })
@@ -439,7 +448,7 @@ function PickupLocationsTab({ item, locations, assignments, loading }: {
                 <label className="flex cursor-pointer items-start gap-3">
                   <input type="checkbox" className="mt-1" checked={assigned} disabled={!canManage || !location.is_active || assignment.isPending} onChange={(event) => {
                     // Removing clears this store's stock record for the item; ask first.
-                    if (!event.target.checked && !confirm(`Remove ${item.name} from ${location.name}? Its stock count at this store is cleared and it no longer appears in the store's inventory.`)) return
+                    if (!event.target.checked && !confirm(`Remove ${item.name} from ${location.name}? Its available units there are retired, it leaves the store's inventory, and the website stops showing it unless another store carries it.`)) return
                     assignment.mutate({ locationId: location.id, assigned: event.target.checked })
                   }} />
                   <span>
@@ -507,6 +516,7 @@ function UnitsTable({ itemId, locationId, locationName, units, loading }: { item
     qc.invalidateQueries({ queryKey: ['equipment_units', itemId] })
     qc.invalidateQueries({ queryKey: ['equipment_items'] })
     qc.invalidateQueries({ queryKey: ['equipment_item_pickup_locations', itemId] })
+    void refreshWebsite()
   }
   const closeForm = () => {
     setAdding(false)
