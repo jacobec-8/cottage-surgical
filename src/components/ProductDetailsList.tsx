@@ -3,7 +3,9 @@
 import { useState, type ReactNode } from 'react'
 import { Pencil } from 'lucide-react'
 import { fulfillmentLabel } from '../lib/fulfillment'
-import { parsePrice, pickupEditProblem } from '../lib/storeProducts'
+import {
+  fulfillmentEditProblem, parsePrice, pickupEditProblem, purchaseEditProblem, rentalEditProblem,
+} from '../lib/storeProducts'
 import { CATEGORIES } from '../lib/categories'
 import type { ProductEdits } from '../lib/useProductEdits'
 
@@ -26,67 +28,103 @@ export type ProductDetailsItem = {
   updated_at: string
 }
 
-const money = (n: number | null, suffix = '') => (n == null ? null : `$${Number(n).toFixed(2)}${suffix}`)
-
-/**
- * Prices, offering and fulfillment facts, shared by the product page and the
- * expanded inventory row. With `edits`, each value the viewer may change gets
- * a pencil that edits it in place: pickup and delivery price for the store in
- * the header, everything else on the product.
- */
 export type DetailField = 'stock' | 'sale' | 'name'
 
+const money = (n: number | null, suffix = '') => (n == null ? null : `$${Number(n).toFixed(2)}${suffix}`)
+const text = (n: number | null) => (n == null ? '' : String(Number(n)))
+
+/**
+ * Every product shows the same sixteen fields in the same order, whatever it
+ * is or who is looking. With `edits`, each value the viewer may change gets a
+ * pencil that edits it in place. Turning rental or purchase on asks for the
+ * price in the same edit, so a product is never offered without one.
+ */
 export default function ProductDetailsList({ item, edits, openField }: { item: ProductDetailsItem; edits?: ProductEdits; openField?: DetailField | null }) {
   const store = edits?.store ?? null
+  const storeName = edits?.storeName ?? null
+  const where = store && storeName ? ` at ${storeName}` : ''
   const pickupOn = store ? store.pickup_enabled : item.pickup_enabled
   const pickupPrice = store?.pickup_rental_price ?? item.pickup_rental_price
   const deliveryPrice = store?.delivery_rental_price ?? item.delivery_rental_price
+  const salePrice = store?.sale_price ?? item.sale_price
   const storeEdit = Boolean(edits?.canEditStore && store)
   const productEdit = Boolean(edits?.canEditProduct)
   const priceEdit = storeEdit || (!store && productEdit)
-  const where = store && edits?.storeName ? ` at ${edits.storeName}` : ''
+  const noStore = 'Choose a store in the header'
 
-  const salePrice = store?.sale_price ?? item.sale_price
-  const saleEdit = storeEdit || (!store && productEdit)
+  // Prices typed while turning something on become the store's prices too, so
+  // what staff typed is what their customers see.
+  const savePrices = async (prices: { pickup?: number | null; delivery?: number | null; sale?: number | null }) => {
+    if (!store) return
+    await edits!.saveStore({
+      ...(prices.pickup !== undefined ? { pickup_rental_price: prices.pickup } : {}),
+      ...(prices.delivery !== undefined ? { delivery_rental_price: prices.delivery } : {}),
+      ...(prices.sale !== undefined ? { sale_price: prices.sale } : {}),
+    })
+  }
+
   return (
     <dl className="grid sm:grid-cols-2 gap-x-8 gap-y-4 text-sm">
-      {item.name != null && <Row open={openField === 'name'} label="Name" value={item.name}
-        editor={productEdit ? (done) => <TextEditor label="Name" action="Save" initial={item.name} done={done} save={(v) => { if (!v.trim()) throw new Error('Enter a name.'); return edits!.saveProduct({ name: v.trim() }) }} /> : undefined} />}
-      {item.category != null && <Row label="Category" value={item.category.charAt(0).toUpperCase() + item.category.slice(1)}
-        editor={productEdit ? (done) => <CategoryEditor initial={item.category!} done={done} save={(v) => edits!.saveProduct({ category: v })} /> : undefined} />}
-      {item.sku !== undefined && <Row label={`SN (scan code)${store && !productEdit ? where : ''}`} value={(store?.scan_code ?? item.sku) || 'Not set'}
+      <Row open={openField === 'name'} label="Name" value={item.name ?? '—'}
+        editor={productEdit && item.name != null ? (done) => <TextEditor label="Name" action="Save" initial={item.name} done={done}
+          save={(v) => { if (!v.trim()) throw new Error('Enter a name.'); return edits!.saveProduct({ name: v.trim() }) }} /> : undefined} />
+      <Row label="Category" value={item.category ? item.category.charAt(0).toUpperCase() + item.category.slice(1) : '—'}
+        editor={productEdit && item.category != null ? (done) => <CategoryEditor initial={item.category!} done={done} save={(v) => edits!.saveProduct({ category: v })} /> : undefined} />
+      <Row label={`SN (scan code)${store && !productEdit ? where : ''}`} value={(store?.scan_code ?? item.sku) || 'Not set'}
         editor={productEdit
           ? (done) => <TextEditor label="SN" action="Save" initial={item.sku ?? ''} done={done} save={(v) => edits!.saveProduct({ sku: v.trim() || null })} />
-          : storeEdit ? (done) => <TextEditor label="SN" action="Save" initial={store!.scan_code ?? item.sku ?? ''} done={done} save={(v) => edits!.saveStore({ scan_code: v.trim() || null })} /> : undefined} />}
-      {item.description !== undefined && <div className="sm:col-span-2"><Row label="Description" value={item.description || 'No description yet'}
-        editor={productEdit ? (done) => <TextEditor label="Description" action="Save" multiline initial={item.description ?? ''} done={done} save={(v) => edits!.saveProduct({ description: v.trim() || null })} /> : undefined} /></div>}
-      {store && <Row open={openField === 'stock'} label={`Stock${where}`} value={item.is_serialized ? `${store.quantity_on_hand} available unit${store.quantity_on_hand === 1 ? '' : 's'}` : `${store.quantity_on_hand} in stock`}
+          : storeEdit ? (done) => <TextEditor label="SN" action="Save" initial={store!.scan_code ?? item.sku ?? ''} done={done} save={(v) => edits!.saveStore({ scan_code: v.trim() || null })} /> : undefined} />
+      <div className="sm:col-span-2"><Row label="Description" value={item.description || 'No description yet'}
+        editor={productEdit ? (done) => <TextEditor label="Description" action="Save" multiline initial={item.description ?? ''} done={done} save={(v) => edits!.saveProduct({ description: v.trim() || null })} /> : undefined} /></div>
+
+      <Row open={openField === 'stock'} label={`Stock${where}`}
+        value={!store ? noStore : item.is_serialized ? `${store.quantity_on_hand} available unit${store.quantity_on_hand === 1 ? '' : 's'}` : `${store.quantity_on_hand} in stock`}
         editor={storeEdit ? (done) => (item.is_serialized
           ? <TextEditor label="Asset tag of the new unit" action="Add unit" done={done} save={(tag) => edits!.addUnit(tag)} />
-          : <QuantityEditor initial={store.quantity_on_hand} done={done} save={(qty) => edits!.saveStore({ quantity_on_hand: qty })} />) : undefined} />}
-      {item.is_purchasable && store && edits?.retailOn != null && <Row label={`Online sales${where}`} value={edits.retailOn ? 'On' : 'Off: customers can’t buy online'}
-        editor={storeEdit ? (done) => <YesNoEditor question="Sell online?" initial={edits.retailOn!} done={done} save={(v) => edits!.setRetail(v)} /> : undefined} />}
-      {item.is_rentable && <Row label="Pickup rental" value={pickupOn && pickupPrice != null ? money(pickupPrice, '/mo')! : `Not offered${where}`}
+          : <QuantityEditor initial={store!.quantity_on_hand} done={done} save={(qty) => edits!.saveStore({ quantity_on_hand: qty })} />) : undefined} />
+      <Row label={`Online sales${where}`} value={!store ? noStore : edits?.retailOn == null ? '…' : edits.retailOn ? 'On' : 'Off: customers can’t buy online'}
+        editor={storeEdit && edits?.retailOn != null ? (done) => <YesNoEditor question="Sell online?" initial={edits.retailOn!} done={done} save={(v) => edits!.setRetail(v)} /> : undefined} />
+
+      <Row label="Pickup rental" value={pickupOn && pickupPrice != null ? money(pickupPrice, '/mo')! : `Not offered${where}`}
         editor={priceEdit ? (done) => <PickupEditor where={where} initialOn={pickupOn} initialPrice={store ? store.pickup_rental_price : item.pickup_rental_price}
           catalogPrice={store ? item.pickup_rental_price : null} done={done}
-          save={(on, price) => (store ? edits!.saveStore({ pickup_enabled: on, pickup_rental_price: price }) : edits!.saveProduct({ pickup_enabled: on, pickup_rental_price: price }))} /> : undefined} />}
-      {item.is_rentable && <Row label="Delivery + return pickup" value={item.delivery_enabled && deliveryPrice != null ? money(deliveryPrice, '/mo')! : 'Not offered'}
+          save={(on, price) => (store ? edits!.saveStore({ pickup_enabled: on, pickup_rental_price: price }) : edits!.saveProduct({ pickup_enabled: on, pickup_rental_price: price }))} /> : undefined} />
+      <Row label="Delivery + return pickup" value={item.delivery_enabled && deliveryPrice != null ? money(deliveryPrice, '/mo')! : 'Not offered'}
         editor={priceEdit ? (done) => <PriceEditor initial={store ? store.delivery_rental_price : item.delivery_rental_price}
           placeholder={store ? money(item.delivery_rental_price, ' catalog') ?? 'Price' : 'Price'} done={done}
-          save={(price) => (store ? edits!.saveStore({ delivery_rental_price: price }) : edits!.saveProduct({ delivery_rental_price: price }))} /> : undefined} />}
+          save={(price) => (store ? edits!.saveStore({ delivery_rental_price: price }) : edits!.saveProduct({ delivery_rental_price: price }))} /> : undefined} />
       <Row open={openField === 'sale'} label={`Sale price${store ? where : ''}`} value={Number(salePrice) > 0 ? money(salePrice)! : 'Not set'}
-        editor={saleEdit ? (done) => <PriceEditor initial={store ? store.sale_price : item.sale_price} placeholder={store && Number(item.sale_price) > 0 ? money(item.sale_price, ' catalog')! : 'Price'} done={done}
+        editor={priceEdit ? (done) => <PriceEditor initial={store ? store.sale_price : item.sale_price} placeholder={store && Number(item.sale_price) > 0 ? money(item.sale_price, ' catalog')! : 'Price'} done={done}
           save={(price) => (store ? edits!.saveStore({ sale_price: price }) : edits!.saveProduct({ sale_price: price }))} /> : undefined} />
+
       <Row label="Rental enabled" value={item.is_rentable ? 'Yes' : 'No'}
-        editor={productEdit ? (done) => <YesNoEditor initial={item.is_rentable} done={done} save={(v) => edits!.saveProduct({ is_rentable: v })} /> : undefined} />
+        editor={productEdit ? (done) => <RentalEditor initialOn={item.is_rentable} pickupOffered={item.pickup_enabled || pickupOn} deliveryOffered={item.delivery_enabled}
+          pickupPrice={text(pickupPrice)} deliveryPrice={text(deliveryPrice)} done={done}
+          save={async (on, pickup, delivery) => {
+            if (!on) { await edits!.saveProduct({ is_rentable: false }); return }
+            await edits!.saveProduct({ is_rentable: true, pickup_rental_price: pickup, delivery_rental_price: delivery })
+            await savePrices({ pickup, delivery })
+          }} /> : undefined} />
       <Row label="Purchase enabled" value={item.is_purchasable ? 'Yes' : 'No'}
-        editor={productEdit ? (done) => <YesNoEditor initial={item.is_purchasable} done={done} save={(v) => edits!.saveProduct({ is_purchasable: v })} /> : undefined} />
+        editor={productEdit ? (done) => <PurchaseEditor initialOn={item.is_purchasable} price={Number(salePrice) > 0 ? text(salePrice) : ''} done={done}
+          save={async (on, price) => {
+            if (!on) { await edits!.saveProduct({ is_purchasable: false }); return }
+            await edits!.saveProduct({ is_purchasable: true, sale_price: price })
+            await savePrices({ sale: price })
+          }} /> : undefined} />
       <Row label="Fulfillment" value={fulfillmentLabel({ pickup_enabled: pickupOn, delivery_enabled: item.delivery_enabled })}
-        editor={productEdit ? (done) => <YesNoEditor question="Offer delivery?" initial={item.delivery_enabled} done={done} save={(v) => edits!.saveProduct({ delivery_enabled: v })} /> : undefined} />
+        editor={productEdit ? (done) => <FulfillmentEditor pickup={pickupOn} delivery={item.delivery_enabled} rentable={item.is_rentable}
+          pickupPrice={text(pickupPrice)} deliveryPrice={text(deliveryPrice)} done={done}
+          save={async (pickup, delivery, pickupP, deliveryP) => {
+            const prices = item.is_rentable ? { pickup_rental_price: pickup ? pickupP : null, delivery_rental_price: delivery ? deliveryP : null } : {}
+            await edits!.saveProduct({ pickup_enabled: pickup, delivery_enabled: delivery, ...prices })
+            if (store) await edits!.saveStore({ pickup_enabled: pickup, ...(item.is_rentable ? { pickup_rental_price: pickup ? pickupP : null, delivery_rental_price: delivery ? deliveryP : null } : {}) })
+          }} /> : undefined} />
       <Row label="Same-day pickup" value={pickupOn && item.same_day_pickup ? 'May be available' : 'No'}
         editor={productEdit ? (done) => <YesNoEditor initial={item.same_day_pickup} done={done} save={(v) => edits!.saveProduct({ same_day_pickup: v })} /> : undefined} />
       <Row label="Installation required" value={item.installation_required ? 'Yes' : 'No'}
         editor={productEdit ? (done) => <YesNoEditor initial={item.installation_required} done={done} save={(v) => edits!.saveProduct({ installation_required: v })} /> : undefined} />
+
       <Row label="Created" value={new Date(item.created_at).toLocaleDateString()} />
       <Row label="Last updated" value={new Date(item.updated_at).toLocaleString()} />
     </dl>
@@ -132,6 +170,15 @@ function Actions({ pending, done, onSave }: { pending: boolean; done: () => void
   )
 }
 const ErrorText = ({ text }: { text: string | null }) => (text ? <span className="block w-full text-xs font-normal text-red-600">{text}</span> : null)
+const onKeys = (submit: () => void, done: () => void) => (e: React.KeyboardEvent) => { if (e.key === 'Enter') submit(); if (e.key === 'Escape') done() }
+
+function PriceBox({ label, value, onChange, submit, done, autoFocus = false }: { label: string; value: string; onChange: (v: string) => void; submit: () => void; done: () => void; autoFocus?: boolean }) {
+  return (
+    <label className="inline-flex items-center gap-1.5 font-normal text-slate-600">{label}
+      <input autoFocus={autoFocus} aria-label={label} inputMode="decimal" value={value} placeholder="$ /mo" onChange={(e) => onChange(e.target.value)} onKeyDown={onKeys(submit, done)} className={INPUT} />
+    </label>
+  )
+}
 
 function PriceEditor({ initial, placeholder, save, done }: { initial: number | null; placeholder: string; save: (price: number | null) => Promise<void>; done: () => void }) {
   const [value, setValue] = useState(initial?.toString() ?? '')
@@ -143,8 +190,7 @@ function PriceEditor({ initial, placeholder, save, done }: { initial: number | n
   }
   return (
     <span className="flex flex-wrap items-center gap-2">
-      <input autoFocus aria-label="Price" inputMode="decimal" value={value} placeholder={placeholder} onChange={(e) => setValue(e.target.value)}
-        onKeyDown={(e) => { if (e.key === 'Enter') submit(); if (e.key === 'Escape') done() }} className={INPUT} />
+      <input autoFocus aria-label="Price" inputMode="decimal" value={value} placeholder={placeholder} onChange={(e) => setValue(e.target.value)} onKeyDown={onKeys(submit, done)} className={INPUT} />
       <Actions pending={s.pending} done={done} onSave={submit} />
       <ErrorText text={s.error} />
     </span>
@@ -167,10 +213,92 @@ function PickupEditor({ where, initialOn, initialPrice, catalogPrice, save, done
     <span className="flex flex-wrap items-center gap-2">
       <label className="inline-flex items-center gap-1.5 font-normal"><input type="checkbox" checked={on} onChange={(e) => setOn(e.target.checked)} /> Offer pickup{where}</label>
       {on && <input autoFocus aria-label="Pickup price" inputMode="decimal" value={value} placeholder={money(catalogPrice, ' catalog') ?? 'Price /mo'}
-        onChange={(e) => setValue(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') submit(); if (e.key === 'Escape') done() }} className={INPUT} />}
+        onChange={(e) => setValue(e.target.value)} onKeyDown={onKeys(submit, done)} className={INPUT} />}
       <Actions pending={s.pending} done={done} onSave={submit} />
       <ErrorText text={s.error} />
     </span>
+  )
+}
+
+/** Yes shows the price boxes; one Save turns rental on with its prices. */
+function RentalEditor({ initialOn, pickupOffered, deliveryOffered, pickupPrice, deliveryPrice, save, done }: {
+  initialOn: boolean; pickupOffered: boolean; deliveryOffered: boolean; pickupPrice: string; deliveryPrice: string
+  save: (on: boolean, pickup: number | null, delivery: number | null) => Promise<void>; done: () => void
+}) {
+  const [on, setOn] = useState(initialOn)
+  const [pickup, setPickup] = useState(pickupPrice)
+  const [delivery, setDelivery] = useState(deliveryPrice)
+  const s = useSave(done)
+  const submit = () => {
+    const problem = rentalEditProblem({ on, pickup, delivery, pickupOffered, deliveryOffered })
+    if (problem) { s.setError(problem); return }
+    void s.run(() => save(on, on ? parsePrice(pickup) ?? null : null, on ? parsePrice(delivery) ?? null : null))
+  }
+  return (
+    <span className="flex flex-wrap items-center gap-2">
+      <Toggle on={on} setOn={setOn} />
+      {on && <PriceBox label={`Pickup${pickupOffered ? '' : ' (optional)'}`} value={pickup} onChange={setPickup} submit={submit} done={done} autoFocus />}
+      {on && <PriceBox label={`Delivery + return${deliveryOffered ? '' : ' (optional)'}`} value={delivery} onChange={setDelivery} submit={submit} done={done} />}
+      <Actions pending={s.pending} done={done} onSave={submit} />
+      <ErrorText text={s.error} />
+    </span>
+  )
+}
+
+/** Yes shows the sale price box; one Save turns selling on with its price. */
+function PurchaseEditor({ initialOn, price, save, done }: { initialOn: boolean; price: string; save: (on: boolean, price: number | null) => Promise<void>; done: () => void }) {
+  const [on, setOn] = useState(initialOn)
+  const [value, setValue] = useState(price)
+  const s = useSave(done)
+  const submit = () => {
+    const problem = purchaseEditProblem(on, value)
+    if (problem) { s.setError(problem); return }
+    void s.run(() => save(on, on ? parsePrice(value) ?? null : null))
+  }
+  return (
+    <span className="flex flex-wrap items-center gap-2">
+      <Toggle on={on} setOn={setOn} />
+      {on && <PriceBox label="Sale price" value={value} onChange={setValue} submit={submit} done={done} autoFocus />}
+      <Actions pending={s.pending} done={done} onSave={submit} />
+      <ErrorText text={s.error} />
+    </span>
+  )
+}
+
+/** Pickup and delivery; a rentable product gets a price box for each chosen method. */
+function FulfillmentEditor({ pickup: p0, delivery: d0, rentable, pickupPrice, deliveryPrice, save, done }: {
+  pickup: boolean; delivery: boolean; rentable: boolean; pickupPrice: string; deliveryPrice: string
+  save: (pickup: boolean, delivery: boolean, pickupPrice: number | null, deliveryPrice: number | null) => Promise<void>; done: () => void
+}) {
+  const [pickup, setPickup] = useState(p0)
+  const [delivery, setDelivery] = useState(d0)
+  const [pp, setPp] = useState(pickupPrice)
+  const [dp, setDp] = useState(deliveryPrice)
+  const s = useSave(done)
+  const submit = () => {
+    const problem = fulfillmentEditProblem({ pickup, delivery, rentable, pickupPrice: pp, deliveryPrice: dp })
+    if (problem) { s.setError(problem); return }
+    void s.run(() => save(pickup, delivery, parsePrice(pp) ?? null, parsePrice(dp) ?? null))
+  }
+  return (
+    <span className="flex flex-wrap items-center gap-2">
+      <label className="inline-flex items-center gap-1.5 font-normal"><input type="checkbox" checked={pickup} onChange={(e) => setPickup(e.target.checked)} /> Pickup</label>
+      {rentable && pickup && <PriceBox label="$/mo" value={pp} onChange={setPp} submit={submit} done={done} />}
+      <label className="inline-flex items-center gap-1.5 font-normal"><input type="checkbox" checked={delivery} onChange={(e) => setDelivery(e.target.checked)} /> Delivery</label>
+      {rentable && delivery && <PriceBox label="$/mo" value={dp} onChange={setDp} submit={submit} done={done} />}
+      <Actions pending={s.pending} done={done} onSave={submit} />
+      <ErrorText text={s.error} />
+    </span>
+  )
+}
+
+function Toggle({ on, setOn }: { on: boolean; setOn: (v: boolean) => void }) {
+  const button = (value: boolean) => `rounded-lg border px-2.5 py-1 text-xs ${value === on ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`
+  return (
+    <>
+      <button type="button" onClick={() => setOn(true)} className={button(true)}>Yes</button>
+      <button type="button" onClick={() => setOn(false)} className={button(false)}>No</button>
+    </>
   )
 }
 
@@ -198,8 +326,7 @@ function QuantityEditor({ initial, save, done }: { initial: number; save: (qty: 
   }
   return (
     <span className="flex flex-wrap items-center gap-2">
-      <input autoFocus aria-label="Quantity" inputMode="numeric" value={value} onChange={(e) => setValue(e.target.value)}
-        onKeyDown={(e) => { if (e.key === 'Enter') submit(); if (e.key === 'Escape') done() }} className={INPUT} />
+      <input autoFocus aria-label="Quantity" inputMode="numeric" value={value} onChange={(e) => setValue(e.target.value)} onKeyDown={onKeys(submit, done)} className={INPUT} />
       <Actions pending={s.pending} done={done} onSave={submit} />
       <ErrorText text={s.error} />
     </span>
@@ -214,8 +341,7 @@ function TextEditor({ label, action, initial = '', multiline = false, save, done
     <span className="flex flex-wrap items-center gap-2">
       {multiline
         ? <textarea autoFocus aria-label={label} value={value} rows={3} onChange={(e) => setValue(e.target.value)} onKeyDown={(e) => { if (e.key === 'Escape') done() }} className={`${INPUT} w-full`} />
-        : <input autoFocus aria-label={label} placeholder={label} value={value} onChange={(e) => setValue(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') submit(); if (e.key === 'Escape') done() }} className={`${INPUT} w-56`} />}
+        : <input autoFocus aria-label={label} placeholder={label} value={value} onChange={(e) => setValue(e.target.value)} onKeyDown={onKeys(submit, done)} className={`${INPUT} w-56`} />}
       <button type="button" onClick={submit} disabled={s.pending} className="rounded-lg bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50">{s.pending ? 'Saving…' : action}</button>
       <Actions pending={s.pending} done={done} />
       <ErrorText text={s.error} />
@@ -226,7 +352,7 @@ function TextEditor({ label, action, initial = '', multiline = false, save, done
 function CategoryEditor({ initial, save, done }: { initial: string; save: (category: string) => Promise<void>; done: () => void }) {
   const [value, setValue] = useState(initial)
   const s = useSave(done)
-  const options = CATEGORIES.includes(initial as (typeof CATEGORIES)[number]) ? CATEGORIES : [initial, ...CATEGORIES]
+  const options = CATEGORIES.includes(initial) ? CATEGORIES : [initial, ...CATEGORIES]
   return (
     <span className="flex flex-wrap items-center gap-2">
       <select autoFocus aria-label="Category" value={value} onChange={(e) => setValue(e.target.value)} className={`${INPUT} w-44 capitalize`}>
