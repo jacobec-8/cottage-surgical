@@ -41,10 +41,10 @@ type Item = {
   updated_at: string
   /** Set for a store's own product (100); null for the owner's catalog. */
   location_id: string | null
-  location_inventory: { location_id: string; quantity_on_hand: number; pickup_enabled: boolean }[]
+  location_inventory: { location_id: string; quantity_on_hand: number; pickup_enabled: boolean; scan_code?: string | null }[]
 }
 
-const SELECT = 'id,name,description,category,sku,monthly_rental_price,pickup_rental_price,delivery_rental_price,sale_price,quantity_on_hand,image_url,is_serialized,is_active,is_rentable,is_purchasable,pickup_enabled,delivery_enabled,same_day_pickup,installation_required,created_at,updated_at,location_id,location_inventory:equipment_location_inventory(location_id,quantity_on_hand,pickup_enabled)'
+const SELECT = 'id,name,description,category,sku,monthly_rental_price,pickup_rental_price,delivery_rental_price,sale_price,quantity_on_hand,image_url,is_serialized,is_active,is_rentable,is_purchasable,pickup_enabled,delivery_enabled,same_day_pickup,installation_required,created_at,updated_at,location_id,location_inventory:equipment_location_inventory(location_id,quantity_on_hand,pickup_enabled,scan_code)'
 
 export default function Inventory() {
   const qc = useQueryClient()
@@ -54,6 +54,8 @@ export default function Inventory() {
   const [editing, setEditing] = useState<Partial<Item> | null>(null) // null=closed, {} = new
   const catalogManager = useCatalogManager()
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  // The row pencil opens the row with its first field ready to edit.
+  const [editTarget, setEditTarget] = useState<{ id: string; n: number } | null>(null)
   const [view, setView] = useState<'store' | 'catalog'>('store')
   const [category, setCategory] = useState('all')
   // Products added this visit stay in the catalog list with "Added · set stock".
@@ -110,7 +112,7 @@ export default function Inventory() {
     },
   })
   const matches = (it: Item) => (category === 'all' || it.category === category)
-    && ([it.name, it.description, it.sku, it.category].filter(Boolean).join(' ').toLowerCase().includes(q.toLowerCase())
+    && ([it.name, it.description, it.sku, it.category, ...(it.location_inventory ?? []).filter((row) => !selectedLocationId || row.location_id === selectedLocationId).map((row) => row.scan_code)].filter(Boolean).join(' ').toLowerCase().includes(q.toLowerCase())
       || Boolean(scanned.data?.has(it.id)))
   const filtered = (data ?? []).filter((it) => matches(it) && (!selectedLocationId || inStore(it)))
   // A store adds products from the shared catalog itself ("Add from catalog").
@@ -258,7 +260,7 @@ export default function Inventory() {
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
-                    <button type="button" onClick={() => setExpandedId(it.id)} aria-label={`Edit ${it.name}`} title="Edit" className="grid h-10 w-10 place-items-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600">
+                    <button type="button" onClick={() => { setExpandedId(it.id); setEditTarget((cur) => ({ id: it.id, n: (cur?.n ?? 0) + 1 })) }} aria-label={`Edit ${it.name}`} title="Edit" className="grid h-10 w-10 place-items-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600">
                       <Pencil size={16} />
                     </button>
                     {selectedLocationId ? canRemoveHere && <button
@@ -287,7 +289,7 @@ export default function Inventory() {
                   </div>
                 </div>
               </div>
-              {open && <ProductPanel item={it} stock={scopedStock} locationId={selectedLocationId} storeName={selectedLocation?.name ?? null} storeOpen={selectedLocation?.is_active ?? true} />}
+              {open && <ProductPanel key={editTarget?.id === it.id ? `edit-${editTarget.n}` : it.id} startField={editTarget?.id === it.id ? (selectedLocationId ? 'stock' : 'name') : null} item={it} stock={scopedStock} locationId={selectedLocationId} storeName={selectedLocation?.name ?? null} storeOpen={selectedLocation?.is_active ?? true} />}
             </div>
           )
         })}

@@ -637,6 +637,13 @@ r, e = call(NORTH, "SELECT public.set_online_retail(%s, true)", (LOC["west"],));
 r, e = call(WEST, "SELECT public.set_online_retail(%s, true)", (LOC["west"],)); check("store staff switch on online sales for their store", bool(r and r.get("ok")), r or e)
 check("with stock, a store price and online sales on, it is buyable and listed at the store's price", buy() == (True, True, 25), buy())
 q("UPDATE pickup_locations SET online_retail_enabled=FALSE WHERE id=%s", (LOC["west"],))
+# ── 108 store staff edit every field of a product their store carries ──
+UP = "SELECT public.update_store_product(%s,%s,%s::jsonb)"
+r, e = call(WEST, UP, (BULK, LOC["west"], json.dumps({"name": "V108 renamed", "installation_required": True, "sku": "V108-SN"})))
+check("store staff edit a carried product's name, SN and installation", bool(r and r.get("ok")) and q("SELECT name, sku, installation_required FROM equipment_items WHERE id=%s", (BULK,))[0] == ("V108 renamed", "V108-SN", True), r or e)
+r, e = call(DRV_USER, UP, (BULK, LOC["west"], json.dumps({"name": "x"}))); check("a driver cannot edit products", (r or {}).get("reason") == "forbidden", r or e)
+r, e = call(NORTH, UP, (BULK, LOC["west"], json.dumps({"name": "x"}))); check("staff cannot edit through another store", (r or {}).get("reason") == "forbidden", r or e)
+r, e = call(A_STAFF, UP, (BULK, LOC_A, json.dumps({"name": "x"}))); check("another business cannot edit a product its store does not carry", (r or {}).get("reason") == "forbidden", r or e)
 nt = q("SELECT title FROM notifications WHERE reference_id LIKE %s LIMIT 1", (f"order_{on1['order_id']}%",)) if on1 else []
 check("alerts name the store", (not nt) or nt[0][0].startswith(f"V074 north {tag}"), nt)
 check("the separation check passes", __import__('subprocess').run(['python3', 'scripts/check_store_separation.py'], env={**os.environ, 'VERIFY_APPLY_FIRST': ''}).returncode == 0 if not os.environ.get('VERIFY_APPLY_FIRST') else True)

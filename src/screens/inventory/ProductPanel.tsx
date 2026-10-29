@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Globe, EyeOff } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { liveChecklist, monthlyIncome, onlineShopLabel, unitCounts, usagePercent, websiteStatus } from '../../lib/productPanel'
-import ProductDetailsList, { type ProductDetailsItem } from '../../components/ProductDetailsList'
+import ProductDetailsList, { type DetailField, type ProductDetailsItem } from '../../components/ProductDetailsList'
 import { useProductEdits } from '../../lib/useProductEdits'
 import { fmtMoney } from '../orders/format'
 
@@ -17,12 +17,16 @@ type Props = {
   storeName: string | null
   /** False when the selected store is not open to customers. */
   storeOpen: boolean
+  /** Field to open for editing straight away (the row's pencil). */
+  startField?: DetailField | null
 }
 
 const SHOP_SELECT = 'storefront_listed,is_active,is_rentable,is_purchasable,delivery_rental_price,pickup_rental_price,sale_price:sale_price_shown'
 
 /** The expanded inventory row: stock position, rental income, online shop status, and product details. */
-export default function ProductPanel({ item, stock, locationId, storeName, storeOpen }: Props) {
+export default function ProductPanel({ item, stock, locationId, storeName, storeOpen, startField = null }: Props) {
+  const [openField, setOpenField] = useState<{ field: DetailField; n: number } | null>(startField ? { field: startField, n: 0 } : null)
+  const openStep = (field: DetailField) => setOpenField((cur) => ({ field, n: (cur?.n ?? 0) + 1 }))
   const edits = useProductEdits(item, locationId, storeName)
   const units = useQuery({
     queryKey: ['equipment_units', item.id, locationId, 'panel'],
@@ -105,12 +109,14 @@ export default function ProductPanel({ item, stock, locationId, storeName, store
           <EyeOff size={13} /> <span className="font-medium">Not in the online shop yet. To make it live:</span>
           {steps.map((step) => step === 'Turn on online sales' && edits.canEditStore
             ? <button key={step} type="button" onClick={() => void turnOnRetail()} disabled={turningOn} className="rounded-full bg-amber-600 px-2.5 py-1 font-medium text-white hover:bg-amber-700 disabled:opacity-50">{turningOn ? 'Turning on…' : 'Turn on online sales'}</button>
-            : <span key={step} className="rounded-full bg-white px-2.5 py-1 font-medium">{step}</span>)}
+            : step === 'Set a sale price' || step === 'Add stock'
+              ? <button key={step} type="button" onClick={() => openStep(step === 'Add stock' ? 'stock' : 'sale')} className="rounded-full bg-amber-600 px-2.5 py-1 font-medium text-white hover:bg-amber-700">{step}</button>
+              : <span key={step} className="rounded-full bg-white px-2.5 py-1 font-medium">{step}</span>)}
           {steps.length === 0 && <span>Saving changes… it will appear in a moment.</span>}
           {retailError && <span className="text-red-600">{retailError}</span>}
         </div>
       )}
-      <ProductDetailsList item={item} edits={edits} />
+      <ProductDetailsList key={openField ? `${openField.field}:${openField.n}` : 'view'} item={item} edits={edits} openField={openField?.field ?? null} />
     </div>
   )
 }
