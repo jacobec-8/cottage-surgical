@@ -615,6 +615,10 @@ check("a driver cannot turn on pickup for a store", r is None, r or e)
 r, e = call(WEST, "UPDATE equipment_location_inventory SET pickup_enabled=TRUE, pickup_rental_price=45 WHERE equipment_item_id=%s AND location_id=%s RETURNING 1", (BULK, LOC["west"]))
 check("store staff turn on pickup at their store with their own price", r == 1, r or e)
 check("the website lists that store as a pickup location", q("SELECT count(*) FROM equipment_item_pickup_locations WHERE equipment_item_id=%s AND pickup_location_id=%s", (BULK, LOC["west"]))[0][0] == 1)
+def as_anon(sql, args=()):
+    cur.execute("SAVEPOINT an"); cur.execute("SET LOCAL ROLE anon"); cur.execute(sql, args); rows = cur.fetchall()
+    cur.execute("ROLLBACK TO SAVEPOINT an"); cur.execute("RELEASE SAVEPOINT an"); return rows
+check("a website visitor sees that store as a pickup store", as_anon("SELECT count(*) FROM equipment_item_pickup_locations WHERE equipment_item_id=%s AND pickup_location_id=%s", (BULK, LOC["west"]))[0][0] == 1)
 check("checkout accepts pickup at that store", bool((PICK(LOC["west"]) or {}).get("ok")), PICK(LOC["west"]))
 check("the website shows pickup as offered, at the store's price", q("SELECT public.pickup_offered(i), public.pickup_price_shown(i) FROM equipment_items i WHERE id=%s", (BULK,))[0] == (True, 45), q("SELECT public.pickup_offered(i), public.pickup_price_shown(i) FROM equipment_items i WHERE id=%s", (BULK,)))
 check("another store is unaffected", (PICK(LOC["north"]) or {}).get("reason") == "pickup_unavailable", PICK(LOC["north"]))
