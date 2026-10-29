@@ -1,11 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronRight, Search } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useLocationScope } from '../contexts/LocationContext'
+import { matchesCustomerSearch } from '../lib/customerSearch'
 import { StatusBadge, TypeBadge } from './orders/badges'
 import { SELECTED_ORDER_PARAM } from './orders/useSelectedOrder'
 import { fmtDate, fmtMoney } from './orders/format'
@@ -34,6 +35,7 @@ type CustomerOrder = {
 export default function Customers() {
   const { selectedLocationId } = useLocationScope()
   const [open, setOpen] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
   const { data, isLoading, error } = useQuery({
     queryKey: ['customers', selectedLocationId],
     queryFn: async () => {
@@ -47,6 +49,7 @@ export default function Customers() {
       return data as Customer[]
     },
   })
+  const shown = useMemo(() => (data ?? []).filter((c) => matchesCustomerSearch(c, search)), [data, search])
 
   return (
     <div>
@@ -54,9 +57,23 @@ export default function Customers() {
       <p className="text-slate-500 text-sm mb-6">Tap any customer to view details &amp; rental history.</p>
       {isLoading && <div className="text-slate-500">Loading…</div>}
       {error && <div className="text-red-600 text-sm">{(error as Error).message}</div>}
+      {data && data.length > 0 && (
+        <label className="relative mb-4 block">
+          <span className="sr-only">Search customers</span>
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name, phone, email or address"
+            className="w-full border border-slate-300 rounded-lg pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </label>
+      )}
       {data && data.length === 0 && <div className="text-slate-500 text-sm">No customers yet.</div>}
+      {data && data.length > 0 && shown.length === 0 && <div className="text-slate-500 text-sm">No customers match “{search.trim()}”.</div>}
       <div className="grid md:grid-cols-2 gap-3 items-start">
-        {data?.map((c) => {
+        {shown.map((c) => {
           const expanded = open === c.id
           return (
             <div key={c.id} className={`bg-white border rounded-xl ${expanded ? 'border-blue-300' : 'border-slate-200'}`}>
