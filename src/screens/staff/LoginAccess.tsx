@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { KeyRound, Save, ShieldCheck } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { branchLoginMessage, MIN_PASSWORD_LENGTH } from '../../lib/branchLogins'
+import { storeLoginMessage, MIN_PASSWORD_LENGTH } from '../../lib/storeLogins'
 import type { StaffLocation } from '../../contexts/LocationContext'
 
 const INPUT = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
@@ -16,7 +16,7 @@ async function callLoginRpc(name: string, args: Record<string, unknown>): Promis
   const { data, error } = await supabase.rpc(name, args)
   if (error) throw new Error('Couldn’t save. Please try again.')
   const result = data as RpcResult
-  if (!result.ok) throw new Error(branchLoginMessage(result.reason))
+  if (!result.ok) throw new Error(storeLoginMessage(result.reason))
 }
 
 /** An owner's controls for one staff or driver login: details, store, on/off (migration 087). */

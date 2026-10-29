@@ -1,10 +1,10 @@
 // Store logins an owner (or admin) adds and manages from Staff (migration 087).
 
-export type BranchLoginRole = 'staff' | 'driver'
+export type StoreLoginRole = 'staff' | 'driver'
 
 export type NewLoginDraft = {
   locationId: string
-  role: BranchLoginRole
+  role: StoreLoginRole
   fullName: string
   phone: string
   username: string
@@ -28,7 +28,7 @@ const REASONS: Record<string, string> = {
 }
 
 /** Staff-readable text for an ok:false reason from the login functions. */
-export function branchLoginMessage(reason: string | undefined, fallback = 'Couldn’t save. Please try again.'): string {
+export function storeLoginMessage(reason: string | undefined, fallback = 'Couldn’t save. Please try again.'): string {
   return (reason && REASONS[reason]) || fallback
 }
 

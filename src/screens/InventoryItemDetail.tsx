@@ -392,7 +392,7 @@ function PickupLocationsTab({ item, locations, assignments, loading }: {
   })
 
   if (loading) return <div className="text-sm text-slate-500">Loading pickup locations…</div>
-  // Admins configure every shop, owners their business's branches. A store
+  // Admins configure every shop, owners every location they own. A store
   // login can only assign inventory to the location the admin associated with that account.
   const canManageLocation = (location: PickupLocation) => profile?.role === 'admin'
     || (profile?.role === 'owner' && location.business_id === profile.business_id)

@@ -8,7 +8,10 @@ test('3LOC-003: an overlapping booking explains the conflict', () => {
 
 test('other dispatch rules map to plain messages', () => {
   assert.match(dispatchErrorMessage({ code: '23514', message: 'new row for relation "deliveries" violates check constraint "deliveries_window_order_check"' }), /end time/)
-  assert.match(dispatchErrorMessage({ code: '23514', message: 'driver_branch: This driver is not set up to work at this branch.' }), /branch/)
+  const notSetUp = dispatchErrorMessage({ code: '23514', message: 'driver_location: This driver is not set up to work at this location.' })
+  assert.match(notSetUp, /isn’t set up to work at this location/)
+  assert.doesNotMatch(notSetUp, /branch/i)
+  assert.equal(dispatchErrorMessage({ code: '23514', message: 'driver_branch: This driver is not set up to work at this branch.' }), notSetUp)
   assert.match(dispatchErrorMessage({ code: '23505', message: 'duplicate key value violates unique constraint "uq_deliveries_one_en_route_per_driver"' }), /another stop/)
   assert.equal(dispatchErrorMessage({ code: '42501', message: 'x' }, 'fallback'), 'fallback')
 })

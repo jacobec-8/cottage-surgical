@@ -8,11 +8,11 @@ import { useAuth } from '../contexts/AuthContext'
 import { authEmailToUsername } from '../lib/staffLogin'
 import { supabase } from '../lib/supabase'
 import { useLocationScope } from '../contexts/LocationContext'
-import { DRIVER_BRANCH_FIELDS, driversForBranch, type BranchDriver } from '../lib/driverBranches'
+import { DRIVER_LOCATION_FIELDS, driversForLocation, type DriverWithLocations } from '../lib/driverLocations'
 import { canSwitchStores } from '../lib/roles'
-import DriverBranches from './drivers/DriverBranches'
+import DriverLocations from './drivers/DriverLocations'
 
-type Driver = BranchDriver & {
+type Driver = DriverWithLocations & {
   id: string
   first_name: string
   last_name: string
@@ -42,13 +42,13 @@ export default function Drivers() {
     queryKey: ['drivers', 'all', selectedLocationId],
     queryFn: async () => {
       // RLS returns this scope's drivers plus drivers shared with it; filter to
-      // the chosen branch here so shared drivers are included.
+      // the chosen location here so drivers who also cover it are included.
       const { data, error } = await supabase
         .from('drivers')
-        .select(`id,first_name,last_name,email,phone,license_number,license_expiry,hire_date,status,user_id,${DRIVER_BRANCH_FIELDS}`)
+        .select(`id,first_name,last_name,email,phone,license_number,license_expiry,hire_date,status,user_id,${DRIVER_LOCATION_FIELDS},own_location:pickup_locations!drivers_location_id_fkey(name)`)
         .order('first_name')
       if (error) throw error
-      return driversForBranch(data as Driver[], selectedLocationId)
+      return driversForLocation(data as unknown as Driver[], selectedLocationId)
     },
   })
 
@@ -179,7 +179,7 @@ export default function Drivers() {
             saving={update.isPending}
             openSettings={profile?.role === 'admin'}
             canEdit={canSwitchStores(profile?.role) || d.location_id === profile?.location_id}
-            branches={<DriverBranches driver={d} locations={locations} canShare={canSwitchStores(profile?.role)} />}
+            coverage={<DriverLocations driver={d} locations={locations} canEdit={canSwitchStores(profile?.role)} />}
             onLink={(profileId) => link.mutate({ driverId: d.id, profileId })}
             onSave={(values) => update.mutateAsync({ driverId: d.id, values })}
           />
@@ -196,7 +196,7 @@ function DriverRow({
   saving,
   openSettings,
   canEdit,
-  branches,
+  coverage,
   onLink,
   onSave,
 }: {
@@ -206,7 +206,7 @@ function DriverRow({
   saving: boolean
   openSettings: boolean
   canEdit: boolean
-  branches: React.ReactNode
+  coverage: React.ReactNode
   onLink: (profileId: string) => void
   onSave: (values: DriverUpdate) => Promise<void>
 }) {
@@ -295,7 +295,7 @@ function DriverRow({
           </div>
         </div>
       )}
-      {!editing && branches}
+      {!editing && coverage}
       {!editing && unlinked && canEdit && (
         <div className="mt-3 pt-3 border-t border-slate-100">
           <div className="text-xs text-amber-700 mb-2">

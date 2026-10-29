@@ -68,7 +68,7 @@ export default function Layout({ children }: { children: ReactNode }) {
       if (selectedLocationId) {
         reqQuery = reqQuery.eq('location_id', selectedLocationId)
         ordQuery = ordQuery.eq('location_id', selectedLocationId)
-        // A driver's stops can be at any branch they serve; RLS already limits them.
+        // A driver's stops can be at any location they work at; RLS already limits them.
         if (!isDriver) delQuery = delQuery.eq('location_id', selectedLocationId)
       }
       const [req, ord, del] = await Promise.all([reqQuery, ordQuery, delQuery])
@@ -87,7 +87,7 @@ export default function Layout({ children }: { children: ReactNode }) {
     },
   })
   const name = profile?.full_name || profile?.email || 'User'
-  // An owner viewing all their branches still sees their own business.
+  // An owner viewing all their locations still sees their own name.
   const business = selectedLocation?.business ?? (profile?.role === 'owner' ? locationScope.locations[0]?.business : null)
   const businessName = business?.name ?? 'All stores'
   // Cottage's own contact is only the fallback for the all-stores admin view;

@@ -1,5 +1,5 @@
 // Roles that sign in to the staff app. An owner works like store staff in
-// every branch of their business (migration 074).
+// every location they own (migration 074).
 export const STAFF_APP_ROLES: readonly string[] = ['admin', 'owner', 'staff', 'driver']
 export const BACKOFFICE_ROLES: readonly string[] = ['admin', 'owner', 'staff']
 

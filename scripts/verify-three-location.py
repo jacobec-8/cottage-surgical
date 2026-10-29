@@ -145,7 +145,7 @@ r, e = order(EAST, LOC["east"], DRV, ws="13:00", we="14:00"); check("East staff 
 east_stop = leg(r["order_id"])
 r, e = order(WEST, LOC["west"], DRV, item=BULK); check("West staff cannot assign a driver not shared with West", (r or {}).get("reason") == "invalid_driver", r or e)
 wleg = leg(ow["order_id"])
-r, e = call(WEST, "UPDATE deliveries SET driver_id=%s WHERE id=%s RETURNING 1", (DRV, wleg)); check("direct update to an unauthorized driver is rejected", e is not None and "driver_branch" in e, r or e)
+r, e = call(WEST, "UPDATE deliveries SET driver_id=%s WHERE id=%s RETURNING 1", (DRV, wleg)); check("direct update to an unauthorized driver is rejected", e is not None and "driver_location" in e, r or e)
 check("East staff see the shared driver; West staff do not", call(EAST, "SELECT count(*) FROM drivers WHERE id=%s", (DRV,))[0] == 1 and call(WEST, "SELECT count(*) FROM drivers WHERE id=%s", (DRV,))[0] == 0)
 r, e = call(EAST, "UPDATE drivers SET phone='555' WHERE id=%s RETURNING 1", (DRV,)); check("East staff cannot edit the North driver record", r is None, r or e)
 r, e = call(DRV_USER, "SELECT count(*) FROM deliveries WHERE id=%s", (east_stop,)); check("driver's queue includes the East stop", r == 1, r or e)

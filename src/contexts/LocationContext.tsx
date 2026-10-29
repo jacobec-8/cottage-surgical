@@ -37,7 +37,7 @@ const STORAGE_KEY = 'cs_admin_location_scope_v1'
 export function LocationProvider({ children }: { children: ReactNode }) {
   const { profile } = useAuth()
   const queryClient = useQueryClient()
-  // Admins switch across every store; owners across their business's branches.
+  // Admins switch across every store; owners across every location they own.
   const canSwitch = canSwitchStores(profile?.role)
   const ownerBusinessId = profile?.role === 'owner' ? profile.business_id : null
   const [adminSelection, setAdminSelection] = useState<string | null>(null)
@@ -52,7 +52,7 @@ export function LocationProvider({ children }: { children: ReactNode }) {
         .eq('business.is_active', true)
         .order('name')
       // RLS lists open stores plus the caller's own not-yet-open ones (admins see all),
-      // so staff of a branch still being set up keep their store context.
+      // so staff of a location still being set up keep their store context.
       if (ownerBusinessId) query = query.eq('business_id', ownerBusinessId)
       const { data, error } = await query
       if (error) throw error

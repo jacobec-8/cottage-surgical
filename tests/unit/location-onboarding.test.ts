@@ -1,96 +1,98 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { businessPayload, emptyBranch, emptyBusiness, emptyDriver, emptyStaff, validateBusinessStep, withoutBranch } from '../../src/lib/businessOnboarding.ts'
+import {
+  emptyDraft, emptyLocation, emptyStaff, locationLabel, onboardingPayload, validateDraft, withoutLocation,
+} from '../../src/lib/businessOnboarding.ts'
 
 // Synthetic validation input, never an account credential.
 const fixturePassword = ['test', 'only', 'not', 'a', 'credential'].join('-')
 
-function branch(name: string) {
-  return { ...emptyBranch(), name, line1: '1 Main St', city: 'Melville', state: 'NY', zip: '11747', deliveryZips: '11747' }
+function business(name: string) {
+  return { ...emptyLocation(), name, line1: '1 Main St', city: 'Melville', state: 'NY', zip: '11747', deliveryZips: '11747' }
 }
 function readyDraft() {
-  const draft = emptyBusiness()
-  draft.businessName = 'Harbor'; draft.contactName = 'Test Owner'; draft.contactPhone = '555-0100'
-  draft.ownerFirstName = 'Test'; draft.ownerLastName = 'Owner'; draft.ownerUsername = 'harbor-owner'; draft.ownerPassword = fixturePassword
-  draft.branches = [branch('Harbor North'), branch('Harbor East'), branch('Harbor West')]
+  const draft = emptyDraft('owner-1')
+  draft.locations = [business('Harbor North'), business('Harbor East'), business('Harbor West')]
   return draft
 }
 
-test('existing businesses do not require reentering contact details; new ones do', () => {
-  const draft = emptyBusiness()
-  draft.ownerLogin = false
-  assert.ok(validateBusinessStep(0, draft))
-  draft.businessId = 'existing-business'
-  assert.equal(validateBusinessStep(0, draft), null)
-  draft.businessId = ''; draft.businessName = 'Harbor'; draft.contactName = 'Test Owner'; draft.contactPhone = '555-0100'
-  assert.equal(validateBusinessStep(0, draft), null)
+test('every business is added under an existing owner; there is no new-owner path', () => {
+  const draft = emptyDraft()
+  draft.locations = [business('Harbor North')]
+  assert.match(validateDraft(draft)!, /owner/i)
+  draft.ownerId = 'owner-1'
+  assert.equal(validateDraft(draft), null)
+  assert.deepEqual(onboardingPayload(draft).business, { id: 'owner-1' })
 })
 
-test('3LOC-001: one owner login is validated once for the whole business', () => {
+test('an owner login is optional and validated only when added', () => {
   const draft = readyDraft()
-  assert.equal(validateBusinessStep(0, draft), null)
-  draft.ownerPassword = 'short'
-  assert.match(validateBusinessStep(0, draft)!, /Owner login/)
-  assert.equal(businessPayload(readyDraft()).owner?.username, 'harbor-owner')
-  draft.ownerLogin = false
-  assert.equal(businessPayload(draft).owner, null)
+  assert.equal(draft.ownerLogin, false)
+  assert.equal(onboardingPayload(draft).owner, null)
+  draft.ownerLogin = true
+  draft.ownerFirstName = 'Test'; draft.ownerLastName = 'Owner'; draft.ownerUsername = 'harbor-owner'; draft.ownerPassword = 'short'
+  assert.match(validateDraft(draft)!, /Owner login/)
+  draft.ownerPassword = fixturePassword
+  assert.equal(validateDraft(draft), null)
+  assert.equal(onboardingPayload(draft).owner?.username, 'harbor-owner')
 })
 
-test('3LOC-005: three branches are validated together and need distinct names', () => {
+test('several businesses are validated together and need distinct names', () => {
   const draft = readyDraft()
-  assert.equal(validateBusinessStep(1, draft), null)
-  draft.branches[2].name = 'harbor north'
-  assert.match(validateBusinessStep(1, draft)!, /own name/)
-  draft.branches[2].name = 'Harbor West'; draft.branches[1].zip = '117'
-  assert.match(validateBusinessStep(1, draft)!, /^Harbor East: .*ZIP/)
+  assert.equal(validateDraft(draft), null)
+  draft.locations[2].name = 'harbor north'
+  assert.match(validateDraft(draft)!, /own name/)
+  draft.locations[2].name = 'Harbor West'; draft.locations[1].zip = '117'
+  assert.match(validateDraft(draft)!, /^Harbor East: .*ZIP/)
+})
+
+test('a delivering business must list the ZIP codes it delivers to', () => {
+  const draft = readyDraft()
+  draft.locations[0].deliveryZips = ''
+  assert.match(validateDraft(draft)!, /^Harbor North: .*ZIP codes this business delivers to/)
+  draft.locations[0].fulfillmentMode = 'pickup_only'
+  assert.equal(validateDraft(draft), null)
+  assert.deepEqual(onboardingPayload(draft).branches[0].location.delivery_zips, [])
 })
 
 test('optional stock is valid; quantities and prices cannot be fractional or negative', () => {
   const draft = readyDraft()
-  draft.branches[0].stock = [{ itemId: 'wheelchair', quantity: '2.5', pickup: true, pickupPrice: '', deliveryPrice: '' }]
-  assert.ok(validateBusinessStep(1, draft))
-  draft.branches[0].stock[0].quantity = '0'
-  assert.equal(validateBusinessStep(1, draft), null)
-  draft.branches[0].stock[0].pickupPrice = '-1'
-  assert.ok(validateBusinessStep(1, draft))
-  draft.branches[0].stock[0].pickupPrice = '0'
-  const stock = businessPayload(draft).branches[0].stock[0]
+  draft.locations[0].stock = [{ itemId: 'wheelchair', quantity: '2.5', pickup: true, pickupPrice: '', deliveryPrice: '' }]
+  assert.ok(validateDraft(draft))
+  draft.locations[0].stock[0].quantity = '0'
+  assert.equal(validateDraft(draft), null)
+  draft.locations[0].stock[0].pickupPrice = '-1'
+  assert.ok(validateDraft(draft))
+  draft.locations[0].stock[0].pickupPrice = '0'
+  const stock = onboardingPayload(draft).branches[0].stock[0]
   assert.equal(stock.pickup_rental_price, 0)
   assert.equal(stock.delivery_rental_price, null)
 })
 
-test('usernames are unique across owner, every branch’s staff and drivers', () => {
+test('usernames are unique across the owner login and every business’s staff', () => {
   const draft = readyDraft()
-  draft.branches[1].staff = [{ ...emptyStaff(), firstName: 'Ann', lastName: 'Lee', username: 'HARBOR-OWNER', password: fixturePassword }]
-  assert.match(validateBusinessStep(1, draft)!, /used twice/)
-  draft.branches[1].staff[0].username = 'harbor-east'
-  assert.equal(validateBusinessStep(1, draft), null)
-  draft.branches[1].staff[0].password = '😀'.repeat(20)
-  assert.ok(validateBusinessStep(1, draft))
+  draft.ownerLogin = true
+  draft.ownerFirstName = 'Test'; draft.ownerLastName = 'Owner'; draft.ownerUsername = 'harbor-owner'; draft.ownerPassword = fixturePassword
+  draft.locations[1].staff = [{ ...emptyStaff(), firstName: 'Ann', lastName: 'Lee', username: 'HARBOR-OWNER', password: fixturePassword }]
+  assert.match(validateDraft(draft)!, /used twice/)
+  draft.locations[1].staff[0].username = 'harbor-east'
+  assert.equal(validateDraft(draft), null)
+  draft.locations[1].staff[0].password = '😀'.repeat(20)
+  assert.ok(validateDraft(draft))
 })
 
-test('3LOC-002: a shared driver is sent home first, then the ticked branches', () => {
-  const draft = readyDraft()
-  const [north, east, west] = draft.branches.map((b) => b.key)
-  draft.drivers = [{ ...emptyDriver(north), firstName: 'Sam', lastName: 'Ray', username: 'harbor-sam', password: fixturePassword, alsoKeys: [east, north] }]
-  assert.equal(validateBusinessStep(2, draft), null)
-  assert.deepEqual(businessPayload(draft).drivers[0].branches, [north, east])
-  draft.drivers[0].login = false
-  assert.equal('password' in businessPayload(draft).drivers[0], false)
-  const removed = withoutBranch(draft, north)
-  assert.equal(removed.drivers[0].homeKey, '')
-  assert.deepEqual(removed.drivers[0].alsoKeys, [east])
-  assert.match(validateBusinessStep(2, removed)!, /home branch/)
-  assert.ok(west)
+test('onboarding never creates or shares drivers', () => {
+  const payload = onboardingPayload(readyDraft())
+  assert.deepEqual(payload.drivers, [])
+  assert.equal('drivers' in readyDraft(), false)
 })
 
-test('an existing driver can be shared with the new branches without new credentials', () => {
+test('an unnamed business is labelled as a business and can be removed', () => {
   const draft = readyDraft()
-  draft.drivers = [{ ...emptyDriver(), existingDriverId: 'driver-1' }]
-  assert.match(validateBusinessStep(2, draft)!, /tick at least one/)
-  draft.drivers[0].alsoKeys = [draft.branches[1].key]
-  assert.equal(validateBusinessStep(2, draft), null)
-  assert.deepEqual(businessPayload(draft).drivers[0], { existing_driver_id: 'driver-1', branches: [draft.branches[1].key] })
+  assert.equal(locationLabel(emptyLocation(), 1), 'Business 2')
+  const removed = withoutLocation(draft, draft.locations[0].key)
+  assert.deepEqual(removed.locations.map((l) => l.name), ['Harbor East', 'Harbor West'])
+  assert.equal(draft.locations.length, 3)
 })
 
 test('private HTTP preview can generate a retry UUID without crypto.randomUUID', async () => {

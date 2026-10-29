@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { UserPlus, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { branchLoginMessage, MIN_PASSWORD_LENGTH, newLoginProblem, type BranchLoginRole, type NewLoginDraft } from '../../lib/branchLogins'
+import { storeLoginMessage, MIN_PASSWORD_LENGTH, newLoginProblem, type StoreLoginRole, type NewLoginDraft } from '../../lib/storeLogins'
 import type { StaffLocation } from '../../contexts/LocationContext'
 
 const INPUT = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
@@ -33,7 +33,7 @@ export default function AddLoginForm({ locations, defaultLocationId, onClose, on
       })
       if (error) throw new Error('Couldn’t add the login. Please try again.')
       const result = data as { ok: boolean; reason?: string; profile_id?: string }
-      if (!result.ok || !result.profile_id) throw new Error(branchLoginMessage(result.reason))
+      if (!result.ok || !result.profile_id) throw new Error(storeLoginMessage(result.reason))
       return result.profile_id
     },
     onSuccess: onCreated,
@@ -54,7 +54,7 @@ export default function AddLoginForm({ locations, defaultLocationId, onClose, on
           </select>
         </Field>
         <Field label="Type">
-          <select className={INPUT} value={draft.role} onChange={(e) => set('role', e.target.value as BranchLoginRole)}>
+          <select className={INPUT} value={draft.role} onChange={(e) => set('role', e.target.value as StoreLoginRole)}>
             <option value="staff">Store staff</option>
             <option value="driver">Driver</option>
           </select>
