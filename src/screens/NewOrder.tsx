@@ -15,16 +15,26 @@ type Item = {
   name: string
   category: string
   delivery_rental_price: number | null
+  pickup_rental_price: number | null
   sale_price: number | null
   is_rentable: boolean
   is_purchasable: boolean
   delivery_enabled: boolean
-  location_inventory: { location_id: string; quantity_on_hand: number; delivery_rental_price: number | null }[]
+  location_inventory: { location_id: string; quantity_on_hand: number; pickup_enabled: boolean; pickup_rental_price: number | null; delivery_rental_price: number | null; sale_price: number | null }[]
 }
-// Mirrors create_staff_order: the selected store's delivery price overrides the catalog.
-const itemRate = (it: Item, mode: 'rental' | 'purchase'): number | null => (mode === 'rental'
-  ? it.location_inventory[0]?.delivery_rental_price ?? it.delivery_rental_price
-  : it.sale_price)
+type Method = 'delivery' | 'pickup'
+// Mirrors create_staff_order: the selected store's price overrides the catalog,
+// and a counter pickup charges the pickup price.
+const itemRate = (it: Item, mode: 'rental' | 'purchase', method: Method): number | null => {
+  const store = it.location_inventory[0]
+  if (mode === 'purchase') return store?.sale_price ?? it.sale_price
+  return method === 'pickup'
+    ? store?.pickup_rental_price ?? it.pickup_rental_price
+    : store?.delivery_rental_price ?? it.delivery_rental_price
+}
+// The store must offer the item the way the customer is getting it (104).
+const offered = (it: Item, method: Method): boolean =>
+  method === 'pickup' ? Boolean(it.location_inventory[0]?.pickup_enabled) : it.delivery_enabled
 
 type CartLine = { item_id: string; name: string; qty: number; rate: number | null }
 
@@ -32,7 +42,8 @@ const orderErrorMessage = (reason?: string) => {
   switch (reason) {
     case 'missing_customer': return 'Choose or add a customer first.'
     case 'invalid_customer': return 'That customer no longer exists — pick another.'
-    case 'invalid_item': return 'One of the items is no longer available for this order type. Remove it and try again.'
+    case 'invalid_item': return 'One of the items isn’t offered this way at this store (or has no price). Remove it and try again.'
+    case 'invalid_method': return 'Choose delivery or in-store pickup.'
     case 'no_items': return 'Add at least one item.'
     case 'forbidden': return 'You don’t have permission to create orders.'
     case 'invalid_driver': return 'That driver isn’t active or isn’t set up for this store. Choose another driver.'
@@ -46,6 +57,7 @@ export default function NewOrder() {
   const qc = useQueryClient()
   const { selectedLocationId, selectedLocation, isAllLocations } = useLocationScope()
   const [mode, setMode] = useState<'rental' | 'purchase'>('rental')
+  const [method, setMethod] = useState<Method>('delivery')
 
   // customer
   const [custMode, setCustMode] = useState<'existing' | 'new'>('existing')
@@ -60,7 +72,7 @@ export default function NewOrder() {
 
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
-  const [result, setResult] = useState<{ order_no: number; unallocated: number } | null>(null)
+  const [result, setResult] = useState<{ order_no: number; unallocated: number; method: Method } | null>(null)
 
   useEffect(() => {
     setCart([])
@@ -83,7 +95,7 @@ export default function NewOrder() {
     enabled: Boolean(selectedLocationId),
     queryFn: async () => {
       const { data, error } = await supabase.from('equipment_items')
-        .select('id,name,category,delivery_rental_price,sale_price,is_rentable,is_purchasable,delivery_enabled,location_inventory:equipment_location_inventory!inner(location_id,quantity_on_hand,delivery_rental_price)')
+        .select('id,name,category,delivery_rental_price,pickup_rental_price,sale_price,is_rentable,is_purchasable,delivery_enabled,location_inventory:equipment_location_inventory!inner(location_id,quantity_on_hand,pickup_enabled,pickup_rental_price,delivery_rental_price,sale_price)')
         .eq('is_active', true).eq('location_inventory.location_id', selectedLocationId!).order('name')
       if (error) throw error
       return data as unknown as Item[]
@@ -109,14 +121,14 @@ export default function NewOrder() {
     },
   })
 
-  const rateFor = (it: Item) => itemRate(it, mode)
+  const rateFor = (it: Item) => itemRate(it, mode, method)
   const filteredItems = useMemo(
     () => (items.data ?? []).filter((it) => {
-      const eligible = it.delivery_enabled && itemRate(it, mode) != null
+      const eligible = offered(it, method) && itemRate(it, mode, method) != null
         && (mode === 'rental' ? it.is_rentable : it.is_purchasable)
       return eligible && it.name.toLowerCase().includes(itemSearch.toLowerCase())
     }),
-    [items.data, itemSearch, mode],
+    [items.data, itemSearch, mode, method],
   )
   const total = cart.reduce((s, l) => s + (l.rate ?? 0) * l.qty, 0)
 
@@ -159,13 +171,13 @@ export default function NewOrder() {
         p_customer_id: customerId,
         p_order_type: mode,
         p_items: cart.map((l) => ({ item_id: l.item_id, quantity: l.qty })),
-        p_delivery: { location_id: selectedLocationId, scheduled_date: deliv.date || null, window_start: deliv.time || null, window_end: deliv.time ? deliv.end || null : null, driver_id: deliv.driver || null, notes: deliv.notes || null },
+        p_delivery: { location_id: selectedLocationId, method, scheduled_date: deliv.date || null, window_start: deliv.time || null, window_end: deliv.time ? deliv.end || null : null, driver_id: method === 'delivery' ? deliv.driver || null : null, notes: deliv.notes || null },
         p_deposit: mode === 'rental' && deliv.deposit ? Math.max(0, Number(deliv.deposit)) : null,
         p_new_customer: newCustomer,
       })
       if (error) throw new Error(dispatchErrorMessage(error, 'Couldn’t create the order. Please try again.'))
       if (!data?.ok) throw new Error(orderErrorMessage(data?.reason))
-      setResult({ order_no: data.order_no, unallocated: data.unallocated })
+      setResult({ order_no: data.order_no, unallocated: data.unallocated, method })
       setCart([]); setCust(null); setNc({ full_name: '', phone: '', email: '', dob: '', coverage: '', line1: '', city: '', state: 'NY', zip: '' })
       setDeliv({ date: '', time: '', end: '', driver: '', notes: '', deposit: '' })
       // create_staff_order may create a customer, reserve stock, and queue a
@@ -188,7 +200,7 @@ export default function NewOrder() {
         <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-6">
           <div className="flex items-center gap-2 text-emerald-800 font-semibold text-lg"><CheckCircle size={20} /> Order #{result.order_no} created</div>
           <p className="text-sm text-emerald-700 mt-2">
-            A delivery has been queued.
+            {result.method === 'pickup' ? `The customer collects at ${selectedLocation?.name ?? 'the store'}; hand it over from Delivery & Pickup.` : 'A delivery has been queued.'}
             {result.unallocated > 0
               ? ` ${result.unallocated} item(s) had no unit in stock — allocate them from the order once units are available.`
               : ' All items were reserved from inventory.'}
@@ -205,7 +217,7 @@ export default function NewOrder() {
     <div className="max-w-3xl space-y-4">
       <div>
         <h2 className="sr-only">New Order</h2>
-        <p className="text-slate-500 text-sm">Build a rental or purchase from {selectedLocation?.name ?? 'a selected store'}, reserve its equipment, and schedule delivery.</p>
+        <p className="text-slate-500 text-sm">Build a rental or purchase from {selectedLocation?.name ?? 'a selected store'}, reserve its equipment, and schedule a delivery or a counter pickup.</p>
       </div>
 
       {isAllLocations && <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">Select a store from the header before creating an order.</div>}
@@ -214,6 +226,12 @@ export default function NewOrder() {
         {(['rental', 'purchase'] as const).map((m) => (
           <button key={m} onClick={() => { setMode(m); setCart([]); setDeliv((dv) => ({ ...dv, deposit: '' })) }}
             className={`px-4 py-1.5 text-sm rounded-md capitalize ${mode === m ? 'bg-slate-900 text-white' : 'text-slate-600'}`}>{m}</button>
+        ))}
+      </div>
+      <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1 ml-3" role="group" aria-label="How the customer gets it">
+        {([['delivery', 'Delivery'], ['pickup', 'In-store pickup']] as const).map(([m, text]) => (
+          <button key={m} onClick={() => { setMethod(m); setCart([]); setDeliv((dv) => ({ ...dv, driver: '' })) }}
+            className={`px-4 py-1.5 text-sm rounded-md ${method === m ? 'bg-blue-600 text-white' : 'text-slate-600'}`}>{text}</button>
         ))}
       </div>
 
@@ -312,26 +330,26 @@ export default function NewOrder() {
 
       {/* Delivery */}
       <div className={card}>
-        <div className={label}>Schedule delivery</div>
+        <div className={label}>{method === 'pickup' ? `Pickup at ${selectedLocation?.name ?? 'the store'}` : 'Schedule delivery'}</div>
         <div className="grid grid-cols-2 gap-3">
-          <div><span className="text-xs text-slate-500">Date</span><input type="date" value={deliv.date} onChange={(e) => setDeliv({ ...deliv, date: e.target.value })} className={`w-full ${inp}`} /></div>
-          <div><span className="text-xs text-slate-500">Driver</span>
+          <div><span className="text-xs text-slate-500">{method === 'pickup' ? 'Pickup date' : 'Date'}</span><input type="date" aria-label={method === 'pickup' ? 'Pickup date' : 'Date'} value={deliv.date} onChange={(e) => setDeliv({ ...deliv, date: e.target.value })} className={`w-full ${inp}`} /></div>
+          {method === 'delivery' ? <div><span className="text-xs text-slate-500">Driver</span>
             <select value={deliv.driver} onChange={(e) => setDeliv({ ...deliv, driver: e.target.value })} className={`w-full ${inp}`}>
               <option value="">Unassigned</option>
               {storeDrivers.map((d) => <option key={d.id} value={d.id}>{d.first_name} {d.last_name}{busyDrivers.data?.has(d.id) ? ' — busy then' : ''}</option>)}
             </select>
-          </div>
-          <div><span className="text-xs text-slate-500">Delivery time</span><input type="time" value={deliv.time} onChange={(e) => setDeliv({ ...deliv, time: e.target.value })} className={`w-full ${inp}`} /></div>
+          </div> : <div className="self-end text-sm text-slate-500 pb-2">No driver: the customer collects at the counter.</div>}
+          <div><span className="text-xs text-slate-500">{method === 'pickup' ? 'Pickup time' : 'Delivery time'}</span><input type="time" value={deliv.time} onChange={(e) => setDeliv({ ...deliv, time: e.target.value })} className={`w-full ${inp}`} /></div>
           <div><span className="text-xs text-slate-500">Until{deliv.time && !deliv.end ? ' (1 hour if blank)' : ''}</span><input type="time" aria-label="Delivery end time" value={deliv.end} onChange={(e) => setDeliv({ ...deliv, end: e.target.value })} className={`w-full ${inp}`} /></div>
           {mode === 'rental' && <div><span className="text-xs text-slate-500">Deposit ($)</span><input type="number" value={deliv.deposit} onChange={(e) => setDeliv({ ...deliv, deposit: e.target.value })} className={`w-full ${inp}`} /></div>}
-          <div className={mode === 'rental' ? '' : 'col-span-2'}><span className="text-xs text-slate-500">Notes</span><input value={deliv.notes} onChange={(e) => setDeliv({ ...deliv, notes: e.target.value })} placeholder="Access, parking…" className={`w-full ${inp}`} /></div>
+          <div className={mode === 'rental' ? '' : 'col-span-2'}><span className="text-xs text-slate-500">Notes</span><input value={deliv.notes} onChange={(e) => setDeliv({ ...deliv, notes: e.target.value })} placeholder={method === 'pickup' ? 'Who is collecting, when they said…' : 'Access, parking…'} className={`w-full ${inp}`} /></div>
         </div>
       </div>
 
       {err && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{err}</div>}
       <div className="flex justify-end">
         <button onClick={create} disabled={busy || !selectedLocationId} className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-6 py-2.5 text-sm font-medium disabled:opacity-50">
-          {busy ? 'Creating…' : `Create ${mode} order`}
+          {busy ? 'Creating…' : `Create ${mode} order${method === 'pickup' ? ' for pickup' : ''}`}
         </button>
       </div>
     </div>
