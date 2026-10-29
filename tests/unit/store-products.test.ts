@@ -47,3 +47,14 @@ test('product edits keep the product sellable or rentable, with the prices that 
   assert.match(productEditProblem({ ...bed, delivery_rental_price: null })!, /delivery price/)
   assert.equal(productEditProblem({ ...bed, delivery_enabled: false, pickup_enabled: true, pickup_rental_price: 150 }), null)
 })
+
+test('starting stock: asset tags from commas, spaces or lines, de-duplicated and upper-cased', async () => {
+  const { parseAssetTags, startingStockProblem } = await import('../../src/lib/storeProducts.ts')
+  assert.deepEqual(parseAssetTags('wc-1, WC-2\nwc-1  wc-3'), ['WC-1', 'WC-2', 'WC-3'])
+  assert.deepEqual(parseAssetTags(''), [])
+  assert.equal(startingStockProblem(false, '12'), null)
+  assert.equal(startingStockProblem(false, ''), null)
+  assert.match(startingStockProblem(false, '1.5')!, /whole number/)
+  assert.equal(startingStockProblem(true, 'WC-1, WC-2'), null)
+  assert.match(startingStockProblem(true, 'x'.repeat(70))!, /too long/)
+})

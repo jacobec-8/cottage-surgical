@@ -467,10 +467,10 @@ q("UPDATE pickup_locations SET online_retail_enabled=false WHERE id = ANY(%s::uu
 check("with retail sales off, a priced, stocked retail item is not buyable or listed", flags() == (False, False), flags())
 r, e = pco([{"item_id": retail, "quantity": 1}], "V094 buyer off")
 check("with retail sales off, purchase checkout is refused", (r or {}).get("reason") == "purchases_disabled", r or e)
-refused = [call(WEST, "SELECT public.set_online_retail(%s,true)", (LOC["west"],))[0], call(A_STAFF, "SELECT public.set_online_retail(%s,true)", (LOC["west"],))[0]]
-check("retail is managed per store: the store's owner and admins yes; staff and other businesses no",
-      [call(w, "SELECT public.can_manage_online_retail(%s)", (LOC["west"],))[0] for w in (ADMIN, OWNER, WEST, A_STAFF)] == [True, True, False, False])
-check("store staff and another business cannot switch a store's retail on", [x.get("reason") for x in refused] == ["forbidden", "forbidden"], refused)
+refused = call(A_STAFF, "SELECT public.set_online_retail(%s,true)", (LOC["west"],))[0]
+check("retail is managed per store: the store's staff, owner and admins yes; other businesses no (106)",
+      [call(w, "SELECT public.can_manage_online_retail(%s)", (LOC["west"],))[0] for w in (ADMIN, OWNER, WEST, A_STAFF)] == [True, True, True, False])
+check("another business cannot switch a store's retail on", (refused or {}).get("reason") == "forbidden", refused)
 r, e = call(OWNER, "SELECT public.set_online_retail(%s,true)", (LOC["west"],))
 check("the owner switches retail on for West only; the item becomes buyable and listed", bool(r and r.get("ok")) and flags() == (True, True)
       and q("SELECT bool_or(online_retail_enabled) FROM pickup_locations WHERE id IN (%s,%s)", (LOC["north"], LOC["east"]))[0][0] is False, (r or e, flags()))
@@ -625,6 +625,18 @@ check("another store is unaffected", (PICK(LOC["north"]) or {}).get("reason") ==
 check("the owner's catalog switch is unchanged", q("SELECT pickup_enabled FROM equipment_items WHERE id=%s", (BULK,))[0][0] is False)
 r, e = call(WEST, "UPDATE equipment_location_inventory SET pickup_enabled=FALSE WHERE equipment_item_id=%s AND location_id=%s RETURNING 1", (BULK, LOC["west"]))
 check("turning pickup off removes the store from the website's pickup list", r == 1 and q("SELECT count(*) FROM equipment_item_pickup_locations WHERE equipment_item_id=%s AND pickup_location_id=%s", (BULK, LOC["west"]))[0][0] == 0, r or e)
+# ── 106 store staff run their store's inventory: store sale price, online sales ──
+q("UPDATE pickup_locations SET online_retail_enabled=FALSE WHERE id=%s", (LOC["west"],))
+RET, e = call(WEST, "INSERT INTO equipment_items(name, category, is_serialized, is_rentable, is_purchasable, sale_price, location_id) VALUES ('V106 retail item', 'mobility', false, false, true, 0, %s) RETURNING id::text", (LOC["west"],))
+buy = lambda: q("SELECT public.can_buy(i), public.storefront_listed(i), public.sale_price_shown(i) FROM equipment_items i WHERE id=%s", (RET,))[0]
+check("a new for-sale item with no stock, price or online sales is not on the website", RET is not None and buy()[:2] == (False, False), buy() if RET else e)
+r, e = call(WEST, "UPDATE equipment_location_inventory SET quantity_on_hand=3, sale_price=25 WHERE equipment_item_id=%s AND location_id=%s RETURNING 1", (RET, LOC["west"]))
+check("store staff set their store's stock and sale price", r == 1 and buy()[0] is False, r or e)
+r, e = call(DRV_USER, "SELECT public.set_online_retail(%s, true)", (LOC["west"],)); check("a driver cannot switch on online sales", (r or {}).get("reason") == "forbidden", r or e)
+r, e = call(NORTH, "SELECT public.set_online_retail(%s, true)", (LOC["west"],)); check("another store's staff cannot switch on online sales here", (r or {}).get("reason") == "forbidden", r or e)
+r, e = call(WEST, "SELECT public.set_online_retail(%s, true)", (LOC["west"],)); check("store staff switch on online sales for their store", bool(r and r.get("ok")), r or e)
+check("with stock, a store price and online sales on, it is buyable and listed at the store's price", buy() == (True, True, 25), buy())
+q("UPDATE pickup_locations SET online_retail_enabled=FALSE WHERE id=%s", (LOC["west"],))
 nt = q("SELECT title FROM notifications WHERE reference_id LIKE %s LIMIT 1", (f"order_{on1['order_id']}%",)) if on1 else []
 check("alerts name the store", (not nt) or nt[0][0].startswith(f"V074 north {tag}"), nt)
 check("the separation check passes", __import__('subprocess').run(['python3', 'scripts/check_store_separation.py'], env={**os.environ, 'VERIFY_APPLY_FIRST': ''}).returncode == 0 if not os.environ.get('VERIFY_APPLY_FIRST') else True)

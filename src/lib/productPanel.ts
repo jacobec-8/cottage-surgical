@@ -46,3 +46,25 @@ export function onlineShopLabel(status: ShopStatus): string {
     ? 'Customers can see it in the online shop'
     : `Hidden from the online shop: ${(status.reason ?? '').charAt(0).toLowerCase()}${(status.reason ?? '').slice(1)}`
 }
+
+export type LiveFacts = {
+  active: boolean; rentable: boolean; purchasable: boolean; storeOpen: boolean
+  stock: number; salePrice: number | null; rentalPrice: number | null; retailOn: boolean | null
+}
+
+/** What still stands between this product and the online shop at this store, as steps staff can take. */
+export function liveChecklist(f: LiveFacts): string[] {
+  if (!f.active) return ['Restore it to the catalog']
+  const steps: string[] = []
+  if (!f.storeOpen) steps.push('Open this store to customers')
+  if (f.rentable) {
+    if (!(Number(f.rentalPrice) > 0)) steps.push('Set a rental price')
+    return steps
+  }
+  if (f.purchasable) {
+    if (!(f.stock > 0)) steps.push('Add stock')
+    if (!(Number(f.salePrice) > 0)) steps.push('Set a sale price')
+    if (!f.retailOn) steps.push('Turn on online sales')
+  }
+  return steps
+}

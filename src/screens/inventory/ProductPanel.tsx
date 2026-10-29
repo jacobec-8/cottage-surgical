@@ -1,9 +1,10 @@
 'use client'
 
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Globe, EyeOff } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { monthlyIncome, onlineShopLabel, unitCounts, usagePercent, websiteStatus } from '../../lib/productPanel'
+import { liveChecklist, monthlyIncome, onlineShopLabel, unitCounts, usagePercent, websiteStatus } from '../../lib/productPanel'
 import ProductDetailsList, { type ProductDetailsItem } from '../../components/ProductDetailsList'
 import { useProductEdits } from '../../lib/useProductEdits'
 import { fmtMoney } from '../orders/format'
@@ -18,7 +19,7 @@ type Props = {
   storeOpen: boolean
 }
 
-const SHOP_SELECT = 'storefront_listed,is_active,is_rentable,is_purchasable,delivery_rental_price,pickup_rental_price,sale_price'
+const SHOP_SELECT = 'storefront_listed,is_active,is_rentable,is_purchasable,delivery_rental_price,pickup_rental_price,sale_price:sale_price_shown'
 
 /** The expanded inventory row: stock position, rental income, online shop status, and product details. */
 export default function ProductPanel({ item, stock, locationId, storeName, storeOpen }: Props) {
@@ -58,6 +59,21 @@ export default function ProductPanel({ item, stock, locationId, storeName, store
   const out = (lines.data ?? []).reduce((sum, l) => sum + l.quantity, 0)
   const status = shop.data ? websiteStatus(shop.data, storeOpen) : null
   const failed = units.error || lines.error
+  // In a store view, say exactly what is missing for the online shop, from the store's own values.
+  const store = edits.store
+  const steps = status && !status.listed && store ? liveChecklist({
+    active: shop.data?.is_active ?? true, rentable: item.is_rentable, purchasable: item.is_purchasable, storeOpen,
+    stock: store.quantity_on_hand, salePrice: store.sale_price ?? item.sale_price,
+    rentalPrice: (item.delivery_enabled ? store.delivery_rental_price ?? item.delivery_rental_price : null)
+      ?? (store.pickup_enabled ? store.pickup_rental_price ?? item.pickup_rental_price : null),
+    retailOn: edits.retailOn,
+  }) : null
+  const [turningOn, setTurningOn] = useState(false)
+  const [retailError, setRetailError] = useState<string | null>(null)
+  const turnOnRetail = async () => {
+    setTurningOn(true); setRetailError(null)
+    try { await edits.setRetail(true) } catch (e) { setRetailError(e instanceof Error ? e.message : 'Couldn’t turn on online sales.') } finally { setTurningOn(false) }
+  }
 
   return (
     <div className="space-y-4 border-t border-slate-100 px-4 pb-4 pt-3">
@@ -81,10 +97,19 @@ export default function ProductPanel({ item, stock, locationId, storeName, store
             <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">{fmtMoney(monthlyIncome(lines.data ?? []))}/mo from current rentals</span>
           </>
         )}
-        {status && (status.listed
-          ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 font-medium text-emerald-700"><Globe size={12} /> {onlineShopLabel(status)}</span>
-          : <span className="inline-flex items-center gap-1 rounded-full bg-slate-200 px-2.5 py-1 font-medium text-slate-700"><EyeOff size={12} /> {onlineShopLabel(status)}</span>)}
+        {status?.listed && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 font-medium text-emerald-700"><Globe size={12} /> {onlineShopLabel(status)}</span>}
+        {status && !status.listed && !steps && <span className="inline-flex items-center gap-1 rounded-full bg-slate-200 px-2.5 py-1 font-medium text-slate-700"><EyeOff size={12} /> {onlineShopLabel(status)}</span>}
       </div>
+      {steps && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          <EyeOff size={13} /> <span className="font-medium">Not in the online shop yet. To make it live:</span>
+          {steps.map((step) => step === 'Turn on online sales' && edits.canEditStore
+            ? <button key={step} type="button" onClick={() => void turnOnRetail()} disabled={turningOn} className="rounded-full bg-amber-600 px-2.5 py-1 font-medium text-white hover:bg-amber-700 disabled:opacity-50">{turningOn ? 'Turning on…' : 'Turn on online sales'}</button>
+            : <span key={step} className="rounded-full bg-white px-2.5 py-1 font-medium">{step}</span>)}
+          {steps.length === 0 && <span>Saving changes… it will appear in a moment.</span>}
+          {retailError && <span className="text-red-600">{retailError}</span>}
+        </div>
+      )}
       <ProductDetailsList item={item} edits={edits} />
     </div>
   )
