@@ -19,7 +19,7 @@ export function businessToday(now: Date = new Date()): string {
 }
 
 /** An open stop whose date has passed. */
-export function isLate(stop: SortableStop, today: string): boolean {
+export function isLate(stop: Pick<SortableStop, 'status' | 'scheduled_date'>, today: string): boolean {
   return Boolean(stop.scheduled_date && stop.scheduled_date < today && !['completed', 'cancelled'].includes(stop.status))
 }
 
