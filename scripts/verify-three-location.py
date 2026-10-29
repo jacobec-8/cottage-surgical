@@ -664,8 +664,32 @@ r, e = call(WEST, SO, (items, json.dumps({"location_id": LOC["west"], "method": 
 check("a counter pickup is refused when the store does not offer pickup for the item", (r or {}).get("reason") == "invalid_item", r or e)
 r, e = call(WEST, SO, (items, json.dumps({"location_id": LOC["west"], "method": "delivery"}), newcust))
 check("a delivery order for the same item still works", bool(r and r.get("ok")) and r.get("method") == "delivery", r or e)
+DLV = r if r and r.get("ok") else None
 r, e = call(WEST, SO, (items, json.dumps({"location_id": LOC["west"], "method": "teleport"}), newcust))
 check("an unknown method is refused", (r or {}).get("reason") == "invalid_method", r or e)
+# ── 111 switch an existing order between delivery and in-store pickup ──
+SW = "SELECT public.set_order_fulfillment(%s, %s)"
+if DLV:
+    did = DLV["order_id"]
+    r, e = call(WEST, SW, (did, "pickup")); check("switch to pickup is refused while the store does not offer pickup for the item", (r or {}).get("reason") == "pickup_unavailable", r or e)
+    q("UPDATE equipment_location_inventory SET pickup_enabled=TRUE, pickup_rental_price=20 WHERE equipment_item_id=%s AND location_id=%s", (BULK, LOC["west"]))
+    r, e = call(WEST, "SELECT public.order_rate_for_method(%s, 'pickup')", (did,)); check("the store's pickup price is suggested for the switch", r == 20, r or e)
+    r, e = call(DRV_USER, SW, (did, "pickup")); check("a driver cannot switch an order's method", (r or {}).get("reason") == "forbidden", r or e)
+    r, e = call(WEST, SW, (did, "pickup")); check("store staff switch a pending delivery to in-store pickup", bool(r and r.get("ok")), r or e)
+    o = q("SELECT fulfillment_method, pickup_location_id::text FROM rental_orders WHERE id=%s", (did,))[0]
+    leg = q("SELECT leg_type, requires_driver, driver_id, status FROM deliveries WHERE order_id=%s AND status <> 'cancelled'", (did,))
+    check("the order is now a pickup at the store with one counter stop and no driver", o == ("pickup", LOC["west"]) and leg == [("pickup", False, None, "pending")], (o, leg))
+    r, e = call(WEST, SW, (did, "delivery")); check("switching back to delivery needs a delivery address", (r or {}).get("reason") == "missing_address", r or e)
+    r, e = call(WEST, "SELECT public.update_rental_details(%s, 'V111 edited', NULL, NULL, '9 Elm St', 'Huntington', 'NY', '11743', NULL, NULL, 20, NULL, NULL)", (did,))
+    addr = q("SELECT d.address_line1 = l.address_line1 FROM deliveries d JOIN pickup_locations l ON l.id = d.location_id WHERE d.order_id=%s AND d.status <> 'cancelled'", (did,))[0][0]
+    check("editing the rental keeps the counter stop at the store's address", bool(r and r.get("ok")) and addr is True, (r or e, addr))
+    q("UPDATE rental_orders SET address_line1='9 Elm St', address_city='Huntington', address_state='NY', address_zip='11743' WHERE id=%s", (did,))
+    r, e = call(WEST, SW, (did, "delivery")); check("and back to delivery once it has one", bool(r and r.get("ok")) and q("SELECT leg_type, requires_driver, driver_id, address_line1 FROM deliveries WHERE order_id=%s AND status <> 'cancelled'", (did,)) == [("delivery", True, None, "9 Elm St")], r or e)
+    r, e = call(WEST, SW, (did, "teleport")); check("an unknown method is refused on switch", (r or {}).get("reason") == "invalid_method", r or e)
+    q("UPDATE deliveries SET status='completed', completed_at=now() WHERE order_id=%s AND status <> 'cancelled'", (did,))
+    r, e = call(WEST, SW, (did, "pickup")); check("once the stop is done the method cannot change", (r or {}).get("reason") == "in_progress", r or e)
+else:
+    check("111 skipped: no delivery order to switch", False)
 nt = q("SELECT title FROM notifications WHERE reference_id LIKE %s LIMIT 1", (f"order_{on1['order_id']}%",)) if on1 else []
 check("alerts name the store", (not nt) or nt[0][0].startswith(f"V074 north {tag}"), nt)
 check("the separation check passes", __import__('subprocess').run(['python3', 'scripts/check_store_separation.py'], env={**os.environ, 'VERIFY_APPLY_FIRST': ''}).returncode == 0 if not os.environ.get('VERIFY_APPLY_FIRST') else True)
