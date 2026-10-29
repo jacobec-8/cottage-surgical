@@ -23,3 +23,31 @@ const MESSAGES: Record<string, (store: string) => string> = {
 export function removeProductMessage(reason: string | undefined, store: string): string {
   return (reason && MESSAGES[reason]?.(store)) || 'Couldn’t remove it. Please try again.'
 }
+
+/** '' → null (use the catalog price); a valid price → number; anything else → undefined. */
+export function parsePrice(value: string): number | null | undefined {
+  const text = value.trim()
+  if (text === '') return null
+  return /^\d+(\.\d{1,2})?$/.test(text) ? Number(text) : undefined
+}
+
+/** Null when a store's pickup setting can be saved; otherwise what to fix. */
+export function pickupEditProblem(enabled: boolean, price: string, catalogPrice: number | null): string | null {
+  const parsed = parsePrice(price)
+  if (parsed === undefined) return 'Enter a valid price, like 45 or 45.50.'
+  if (enabled && parsed == null && catalogPrice == null) return 'Enter a pickup price.'
+  return null
+}
+
+type ProductOffer = {
+  is_rentable: boolean; is_purchasable: boolean; pickup_enabled: boolean; delivery_enabled: boolean
+  delivery_rental_price: number | null; pickup_rental_price: number | null; sale_price: number | null
+}
+
+/** Null when an in-place product edit leaves a consistent product; otherwise what to fix first. */
+export function productEditProblem(p: ProductOffer): string | null {
+  if (!p.is_rentable && !p.is_purchasable) return 'A product must be available to rent or sell.'
+  if (p.is_purchasable && !(Number(p.sale_price) > 0)) return 'Set a sale price before turning on selling.'
+  if (p.is_rentable && p.delivery_enabled && p.delivery_rental_price == null) return 'Set a delivery price before offering delivery.'
+  return null
+}
