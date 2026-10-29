@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Save, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
@@ -16,7 +16,15 @@ const REASONS: Record<string, string> = {
   not_found: 'This rental no longer exists.',
   not_rental: 'Only rental orders can be edited here.',
   closed: 'Closed or cancelled rentals cannot be edited.',
+  in_progress: 'The delivery or pickup is already under way or done, so how the customer gets it can’t change now.',
+  pickup_unavailable: 'This store doesn’t offer in-store pickup for an item on this order. Turn pickup on for it in Inventory first.',
+  delivery_unavailable: 'An item on this order isn’t offered for delivery.',
+  store_no_delivery: 'This store doesn’t deliver.',
+  missing_address: 'Enter a delivery address before switching to delivery.',
+  invalid_method: 'Choose delivery or in-store pickup.',
 }
+type Method = 'delivery' | 'pickup'
+const OPEN_STOP = new Set(['pending', 'scheduled'])
 
 export default function EditRentalModal({
   order,
@@ -44,8 +52,33 @@ export default function EditRentalModal({
   })
   const set = (key: keyof typeof form) => (value: string) => setForm((current) => ({ ...current, [key]: value }))
 
+  // How the customer gets it. The outbound stop is the delivery, or the
+  // counter handoff (a 'pickup' leg with no driver); once it is under way or
+  // done the method is fixed.
+  const originalMethod: Method = order.fulfillment_method === 'pickup' ? 'pickup' : 'delivery'
+  const [method, setMethod] = useState<Method>(originalMethod)
+  const outbound = order.deliveries.find((d) => d.leg_type === 'delivery' || (d.leg_type === 'pickup' && !d.requires_driver))
+  const canSwitch = !outbound || OPEN_STOP.has(outbound.status)
+  const [rateHint, setRateHint] = useState<string | null>(null)
+  useEffect(() => {
+    if (method === originalMethod) { setRateHint(null); return }
+    let cancelled = false
+    // Pre-fill the store's price for the new method; staff can still change it before saving.
+    void supabase.rpc('order_rate_for_method', { p_order_id: order.id, p_method: method }).then(({ data }) => {
+      if (cancelled || data == null) return
+      setForm((current) => ({ ...current, monthlyRate: String(Number(data)) }))
+      setRateHint(`Monthly rate set to the store’s ${method === 'pickup' ? 'pickup' : 'delivery'} price, $${Number(data).toFixed(2)}. Change it if you agreed something else.`)
+    })
+    return () => { cancelled = true }
+  }, [method, originalMethod, order.id])
+
   const save = useMutation({
     mutationFn: async () => {
+      if (method !== originalMethod) {
+        const switched = await supabase.rpc('set_order_fulfillment', { p_order_id: order.id, p_method: method })
+        if (switched.error) throw new Error('Couldn’t change how the customer gets it. Please try again.')
+        if (!switched.data?.ok) throw new Error(REASONS[switched.data?.reason] || 'Couldn’t change how the customer gets it.')
+      }
       const { data, error } = await supabase.rpc('update_rental_details', {
         p_order_id: order.id,
         p_full_name: form.fullName,
@@ -114,7 +147,20 @@ export default function EditRentalModal({
           </fieldset>
 
           <fieldset>
-            <legend className="mb-2 text-sm font-semibold text-slate-800">Service address</legend>
+            <legend className="mb-2 text-sm font-semibold text-slate-800">How the customer gets it</legend>
+            <div className="inline-flex rounded-lg border border-slate-200 p-1" role="radiogroup" aria-label="How the customer gets it">
+              {([['delivery', 'Delivery'], ['pickup', 'In-store pickup']] as const).map(([m, text]) => (
+                <button key={m} type="button" role="radio" aria-checked={method === m} disabled={!canSwitch && m !== method} onClick={() => setMethod(m)}
+                  className={`px-4 py-1.5 text-sm rounded-md ${method === m ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-50'} disabled:opacity-50`}>{text}</button>
+              ))}
+            </div>
+            {!canSwitch && <p className="mt-2 text-xs text-slate-500">Can’t change: the {outbound?.leg_type === 'delivery' ? 'delivery' : 'pickup'} is already {outbound?.status === 'en_route' ? 'under way' : outbound?.status}.</p>}
+            {canSwitch && method !== originalMethod && <p className="mt-2 text-xs text-amber-700">{method === 'pickup' ? 'The delivery stop becomes a counter pickup at the store; the driver is removed.' : 'The counter pickup becomes a delivery stop; assign a driver on Delivery & Pickup.'}</p>}
+            {rateHint && <p className="mt-1 text-xs text-slate-600">{rateHint}</p>}
+          </fieldset>
+
+          <fieldset>
+            <legend className="mb-2 text-sm font-semibold text-slate-800">{method === 'pickup' ? 'Customer address' : 'Service address'}</legend>
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="text-xs text-slate-500 sm:col-span-2">Street
                 <input value={form.line1} onChange={(e) => set('line1')(e.target.value)} className={`mt-1 ${input}`} />
@@ -136,7 +182,7 @@ export default function EditRentalModal({
           <fieldset>
             <legend className="mb-2 text-sm font-semibold text-slate-800">Rental terms</legend>
             <div className="grid gap-3 sm:grid-cols-2">
-              <label className="text-xs text-slate-500">Delivery/start date
+              <label className="text-xs text-slate-500">{method === 'pickup' ? 'Pickup/start date' : 'Delivery/start date'}
                 <input type="date" value={form.startDate} onChange={(e) => set('startDate')(e.target.value)} className={`mt-1 ${input}`} />
               </label>
               <label className="text-xs text-slate-500">Return/end date

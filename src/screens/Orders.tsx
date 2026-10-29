@@ -21,7 +21,7 @@ const OPEN_RENTAL_STATUSES = new Set(['open', 'active', 'overdue'])
 
 export default function Orders() {
   const { selectedLocationId } = useLocationScope()
-  const [tab, setTab] = useState<Tab>('open')
+  const [tab, setTab] = useState<Tab>('all')
   const [actionMsg, setActionMsg] = useState('')
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useSelectedOrder()
