@@ -27,7 +27,7 @@ function Payment({ d }: { d: Deliv }) {
   return <span className={state === 'not_paid' ? 'font-medium text-amber-700' : 'text-slate-500'}>{paymentStateLabel(state)}</span>
 }
 
-function useStaffCompletion(d: Deliv, onError: (message: string) => void) {
+function useStaffCompletion(d: Deliv, onError: (message: string) => void, onStart: () => void) {
   const qc = useQueryClient()
   // Completing flips billing and stock, so refresh the whole order workflow.
   const complete = (rpc: 'complete_delivery' | 'complete_store_pickup', args: Record<string, unknown>) => async () => {
@@ -35,7 +35,7 @@ function useStaffCompletion(d: Deliv, onError: (message: string) => void) {
     if (error) throw error
     if (!data?.ok) throw new Error(lifecycleError(data))
   }
-  const handlers = { onSuccess: () => invalidateOrderWorkflow(qc), onError: (e: Error) => onError(e.message) }
+  const handlers = { onMutate: onStart, onSuccess: () => invalidateOrderWorkflow(qc), onError: (e: Error) => onError(e.message) }
   const override = useMutation({ mutationFn: complete('complete_delivery', { p_delivery_id: d.id, p_photo_path: null }), ...handlers })
   const storePickup = useMutation({ mutationFn: complete('complete_store_pickup', { p_delivery_id: d.id }), ...handlers })
   return { override, storePickup }
@@ -50,7 +50,7 @@ export default function StaffStopCard({ d, drivers, onOpen, selected }: { d: Del
   const [editing, setEditing] = useState(false)
   const [reporting, setReporting] = useState(false)
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null)
-  const { override, storePickup } = useStaffCompletion(d, (text) => setMsg({ text, ok: false }))
+  const { override, storePickup } = useStaffCompletion(d, (text) => setMsg({ text, ok: false }), () => setMsg(null))
 
   useEffect(() => {
     if (!msg?.ok) return
@@ -58,8 +58,7 @@ export default function StaffStopCard({ d, drivers, onOpen, selected }: { d: Del
     return () => clearTimeout(t)
   }, [msg])
 
-  const assigned = drivers.find((dr) => dr.id === d.driver_id)
-  const driverName = assigned ? `${assigned.first_name} ${assigned.last_name}`.trim() : null
+  const driverName = d.driver ? `${d.driver.first_name} ${d.driver.last_name}`.trim() : null
   const showForm = d.status === 'pending' || editing
   const canMiss = d.requires_driver && (d.status === 'scheduled' || d.status === 'en_route')
   const menu: StopMenuItem[] = [

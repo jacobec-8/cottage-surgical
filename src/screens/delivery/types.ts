@@ -20,6 +20,7 @@ export type Deliv = {
   requires_driver: boolean
   location_id: string | null
   location: { name: string } | null
+  driver: { first_name: string; last_name: string } | null
   order: {
     id: string
     order_no: number

@@ -2,8 +2,10 @@
 
 import { Check } from 'lucide-react'
 import { fmtWindow, stopProgress, type ProgressStep, type StopPhase } from './stopProgress'
-import { businessToday, fmtStopDate, reasonLabel, type StopAttempt } from './stopStatus'
+import { businessToday, fmtStopDate, isLate, reasonLabel, type StopAttempt } from './stopStatus'
 import type { Deliv } from './types'
+
+const BUSINESS_TZ = 'America/New_York'
 
 const ATTENTION: readonly StopPhase[] = ['needs_scheduling', 'missed']
 
@@ -49,7 +51,13 @@ function Steps({ steps, attention }: { steps: ProgressStep[]; attention: boolean
 }
 
 function startedAt(iso: string | null): string | null {
-  return iso ? new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : null
+  return iso ? new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: BUSINESS_TZ }) : null
+}
+
+function missedOn(missed: StopAttempt): string {
+  const when = new Date(missed.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: BUSINESS_TZ })
+  const note = missed.note ? ` (“${missed.note}”)` : ''
+  return `Missed ${when}: ${reasonLabel(missed.reason)}${note}`
 }
 
 function headline(phase: StopPhase, d: Deliv, driver: string, missed: StopAttempt | null): string {
@@ -57,11 +65,7 @@ function headline(phase: StopPhase, d: Deliv, driver: string, missed: StopAttemp
   const Driver = driver.charAt(0).toUpperCase() + driver.slice(1)
   switch (phase) {
     case 'needs_scheduling': return store ? 'Customer collects in store. No date set yet.' : 'Needs a driver, date and time.'
-    case 'missed': {
-      const when = new Date(missed!.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-      const note = missed!.note ? ` (“${missed!.note}”)` : ''
-      return `Missed ${when}: ${reasonLabel(missed!.reason)}${note}. Needs a new date and driver.`
-    }
+    case 'missed': return `${missedOn(missed!)}. Needs a new date and driver.`
     case 'waiting': return store ? 'Customer collects in store.' : `Waiting for ${driver} to start.`
     case 'late': return store ? `Late: was due ${fmtStopDate(d.scheduled_date!)}.` : `Late: was ${fmtStopDate(d.scheduled_date!)}. ${Driver} hasn’t started.`
     case 'on_the_way': {
@@ -74,7 +78,11 @@ function headline(phase: StopPhase, d: Deliv, driver: string, missed: StopAttemp
 
 /** Where the stop stands: steps, one plain sentence, and when it's booked. */
 export default function StopProgressView({ d, driverName, missed }: { d: Deliv; driverName: string | null; missed: StopAttempt | null }) {
-  const { phase, steps } = stopProgress(d, businessToday(), Boolean(missed))
+  const today = businessToday()
+  const { phase, steps } = stopProgress(d, today, Boolean(missed))
+  // The headline covers lateness/misses in their own phases; otherwise flag them underneath.
+  const lateNote = isLate(d, today) && phase !== 'late' ? `Late: was ${fmtStopDate(d.scheduled_date!)}.` : null
+  const missedNote = missed && phase !== 'missed' ? `${missedOn(missed)}.` : null
   const booked = phase !== 'needs_scheduling' && phase !== 'missed'
   const when = booked
     ? [d.scheduled_date ? fmtStopDate(d.scheduled_date) : 'No date set', fmtWindow(d.window_start, d.window_end)].filter(Boolean).join(' · ')
@@ -84,6 +92,8 @@ export default function StopProgressView({ d, driverName, missed }: { d: Deliv; 
       <Steps steps={steps} attention={ATTENTION.includes(phase)} />
       <div className={`text-sm font-medium ${HEADLINE_CLASS[phase]}`}>{headline(phase, d, driverName ?? 'the driver', missed)}</div>
       {when && <div className="text-sm text-slate-500">{when}</div>}
+      {lateNote && <div className="text-sm font-medium text-red-700">{lateNote}</div>}
+      {missedNote && <div className="text-xs text-amber-800">Earlier: {missedNote}</div>}
     </div>
   )
 }

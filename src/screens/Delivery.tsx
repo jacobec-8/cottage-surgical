@@ -21,6 +21,7 @@ import { hasAddress, type Deliv, type DriverOption } from './delivery/types'
 
 const SELECT =
   'id,leg_type,status,scheduled_date,window_start,window_end,started_at,completed_at,address_line1,address_city,address_state,address_zip,driver_id,requires_driver,location_id,location:pickup_locations!deliveries_location_id_fkey(name),' +
+  'driver:drivers!deliveries_driver_id_fkey(first_name,last_name),' +
   'order:rental_orders(id,order_no,payment_status,payment_preference,customer:customers(full_name),rental_line_items(quantity,equipment:equipment_items(name))),' +
   'delivery_photos(storage_path,captured_at,notes),attempts:stop_attempts(reason,note,created_at)'
 
@@ -135,7 +136,7 @@ export default function Delivery() {
               ? <DriverStopRow key={d.id} d={d} contact={contacts.byDeliveryId.get(d.id)}
                   activeStop={data.find((other) => other.status === 'en_route' && other.id !== d.id)}
                   showLocation={new Set(data.map((stop) => stop.location_id)).size > 1} />
-              : <StaffStopCard key={`${d.id}:${d.status}`} d={d} drivers={drivers.data ?? []} onOpen={onOpen} selected={selected === d.order?.id} />,
+              : <StaffStopCard key={d.id} d={d} drivers={drivers.data ?? []} onOpen={onOpen} selected={selected === d.order?.id} />,
         )}
       </div>
 
