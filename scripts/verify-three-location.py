@@ -644,6 +644,28 @@ check("store staff edit a carried product's name, SN and installation", bool(r a
 r, e = call(DRV_USER, UP, (BULK, LOC["west"], json.dumps({"name": "x"}))); check("a driver cannot edit products", (r or {}).get("reason") == "forbidden", r or e)
 r, e = call(NORTH, UP, (BULK, LOC["west"], json.dumps({"name": "x"}))); check("staff cannot edit through another store", (r or {}).get("reason") == "forbidden", r or e)
 r, e = call(A_STAFF, UP, (BULK, LOC_A, json.dumps({"name": "x"}))); check("another business cannot edit a product its store does not carry", (r or {}).get("reason") == "forbidden", r or e)
+# ── 110 staff take a counter-pickup order ──
+q("UPDATE equipment_items SET is_rentable=TRUE, delivery_enabled=TRUE, delivery_rental_price=COALESCE(delivery_rental_price, 30) WHERE id=%s", (BULK,))
+q("UPDATE equipment_location_inventory SET pickup_enabled=TRUE, pickup_rental_price=20, quantity_on_hand=GREATEST(quantity_on_hand, 5) WHERE equipment_item_id=%s AND location_id=%s", (BULK, LOC["west"]))
+SO = "SELECT public.create_staff_order(NULL, 'rental', %s::jsonb, %s::jsonb, NULL, %s::jsonb)"
+items = json.dumps([{"item_id": BULK, "quantity": 1}])
+newcust = json.dumps({"full_name": f"V110 walk-in {tag}", "phone": "516-555-0110"})
+r, e = call(WEST, SO, (items, json.dumps({"location_id": LOC["west"], "method": "pickup", "scheduled_date": "2026-11-10", "driver_id": DRV}), newcust))
+check("store staff create a counter-pickup order (driver ignored)", bool(r and r.get("ok")) and r.get("method") == "pickup", r or e)
+if r and r.get("ok"):
+    o = q("SELECT fulfillment_method, pickup_location_id::text, monthly_rate FROM rental_orders WHERE id=%s", (r["order_id"],))[0]
+    check("the pickup order is marked pickup at the store, priced at the store's pickup price", o == ("pickup", LOC["west"], 20), o)
+    leg = q("SELECT leg_type, requires_driver, driver_id, status FROM deliveries WHERE order_id=%s", (r["order_id"],))[0]
+    check("it gets a store-collection leg with no driver, scheduled for the pickup day", leg == ("pickup", False, None, "scheduled"), leg)
+    r2, e2 = call(WEST, "SELECT public.complete_store_pickup(%s)", (q("SELECT id FROM deliveries WHERE order_id=%s", (r["order_id"],))[0][0],))
+    check("staff hand it over at the counter", bool(r2 and r2.get("ok")), r2 or e2)
+q("UPDATE equipment_location_inventory SET pickup_enabled=FALSE WHERE equipment_item_id=%s AND location_id=%s", (BULK, LOC["west"]))
+r, e = call(WEST, SO, (items, json.dumps({"location_id": LOC["west"], "method": "pickup"}), newcust))
+check("a counter pickup is refused when the store does not offer pickup for the item", (r or {}).get("reason") == "invalid_item", r or e)
+r, e = call(WEST, SO, (items, json.dumps({"location_id": LOC["west"], "method": "delivery"}), newcust))
+check("a delivery order for the same item still works", bool(r and r.get("ok")) and r.get("method") == "delivery", r or e)
+r, e = call(WEST, SO, (items, json.dumps({"location_id": LOC["west"], "method": "teleport"}), newcust))
+check("an unknown method is refused", (r or {}).get("reason") == "invalid_method", r or e)
 nt = q("SELECT title FROM notifications WHERE reference_id LIKE %s LIMIT 1", (f"order_{on1['order_id']}%",)) if on1 else []
 check("alerts name the store", (not nt) or nt[0][0].startswith(f"V074 north {tag}"), nt)
 check("the separation check passes", __import__('subprocess').run(['python3', 'scripts/check_store_separation.py'], env={**os.environ, 'VERIFY_APPLY_FIRST': ''}).returncode == 0 if not os.environ.get('VERIFY_APPLY_FIRST') else True)
