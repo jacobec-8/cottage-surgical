@@ -80,7 +80,7 @@ credentials, or a delivery commitment.
 | "Add X to inventory" | Search existing inventory. Determine whether X is a new product, more physical units of an existing product, or a bulk-stock adjustment. Resolve store and quantity from context. |
 | "Add three wheelchairs" | Match the specific model; add three physical units if serialized. This does not mean create three catalog products or set the total stock to three. |
 | "Set stock to three" | Absolute available quantity for the stated store. For serialized items, reconcile actual unit records rather than editing only the displayed total. |
-| "New order for this person on this date" | Resolve customer, items/quantities, store, rental/purchase, fulfillment, and what the date means. New Order currently creates a delivery workflow. |
+| "New order for this person on this date" | Resolve customer, items/quantities, store, rental/purchase, fulfillment, and what the date means. New Order creates a delivery or, with **In-store pickup** chosen, a counter pickup: the store's pickup price, no driver, a pickup date, and a store-collection stop staff complete with **Mark picked up** on Delivery & Pickup (migration 110). |
 | "Move it to Friday" | Identify the order and whether this is outbound delivery, in-store collection, return pickup, or a billing due date. Use the user's calendar/timezone for relative dates. |
 | "Add a store" / "Set up a business with three branches" | Admin → Locations → Onboard a business or branches. One submission: business and owner login, every branch with its stock and staff, drivers with the branches they serve; review before creating (§4). |
 | "Let this driver work at both stores" | Drivers → that driver → **Branches…** (owner or admin). Not a second driver record or login. |
@@ -439,8 +439,9 @@ inspect the individual order and its stops before choosing the next action.
    equipment returned.
 2. **Customer Directory:** fixed. A card expands to contact details and the
    customer's order history; each order links to its detail.
-3. **Staff pickup creation:** New Order has no fulfillment selector. This is
-   a product capability gap for call-in pickup orders, not missing user input.
+3. **Staff pickup creation:** fixed (110). New Order offers **Delivery** or
+   **In-store pickup**; a pickup order needs the store's pickup switch on for
+   the item and charges the store's pickup price.
 4. **Policy copy versus implemented behavior:** FAQ and Return Policy source
    explicitly identify their wording as draft policy. Login/dashboard copy
    also describes capabilities more broadly than implemented (for example,
