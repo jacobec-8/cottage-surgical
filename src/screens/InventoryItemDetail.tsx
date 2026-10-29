@@ -17,6 +17,7 @@ import { refreshWebsite } from '../lib/websiteRefresh'
 import { removeProductMessage } from '../lib/storeProducts'
 import { bulkCounts } from '../lib/bulkStock'
 import StockStatusBadges from '../components/StockStatusBadges'
+import ProductDetailsList from '../components/ProductDetailsList'
 import { CATEGORIES } from '../lib/categories'
 
 type Item = {
@@ -331,24 +332,9 @@ function DetailsCard({ item }: { item: Item }) {
   return (
     <section className="bg-white border border-slate-200 rounded-2xl p-5">
       <h2 className="font-semibold text-lg mb-4">Product details</h2>
-      <dl className="grid sm:grid-cols-2 gap-x-8 gap-y-4 text-sm">
-        <Detail label="Pickup rental" value={!item.pickup_enabled || item.pickup_rental_price == null ? 'Not offered' : `$${Number(item.pickup_rental_price).toFixed(2)}/mo`} />
-        <Detail label="Delivery + return pickup" value={!item.delivery_enabled || item.delivery_rental_price == null ? 'Not offered' : `$${Number(item.delivery_rental_price).toFixed(2)}/mo`} />
-        <Detail label="Sale price" value={item.sale_price == null ? 'Not set' : `$${Number(item.sale_price).toFixed(2)}`} />
-        <Detail label="Rental enabled" value={item.is_rentable ? 'Yes' : 'No'} />
-        <Detail label="Purchase enabled" value={item.is_purchasable ? 'Yes' : 'No'} />
-        <Detail label="Fulfillment" value={fulfillmentLabel(item)} />
-        <Detail label="Same-day pickup" value={item.pickup_enabled && item.same_day_pickup ? 'May be available' : 'No'} />
-        <Detail label="Installation required" value={item.installation_required ? 'Yes' : 'No'} />
-        <Detail label="Created" value={new Date(item.created_at).toLocaleDateString()} />
-        <Detail label="Last updated" value={new Date(item.updated_at).toLocaleString()} />
-      </dl>
+      <ProductDetailsList item={item} />
     </section>
   )
-}
-
-function Detail({ label, value }: { label: string; value: string }) {
-  return <div><dt className="text-xs text-slate-400 uppercase tracking-wide mb-1">{label}</dt><dd className="font-medium text-slate-800">{value}</dd></div>
 }
 
 function RentalCard({ assignments, loading, full = false }: { assignments: RentalAssignment[]; loading: boolean; full?: boolean }) {
