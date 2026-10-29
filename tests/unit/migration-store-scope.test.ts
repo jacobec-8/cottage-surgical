@@ -40,5 +40,5 @@ test('the parser sees the functions this guard exists for', () => {
   for (const name of ['update_rental_details', 'cancel_order', 'close_out_order', 'settle_deposit']) {
     assert.ok(latest.has(name), `${name} not found in migrations`)
   }
-  assert.equal(latest.get('update_rental_details')?.file, '069_store_guard_restore_bulk_counts_deposits.sql')
+  assert.equal(latest.get('update_rental_details')?.file, '111_switch_order_fulfillment.sql')
 })
