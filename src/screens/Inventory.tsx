@@ -15,6 +15,7 @@ import { useAuth } from '../contexts/AuthContext'
 import StockStatusBadges, { LOW_STOCK_THRESHOLD } from '../components/StockStatusBadges'
 import { CATEGORIES } from '../lib/categories'
 import CatalogPicker from './inventory/CatalogPicker'
+import ProductPanel from './inventory/ProductPanel'
 
 type Item = {
   id: string
@@ -192,7 +193,7 @@ export default function Inventory() {
                     type="button"
                     onClick={() => setExpandedId(open ? null : it.id)}
                     className="grid h-10 w-8 shrink-0 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                    aria-label={open ? 'Collapse units' : 'Expand units'}
+                    aria-label={open ? `Collapse ${it.name}` : `Expand ${it.name}`}
                   >
                     {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                   </button>
@@ -269,7 +270,7 @@ export default function Inventory() {
                   </div>
                 </div>
               </div>
-              {open && <UnitsPanel itemId={it.id} locationId={selectedLocationId} />}
+              {open && <ProductPanel itemId={it.id} isSerialized={it.is_serialized} stock={scopedStock} locationId={selectedLocationId} storeOpen={selectedLocation?.is_active ?? true} />}
             </div>
           )
         })}
@@ -284,53 +285,6 @@ export default function Inventory() {
       )}
 
       {editing && <ItemModal item={editing} onClose={() => setEditing(null)} />}
-    </div>
-  )
-}
-
-type Unit = { id: string; serial_number: string | null; asset_tag: string | null; status: string }
-
-function UnitsPanel({ itemId, locationId }: { itemId: string; locationId: string | null }) {
-  const units = useQuery({
-    queryKey: ['equipment_units', itemId, locationId],
-    queryFn: async () => {
-      let query = supabase
-        .from('equipment_units')
-        .select('id,serial_number,asset_tag,status')
-        .eq('item_id', itemId)
-        .order('status')
-      if (locationId) query = query.eq('location_id', locationId)
-      const { data, error } = await query
-      if (error) throw error
-      return data as Unit[]
-    },
-  })
-
-  if (units.isLoading) return <div className="px-4 pb-4 text-sm text-slate-500">Loading units…</div>
-  if (units.error) return <div className="px-4 pb-4 text-sm text-red-600">Couldn’t load units.</div>
-  if (!units.data?.length) {
-    return (
-      <div className="px-4 pb-4 text-sm text-slate-500 border-t border-slate-100 pt-3">
-        No serialized units for this item. Qty on hand is managed at the catalog level for bulk stock.
-      </div>
-    )
-  }
-
-  return (
-    <div className="border-t border-slate-100 px-4 pb-4 pt-3 space-y-2">
-      <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Units</div>
-      {units.data.map((u) => (
-        <div key={u.id} className="flex flex-col items-stretch gap-3 rounded-lg bg-slate-50 px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <span className="font-medium">{u.asset_tag || u.serial_number || u.id.slice(0, 8)}</span>
-            <span className={`ml-2 text-xs px-2 py-0.5 rounded-full capitalize ${
-              u.status === 'available' ? 'bg-emerald-100 text-emerald-700'
-                : u.status === 'rented' || u.status === 'reserved' ? 'bg-blue-100 text-blue-700'
-                  : 'bg-slate-200 text-slate-600'
-            }`}>{u.status}</span>
-          </div>
-        </div>
-      ))}
     </div>
   )
 }
