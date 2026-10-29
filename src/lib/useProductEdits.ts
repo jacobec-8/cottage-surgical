@@ -7,7 +7,7 @@ import { refreshWebsite } from './websiteRefresh'
 import { productEditProblem } from './storeProducts'
 import type { ProductDetailsItem } from '../components/ProductDetailsList'
 
-export type StoreSettings = { pickup_enabled: boolean; pickup_rental_price: number | null; delivery_rental_price: number | null; sale_price: number | null; quantity_on_hand: number }
+export type StoreSettings = { pickup_enabled: boolean; pickup_rental_price: number | null; delivery_rental_price: number | null; sale_price: number | null; quantity_on_hand: number; scan_code: string | null }
 type StorePatch = Partial<StoreSettings>
 type ProductPatch = Partial<Pick<ProductDetailsItem, 'name' | 'description' | 'category' | 'sku' | 'pickup_enabled' | 'delivery_enabled' | 'pickup_rental_price' | 'delivery_rental_price' | 'sale_price' | 'is_rentable' | 'is_purchasable' | 'same_day_pickup' | 'installation_required'>>
 
@@ -35,7 +35,7 @@ export function useProductEdits(item: ProductDetailsItem & { id: string; locatio
     enabled: Boolean(locationId),
     queryFn: async () => {
       const { data, error } = await supabase.from('equipment_location_inventory')
-        .select('pickup_enabled,pickup_rental_price,delivery_rental_price,sale_price,quantity_on_hand')
+        .select('pickup_enabled,pickup_rental_price,delivery_rental_price,sale_price,quantity_on_hand,scan_code')
         .eq('equipment_item_id', item.id).eq('location_id', locationId!).maybeSingle()
       if (error) throw error
       return data as StoreSettings | null
@@ -60,12 +60,13 @@ export function useProductEdits(item: ProductDetailsItem & { id: string; locatio
     storeName,
     store: store.data ?? null,
     canEditStore: Boolean(store.data) && (isAdmin || staffHere),
-    canEditProduct: isAdmin || (profile?.role === 'staff' && Boolean(item.location_id) && item.location_id === profile.location_id),
+    // Staff edit every field of a product their store carries (108); admins any product.
+    canEditProduct: isAdmin || (staffHere && Boolean(store.data)) || (profile?.role === 'owner' && Boolean(store.data)),
     saveStore: async (patch) => {
       const { error } = await supabase.from('equipment_location_inventory')
         .update({ ...patch, updated_at: new Date().toISOString() })
         .eq('equipment_item_id', item.id).eq('location_id', locationId!)
-      if (error) throw new Error('Couldn’t save. Please try again.')
+      if (error) throw new Error(error.code === '23505' ? 'That scan code is already used for another product at this store.' : 'Couldn’t save. Please try again.')
       refresh()
     },
     saveProduct: async (patch) => {
@@ -74,8 +75,13 @@ export function useProductEdits(item: ProductDetailsItem & { id: string; locatio
         delivery_rental_price: store.data.delivery_rental_price ?? item.delivery_rental_price } : item
       const problem = productEditProblem({ ...effective, ...patch })
       if (problem) throw new Error(problem)
-      const { error } = await supabase.from('equipment_items').update(patch).eq('id', item.id)
-      if (error) throw new Error('Couldn’t save. Please try again.')
+      if (locationId) {
+        const { data, error } = await supabase.rpc('update_store_product', { p_item_id: item.id, p_location_id: locationId, p_patch: patch })
+        if (error || !data?.ok) throw new Error(data?.reason === 'invalid_name' ? 'Enter a name.' : data?.reason === 'forbidden' ? 'You can only edit products your store carries.' : 'Couldn’t save. Please try again.')
+      } else {
+        const { error } = await supabase.from('equipment_items').update(patch).eq('id', item.id)
+        if (error) throw new Error('Couldn’t save. Please try again.')
+      }
       refresh()
     },
     retailOn: locationId ? retail.data ?? null : null,

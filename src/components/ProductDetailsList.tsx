@@ -34,7 +34,9 @@ const money = (n: number | null, suffix = '') => (n == null ? null : `$${Number(
  * a pencil that edits it in place: pickup and delivery price for the store in
  * the header, everything else on the product.
  */
-export default function ProductDetailsList({ item, edits }: { item: ProductDetailsItem; edits?: ProductEdits }) {
+export type DetailField = 'stock' | 'sale' | 'name'
+
+export default function ProductDetailsList({ item, edits, openField }: { item: ProductDetailsItem; edits?: ProductEdits; openField?: DetailField | null }) {
   const store = edits?.store ?? null
   const pickupOn = store ? store.pickup_enabled : item.pickup_enabled
   const pickupPrice = store?.pickup_rental_price ?? item.pickup_rental_price
@@ -48,15 +50,17 @@ export default function ProductDetailsList({ item, edits }: { item: ProductDetai
   const saleEdit = storeEdit || (!store && productEdit)
   return (
     <dl className="grid sm:grid-cols-2 gap-x-8 gap-y-4 text-sm">
-      {item.name != null && <Row label="Name" value={item.name}
+      {item.name != null && <Row open={openField === 'name'} label="Name" value={item.name}
         editor={productEdit ? (done) => <TextEditor label="Name" action="Save" initial={item.name} done={done} save={(v) => { if (!v.trim()) throw new Error('Enter a name.'); return edits!.saveProduct({ name: v.trim() }) }} /> : undefined} />}
       {item.category != null && <Row label="Category" value={item.category.charAt(0).toUpperCase() + item.category.slice(1)}
         editor={productEdit ? (done) => <CategoryEditor initial={item.category!} done={done} save={(v) => edits!.saveProduct({ category: v })} /> : undefined} />}
-      {item.sku !== undefined && <Row label="SN (scan code)" value={item.sku || 'Not set'}
-        editor={productEdit ? (done) => <TextEditor label="SN" action="Save" initial={item.sku ?? ''} done={done} save={(v) => edits!.saveProduct({ sku: v.trim() || null })} /> : undefined} />}
+      {item.sku !== undefined && <Row label={`SN (scan code)${store && !productEdit ? where : ''}`} value={(store?.scan_code ?? item.sku) || 'Not set'}
+        editor={productEdit
+          ? (done) => <TextEditor label="SN" action="Save" initial={item.sku ?? ''} done={done} save={(v) => edits!.saveProduct({ sku: v.trim() || null })} />
+          : storeEdit ? (done) => <TextEditor label="SN" action="Save" initial={store!.scan_code ?? item.sku ?? ''} done={done} save={(v) => edits!.saveStore({ scan_code: v.trim() || null })} /> : undefined} />}
       {item.description !== undefined && <div className="sm:col-span-2"><Row label="Description" value={item.description || 'No description yet'}
         editor={productEdit ? (done) => <TextEditor label="Description" action="Save" multiline initial={item.description ?? ''} done={done} save={(v) => edits!.saveProduct({ description: v.trim() || null })} /> : undefined} /></div>}
-      {store && <Row label={`Stock${where}`} value={item.is_serialized ? `${store.quantity_on_hand} available unit${store.quantity_on_hand === 1 ? '' : 's'}` : `${store.quantity_on_hand} in stock`}
+      {store && <Row open={openField === 'stock'} label={`Stock${where}`} value={item.is_serialized ? `${store.quantity_on_hand} available unit${store.quantity_on_hand === 1 ? '' : 's'}` : `${store.quantity_on_hand} in stock`}
         editor={storeEdit ? (done) => (item.is_serialized
           ? <TextEditor label="Asset tag of the new unit" action="Add unit" done={done} save={(tag) => edits!.addUnit(tag)} />
           : <QuantityEditor initial={store.quantity_on_hand} done={done} save={(qty) => edits!.saveStore({ quantity_on_hand: qty })} />) : undefined} />}
@@ -70,7 +74,7 @@ export default function ProductDetailsList({ item, edits }: { item: ProductDetai
         editor={priceEdit ? (done) => <PriceEditor initial={store ? store.delivery_rental_price : item.delivery_rental_price}
           placeholder={store ? money(item.delivery_rental_price, ' catalog') ?? 'Price' : 'Price'} done={done}
           save={(price) => (store ? edits!.saveStore({ delivery_rental_price: price }) : edits!.saveProduct({ delivery_rental_price: price }))} /> : undefined} />}
-      <Row label={`Sale price${store ? where : ''}`} value={Number(salePrice) > 0 ? money(salePrice)! : 'Not set'}
+      <Row open={openField === 'sale'} label={`Sale price${store ? where : ''}`} value={Number(salePrice) > 0 ? money(salePrice)! : 'Not set'}
         editor={saleEdit ? (done) => <PriceEditor initial={store ? store.sale_price : item.sale_price} placeholder={store && Number(item.sale_price) > 0 ? money(item.sale_price, ' catalog')! : 'Price'} done={done}
           save={(price) => (store ? edits!.saveStore({ sale_price: price }) : edits!.saveProduct({ sale_price: price }))} /> : undefined} />
       <Row label="Rental enabled" value={item.is_rentable ? 'Yes' : 'No'}
@@ -89,8 +93,8 @@ export default function ProductDetailsList({ item, edits }: { item: ProductDetai
   )
 }
 
-function Row({ label, value, editor }: { label: string; value: string; editor?: (done: () => void) => ReactNode }) {
-  const [open, setOpen] = useState(false)
+function Row({ label, value, editor, open: startOpen = false }: { label: string; value: string; editor?: (done: () => void) => ReactNode; open?: boolean }) {
+  const [open, setOpen] = useState(startOpen)
   return (
     <div>
       <dt className="text-xs text-slate-400 uppercase tracking-wide mb-1">{label}</dt>
