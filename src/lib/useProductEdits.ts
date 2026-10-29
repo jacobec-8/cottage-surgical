@@ -72,12 +72,13 @@ export function useProductEdits(item: ProductDetailsItem & { id: string; locatio
     saveProduct: async (patch) => {
       // The store's own prices count: a store price is enough to turn on selling or delivery.
       const effective = store.data ? { ...item, sale_price: store.data.sale_price ?? item.sale_price,
+        pickup_rental_price: store.data.pickup_rental_price ?? item.pickup_rental_price,
         delivery_rental_price: store.data.delivery_rental_price ?? item.delivery_rental_price } : item
-      const problem = productEditProblem({ ...effective, ...patch })
+      const problem = productEditProblem(effective, patch)
       if (problem) throw new Error(problem)
       if (locationId) {
         const { data, error } = await supabase.rpc('update_store_product', { p_item_id: item.id, p_location_id: locationId, p_patch: patch })
-        if (error || !data?.ok) throw new Error(data?.reason === 'invalid_name' ? 'Enter a name.' : data?.reason === 'forbidden' ? 'You can only edit products your store carries.' : 'Couldn’t save. Please try again.')
+        if (error || !data?.ok) throw new Error(data?.reason === 'invalid_name' ? 'Enter a name.' : data?.reason === 'forbidden' ? 'You can only edit products your store carries.' : data?.reason === 'invalid_value' ? 'A price is missing for what this product offers.' : 'Couldn’t save. Please try again.')
       } else {
         const { error } = await supabase.from('equipment_items').update(patch).eq('id', item.id)
         if (error) throw new Error('Couldn’t save. Please try again.')
