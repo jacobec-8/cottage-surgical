@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Camera, Truck } from 'lucide-react'
+import { Camera, Plus, Truck } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { statusClass, statusLabel } from '../lib/status'
@@ -14,6 +14,7 @@ import { useLocationScope } from '../contexts/LocationContext'
 import { PaymentBadge } from './orders/badges'
 import { DRIVER_LOCATION_FIELDS } from '../lib/driverLocations'
 import MissedStop from './delivery/MissedStop'
+import NewStopPanel from './delivery/NewStopPanel'
 import StaffStopCard from './delivery/StaffStopCard'
 import { addressLabel, clickableCard, customerLabel, DetailsHint, itemsLabel, lifecycleError, stopOpen, type OpenStop } from './delivery/cardParts'
 import { businessToday, fmtStopDate, isLate, latestAttempt, reasonLabel, sortStops } from './delivery/stopStatus'
@@ -30,6 +31,9 @@ export default function Delivery() {
   const { selectedLocationId } = useLocationScope()
   const isDriver = profile?.role === 'driver'
   const [view, setView] = useState<'active' | 'completed'>('active')
+  // Staff: "+ New" opens the return-pickup panel; its result shows above the list.
+  const [creating, setCreating] = useState(false)
+  const [notice, setNotice] = useState('')
   const [stopKind, setStopKind] = useState<'all' | 'delivery' | 'pickup'>('all')
   // Staff: click a stop to open the order panel (?order=<id>) with that leg highlighted.
   const [selected, setSelected] = useSelectedOrder()
@@ -92,14 +96,29 @@ export default function Delivery() {
           : 'Schedule in-store pickups, or assign drivers and windows to delivery and return stops. Click a stop for the full order.'}
       </p>
 
-      <div className={`${isDriver ? 'grid w-full grid-cols-2 sm:inline-grid sm:w-auto' : 'inline-flex'} mb-5 rounded-xl border border-slate-200 bg-white p-1`}>
-        {(['active', 'completed'] as const).map((v) => (
-          <button key={v} onClick={() => setView(v)}
-            className={`min-h-11 rounded-lg px-4 py-2 text-sm font-medium capitalize transition-colors ${view === v ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
-            {v === 'active' ? 'Active' : 'Completed'}
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div className={`${isDriver ? 'grid w-full grid-cols-2 sm:inline-grid sm:w-auto' : 'inline-flex'} rounded-xl border border-slate-200 bg-white p-1`}>
+          {(['active', 'completed'] as const).map((v) => (
+            <button key={v} onClick={() => setView(v)}
+              className={`min-h-11 rounded-lg px-4 py-2 text-sm font-medium capitalize transition-colors ${view === v ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
+              {v === 'active' ? 'Active' : 'Completed'}
+            </button>
+          ))}
+        </div>
+        {!isDriver && !creating && (
+          <button type="button" onClick={() => { setNotice(''); setCreating(true) }}
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">
+            <Plus size={16} /> New
           </button>
-        ))}
+        )}
       </div>
+
+      {!isDriver && creating && (
+        <NewStopPanel locationId={selectedLocationId} drivers={drivers.data ?? []}
+          onDone={(message) => { setCreating(false); setNotice(message); setView('active') }}
+          onCancel={() => setCreating(false)} />
+      )}
+      {notice && <div role="status" className="mb-4 text-sm text-emerald-700">{notice}</div>}
 
       {!isDriver && (
         <div className="mb-5 flex flex-wrap gap-2" aria-label="Fulfillment type">

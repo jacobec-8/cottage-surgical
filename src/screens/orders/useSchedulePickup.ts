@@ -10,7 +10,7 @@ type ScheduleArgs = { orderId: string; address?: ReturnAddress }
 export const ADDRESS_REQUIRED_MSG = 'This rental has no home address. Enter where the driver should collect it.'
 
 /** schedule_pickup RAISEs rather than returning {ok:false}; translate the known messages. */
-function friendlyError(e: unknown): string {
+export function friendlyError(e: unknown): string {
   const raw = (e as Error)?.message ?? ''
   if (/staff only/i.test(raw)) return 'Only staff can schedule pickups.'
   if (/another store/i.test(raw)) return 'This order belongs to another store.'
