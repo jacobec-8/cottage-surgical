@@ -17,6 +17,5 @@ export default function ItemThumb({ src, size = 'sm' }: { src: string | null | u
   if (!src || broken) {
     return <span aria-hidden="true" className={`${box} grid place-items-center text-slate-300`}><Package size={ICON[size]} /></span>
   }
-  // eslint-disable-next-line @next/next/no-img-element -- product photos are plain public storage URLs, as on Inventory
   return <img src={src} alt="" loading="lazy" decoding="async" onError={() => setBroken(true)} className={`${box} object-cover`} />
 }
