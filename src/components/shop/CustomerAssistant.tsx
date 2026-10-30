@@ -91,7 +91,8 @@ function CatalogChat() {
     }
   }
 
-  if (cartOpen) return null
+  // It must not cover the cart or the checkout form.
+  if (cartOpen || pathname.startsWith('/checkout')) return null
   return <>
     <button ref={launcher} type="button" onClick={() => setOpen(true)} aria-expanded={open} aria-controls={panelId}
       className={`${open ? 'hidden' : 'inline-flex'} fixed bottom-5 right-4 z-40 items-center gap-2 rounded-full bg-brand-600 px-5 py-3.5 text-sm font-semibold text-white shadow-lg transition hover:bg-brand-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-brand-600 sm:bottom-6 sm:right-6`}>
