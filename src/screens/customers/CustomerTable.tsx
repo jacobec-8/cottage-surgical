@@ -20,7 +20,7 @@ export type CustomerRow = {
 // Columns appear as the screen widens; the customer's cell carries what is hidden.
 const COLUMNS =
   'items-center gap-x-4 px-4 grid-cols-[minmax(0,1fr)_1rem] sm:grid-cols-[minmax(0,1fr)_4.5rem_1rem] md:grid-cols-[minmax(0,1fr)_9rem_4.5rem_1rem] ' +
-  'lg:grid-cols-[minmax(0,1fr)_9rem_minmax(0,1fr)_4.5rem_1rem] xl:grid-cols-[minmax(0,1.2fr)_9rem_minmax(0,1.2fr)_9rem_8rem_4.5rem_1rem]'
+  'lg:grid-cols-[minmax(0,1fr)_9rem_minmax(0,1fr)_4.5rem_1rem] xl:grid-cols-[minmax(0,1.6fr)_8rem_minmax(0,1.2fr)_7rem_7rem_4.5rem_1rem]'
 
 const Empty = () => <span className="text-slate-300">—</span>
 

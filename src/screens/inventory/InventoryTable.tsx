@@ -24,16 +24,16 @@ type Props = {
 
 // Below xl the product's cell carries everything the hidden columns show.
 const COLUMNS =
-  'items-center gap-x-4 px-3 grid-cols-[minmax(0,1fr)_auto] xl:grid-cols-[minmax(0,1fr)_11rem_11rem_10.5rem_5.5rem] 2xl:grid-cols-[minmax(0,1fr)_8rem_11rem_11rem_10.5rem_5.5rem]'
+  'items-center gap-x-4 px-3 grid-cols-[minmax(0,1fr)_auto] xl:grid-cols-[minmax(0,1fr)_9.5rem_10.5rem_7.5rem_5.5rem] 2xl:grid-cols-[minmax(0,1fr)_8rem_10rem_11rem_8rem_5.5rem]'
 
 const money = (value: number | null) => `$${Number(value).toFixed(0)}`
 
-function rentLabel(it: InventoryItem) {
-  if (!it.is_rentable) return 'Not rentable'
+function rentLabels(it: InventoryItem): string[] {
+  if (!it.is_rentable) return ['Not rentable']
   return [
     it.pickup_enabled && it.pickup_rental_price != null ? `${money(it.pickup_rental_price)} pickup` : null,
     it.delivery_enabled && it.delivery_rental_price != null ? `${money(it.delivery_rental_price)} delivered` : null,
-  ].filter(Boolean).join(' · ')
+  ].filter((label): label is string => Boolean(label))
 }
 
 const saleLabel = (it: InventoryItem) => (it.is_purchasable && it.sale_price != null ? `${money(it.sale_price)} sale` : 'Not for sale')
@@ -92,7 +92,7 @@ export default function InventoryTable({ items, expandedId, onToggle, editTarget
           return (
             <li key={it.id} className={it.is_active ? '' : 'opacity-50'}>
               <div className={`grid py-3 ${COLUMNS}`}>
-                <div className="flex min-w-0 items-center gap-2.5">
+                <div className="flex min-w-0 items-start gap-2.5 xl:items-center">
                   <button
                     type="button"
                     onClick={() => onToggle(it.id)}
@@ -103,7 +103,7 @@ export default function InventoryTable({ items, expandedId, onToggle, editTarget
                   </button>
                   <ItemThumb size="lg" src={it.image_url} />
                   <div className="min-w-0 flex-1">
-                    <Link href={`/inventory/${it.id}`} className="block truncate text-base font-medium text-slate-900 hover:text-blue-600">
+                    <Link href={`/inventory/${it.id}`} className="block text-base font-medium leading-snug text-slate-900 hover:text-blue-600 xl:truncate">
                       {it.name}
                       {!it.is_active && <span className="ml-2 text-xs text-slate-400">(inactive)</span>}
                     </Link>
@@ -116,7 +116,7 @@ export default function InventoryTable({ items, expandedId, onToggle, editTarget
                       <span className="font-medium tabular-nums text-slate-700">{stock} in stock{locationId ? '' : ' across stores'}</span>
                       <StockFlags it={it} stock={stock} locationId={locationId} />
                       <Offered it={it} />
-                      <span className="font-medium text-slate-700">{rentLabel(it)}</span>
+                      <span className="font-medium text-slate-700">{rentLabels(it).join(' · ')}</span>
                       <span className="text-slate-500">{saleLabel(it)}</span>
                     </div>
                   </div>
@@ -128,8 +128,8 @@ export default function InventoryTable({ items, expandedId, onToggle, editTarget
                   <div className="flex flex-wrap gap-1"><StockFlags it={it} stock={stock} locationId={locationId} /></div>
                 </div>
                 <div className="hidden text-right xl:block">
-                  <div className="text-sm font-medium text-slate-900">{rentLabel(it)}</div>
-                  <div className="text-sm text-slate-500">{saleLabel(it)}</div>
+                  {rentLabels(it).map((label) => <div key={label} className="whitespace-nowrap text-sm font-medium text-slate-900">{label}</div>)}
+                  <div className="whitespace-nowrap text-sm text-slate-500">{saleLabel(it)}</div>
                 </div>
                 <div className="flex shrink-0 items-center justify-end gap-1">{actions(it)}</div>
               </div>

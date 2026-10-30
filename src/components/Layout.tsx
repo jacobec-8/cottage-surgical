@@ -223,7 +223,7 @@ export default function Layout({ children }: { children: ReactNode }) {
       )}
 
       <div className="flex-1 min-w-0 flex flex-col">
-        <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-slate-200 bg-white px-3 py-3 sm:px-6 lg:static lg:h-[72px] lg:shrink-0 lg:justify-end lg:gap-6 lg:py-0">
+        <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-slate-200 bg-white px-3 py-3 sm:px-6 lg:static lg:h-[72px] lg:shrink-0 lg:justify-end lg:gap-4 lg:py-0 2xl:gap-6">
           <div className="flex min-w-0 items-center gap-2 lg:hidden">
             <button
               type="button"
@@ -246,10 +246,10 @@ export default function Layout({ children }: { children: ReactNode }) {
               </div>
             </div>
           </div>
-          <div className="hidden xl:flex items-center gap-5 text-xs text-slate-500">
-            <span className="flex items-center gap-1.5"><MapPin size={13} /> {selectedLocation ? `${selectedLocation.address_line1}, ${selectedLocation.address_city} ${selectedLocation.address_state} ${selectedLocation.address_zip}` : 'All store locations'}</span>
-            {contactPhone && <span className="flex items-center gap-1.5"><Phone size={13} /> {contactPhone}</span>}
-            {contactEmail && <span className="flex items-center gap-1.5"><Mail size={13} /> {contactEmail}</span>}
+          <div className="hidden min-w-0 items-center gap-3 text-xs text-slate-500 xl:flex 2xl:gap-5">
+            <span className="flex min-w-0 items-center gap-1.5"><MapPin size={13} className="shrink-0" /> {selectedLocation ? `${selectedLocation.address_line1}, ${selectedLocation.address_city} ${selectedLocation.address_state} ${selectedLocation.address_zip}` : 'All store locations'}</span>
+            {contactPhone && <span className="flex items-center gap-1.5 whitespace-nowrap"><Phone size={13} className="shrink-0" /> {contactPhone}</span>}
+            {contactEmail && <span className="flex items-center gap-1.5 whitespace-nowrap"><Mail size={13} className="shrink-0" /> {contactEmail}</span>}
           </div>
           <div className="min-w-0 flex-1 sm:max-w-xs lg:flex-none">
             {canSwitchStores(profile?.role) ? (
@@ -272,10 +272,10 @@ export default function Layout({ children }: { children: ReactNode }) {
           <NotificationsBell />
           <div className="ml-auto flex items-center gap-1 sm:gap-3 lg:ml-0">
             <div className="hidden text-right md:block">
-              <div className="text-sm font-medium text-slate-800 leading-tight">{name}</div>
-              <div className="text-xs text-slate-400 leading-tight">{roleLabel(profile?.role)}</div>
+              <div className="whitespace-nowrap text-sm font-medium text-slate-800 leading-tight">{name}</div>
+              <div className="whitespace-nowrap text-xs text-slate-400 leading-tight">{roleLabel(profile?.role)}</div>
             </div>
-            <div className="hidden h-8 w-8 place-items-center rounded-full bg-blue-600 text-xs font-semibold text-white sm:grid">
+            <div className="hidden h-8 w-8 shrink-0 place-items-center rounded-full bg-blue-600 text-xs font-semibold text-white sm:grid">
               {initials}
             </div>
             <button
@@ -288,7 +288,7 @@ export default function Layout({ children }: { children: ReactNode }) {
               title="Log out"
               className="flex min-h-10 min-w-10 items-center justify-center gap-1.5 rounded-lg text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-800 sm:px-2 lg:ml-2"
             >
-              <LogOut size={18} /> <span className="hidden sm:inline">Logout</span>
+              <LogOut size={18} className="shrink-0" /> <span className="hidden sm:inline">Logout</span>
             </button>
           </div>
         </header>
