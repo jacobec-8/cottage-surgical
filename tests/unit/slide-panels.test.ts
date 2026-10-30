@@ -31,3 +31,14 @@ test('panels do not close straight from the X, backdrop or Esc', () => {
 test('people who ask for reduced motion get no sliding', () => {
   assert.match(css, /prefers-reduced-motion: reduce[\s\S]*slide-panel-right[\s\S]*animation: none/)
 })
+
+test('the slide skips the wait for reduced motion and forgets itself if the phone menu closes another way', () => {
+  assert.match(readFileSync('src/lib/useSlideClose.ts', 'utf8'), /prefers-reduced-motion: reduce/)
+  assert.match(readFileSync('src/components/Layout.tsx', 'utf8'), /resetNavSlide\(\)\s+setMobileNavOpen\(false\)/)
+})
+
+test('another user changing an order refreshes the Customers list', () => {
+  const sync = readFileSync('src/components/RealtimeSync.tsx', 'utf8')
+  const entry = sync.split('\n').find((line) => line.includes("rental_orders")) ?? ''
+  assert.match(entry, /'customers'/)
+})

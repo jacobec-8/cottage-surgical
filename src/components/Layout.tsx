@@ -49,9 +49,12 @@ export default function Layout({ children }: { children: ReactNode }) {
   const access = useStaffModuleAccess()
   const pathname = usePathname()
   const router = useRouter()
-  useEffect(() => setMobileNavOpen(false), [pathname])
   const closeMobileNav = useCallback(() => setMobileNavOpen(false), [])
-  const { leaving: mobileNavLeaving, close: slideNavClosed } = useSlideClose(closeMobileNav)
+  const { leaving: mobileNavLeaving, close: slideNavClosed, reset: resetNavSlide } = useSlideClose(closeMobileNav)
+  useEffect(() => {
+    resetNavSlide()
+    setMobileNavOpen(false)
+  }, [pathname, resetNavSlide])
 
   useEffect(() => {
     if (!mobileNavOpen) return

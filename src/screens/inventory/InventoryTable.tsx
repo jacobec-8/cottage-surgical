@@ -107,7 +107,7 @@ export default function InventoryTable({ items, expandedId, onToggle, editTarget
                       {it.name}
                       {!it.is_active && <span className="ml-2 text-xs text-slate-400">(inactive)</span>}
                     </Link>
-                    <div className="truncate text-sm text-slate-500" title={it.description ?? undefined}>
+                    <div className="line-clamp-2 text-sm text-slate-500 xl:line-clamp-none xl:truncate" title={it.description ?? undefined}>
                       <span className="capitalize 2xl:hidden">{it.category}</span>
                       {it.sku && <span><span className="2xl:hidden"> · </span>SN {it.sku}</span>}
                       {it.description && <span>{it.sku ? ' · ' : <span className="2xl:hidden"> · </span>}{it.description}</span>}

@@ -66,9 +66,9 @@ export default function StaffDirectory() {
         <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search staff by name, username, or role…" className="w-full border border-slate-300 rounded-lg pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
       </div>
 
-      <div role="tablist" aria-label="Staff type" className="mb-4 flex flex-wrap gap-1.5">
+      <div role="group" aria-label="Staff type" className="mb-4 flex flex-wrap gap-1.5">
         {staffTabs(isOwner).map(({ key, label }) => (
-          <button key={key} type="button" role="tab" aria-selected={tab === key} onClick={() => setTab(key)}
+          <button key={key} type="button" aria-pressed={tab === key} onClick={() => setTab(key)}
             className={`min-h-9 rounded-full px-3.5 text-sm font-medium ${tab === key ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}>
             {label} · {counts[key]}
           </button>

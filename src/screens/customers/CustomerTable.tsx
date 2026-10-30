@@ -42,6 +42,7 @@ export default function CustomerTable({ customers, selected, onOpen }: {
       <ul className="divide-y divide-slate-100">
         {customers.map((c) => {
           const out = outNow(c.rental_orders).length
+          const coverage = coverageLabel(c.coverage_type)
           return (
             <li key={c.id}>
               <button
@@ -54,10 +55,10 @@ export default function CustomerTable({ customers, selected, onOpen }: {
                   <span aria-hidden="true" className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-slate-100 text-xs font-medium text-slate-600">{customerInitials(c.full_name)}</span>
                   <span className="min-w-0">
                     <span className="block truncate font-medium text-slate-900">{c.full_name}</span>
-                    {(c.phone || c.address_city) && (
+                    {(c.phone || c.address_city || coverage) && (
                       <span className="block truncate text-xs text-slate-500 xl:hidden">
-                        <span className="md:hidden">{c.phone}{c.phone && c.address_city ? ' · ' : ''}</span>
-                        {c.address_city}
+                        <span className="md:hidden">{c.phone}{c.phone && (c.address_city || coverage) ? ' · ' : ''}</span>
+                        {[c.address_city, coverage].filter(Boolean).join(' · ')}
                       </span>
                     )}
                   </span>
@@ -65,7 +66,7 @@ export default function CustomerTable({ customers, selected, onOpen }: {
                 <span className="hidden truncate tabular-nums text-slate-600 md:block">{c.phone || <Empty />}</span>
                 <span className="hidden truncate text-slate-600 lg:block">{c.email || <Empty />}</span>
                 <span className="hidden truncate text-slate-600 xl:block">{c.address_city || <Empty />}</span>
-                <span className="hidden truncate text-slate-600 xl:block">{coverageLabel(c.coverage_type) || <Empty />}</span>
+                <span className="hidden truncate text-slate-600 xl:block">{coverage || <Empty />}</span>
                 <span className="hidden sm:block">
                   {out > 0 ? <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium tabular-nums text-blue-700">{out}</span> : <Empty />}
                 </span>
