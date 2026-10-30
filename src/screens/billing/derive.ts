@@ -81,10 +81,6 @@ export function rentalPeriod(c: Charge): RentalPeriod {
   return { start, end: null, endIsExpected: false }
 }
 
-export function itemsLabel(c: Charge): string {
-  const lines = c.order?.rental_line_items ?? []
-  return lines.map((l) => `${l.quantity > 1 ? `${l.quantity}× ` : ''}${l.equipment?.name ?? 'Item'}`).join(', ')
-}
 
 export function depositHeld(c: Charge): number {
   return (c.order?.deposits ?? []).filter((d) => d.status === 'held' || d.status === 'pending_refund')

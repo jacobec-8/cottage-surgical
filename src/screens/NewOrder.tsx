@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useQueryClient } from '@tanstack/react-query'
 import { Search, Plus, Minus, Trash2, CheckCircle } from 'lucide-react'
+import ItemThumb from '../components/ItemThumb'
 import { supabase } from '../lib/supabase'
 import { invalidateOrderWorkflow } from '../lib/workflowKeys'
 import { useLocationScope } from '../contexts/LocationContext'
@@ -13,6 +14,7 @@ import { DRIVER_BUSY_MSG, dispatchErrorMessage, windowProblem } from '../lib/dis
 type Item = {
   id: string
   name: string
+  image_url: string | null
   category: string
   delivery_rental_price: number | null
   pickup_rental_price: number | null
@@ -36,7 +38,7 @@ const itemRate = (it: Item, mode: 'rental' | 'purchase', method: Method): number
 const offered = (it: Item, method: Method): boolean =>
   method === 'pickup' ? Boolean(it.location_inventory[0]?.pickup_enabled) : it.delivery_enabled
 
-type CartLine = { item_id: string; name: string; qty: number; rate: number | null }
+type CartLine = { item_id: string; name: string; image_url: string | null; qty: number; rate: number | null }
 
 const orderErrorMessage = (reason?: string) => {
   switch (reason) {
@@ -95,7 +97,7 @@ export default function NewOrder() {
     enabled: Boolean(selectedLocationId),
     queryFn: async () => {
       const { data, error } = await supabase.from('equipment_items')
-        .select('id,name,category,delivery_rental_price,pickup_rental_price,sale_price,is_rentable,is_purchasable,delivery_enabled,location_inventory:equipment_location_inventory!inner(location_id,quantity_on_hand,pickup_enabled,pickup_rental_price,delivery_rental_price,sale_price)')
+        .select('id,name,image_url,category,delivery_rental_price,pickup_rental_price,sale_price,is_rentable,is_purchasable,delivery_enabled,location_inventory:equipment_location_inventory!inner(location_id,quantity_on_hand,pickup_enabled,pickup_rental_price,delivery_rental_price,sale_price)')
         .eq('is_active', true).eq('location_inventory.location_id', selectedLocationId!).order('name')
       if (error) throw error
       return data as unknown as Item[]
@@ -136,7 +138,7 @@ export default function NewOrder() {
     setCart((c) => {
       const ex = c.find((l) => l.item_id === it.id)
       if (ex) return c.map((l) => (l.item_id === it.id ? { ...l, qty: l.qty + 1 } : l))
-      return [...c, { item_id: it.id, name: it.name, qty: 1, rate: rateFor(it) }]
+      return [...c, { item_id: it.id, name: it.name, image_url: it.image_url, qty: 1, rate: rateFor(it) }]
     })
   }
   // Clamp to 1..20 to match the server (create_staff_order caps at 20) so the
@@ -299,8 +301,8 @@ export default function NewOrder() {
         {itemSearch && (
           <div className="border border-slate-200 rounded-lg divide-y divide-slate-100 mb-3 max-h-56 overflow-auto">
             {filteredItems.map((it) => (
-              <button key={it.id} onClick={() => addItem(it)} className="w-full text-left px-3 py-2 hover:bg-slate-50 flex justify-between text-sm">
-                <span>{it.name}</span>
+              <button key={it.id} onClick={() => addItem(it)} className="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center justify-between gap-3 text-sm">
+                <span className="flex min-w-0 items-center gap-2"><ItemThumb src={it.image_url} /><span>{it.name}</span></span>
                 <span className="text-slate-500">${Number(rateFor(it) ?? 0).toFixed(0)}{mode === 'rental' ? '/mo' : ''}</span>
               </button>
             ))}
@@ -313,6 +315,7 @@ export default function NewOrder() {
           <div className="space-y-2">
             {cart.map((l) => (
               <div key={l.item_id} className="flex items-center gap-3 bg-slate-50 rounded-lg px-3 py-2">
+                <ItemThumb src={l.image_url} />
                 <div className="flex-1 text-sm font-medium">{l.name}</div>
                 <div className="flex items-center gap-1">
                   <button onClick={() => setQty(l.item_id, -1)} className="w-6 h-6 rounded border border-slate-300 grid place-items-center text-slate-500"><Minus size={13} /></button>

@@ -64,10 +64,6 @@ export function customerLabel(d: Deliv, contact?: StopContact): string {
   return contact?.full_name || d.order?.customer?.full_name || 'Customer'
 }
 
-/** "2× Walker, Shower chair" */
-export function itemsLabel(d: Deliv): string {
-  return (d.order?.rental_line_items ?? []).map((li) => `${li.quantity > 1 ? li.quantity + '× ' : ''}${li.equipment?.name ?? 'Item'}`).join(', ')
-}
 
 export function addressLabel(d: Deliv): string {
   return [d.address_line1, d.address_city, d.address_state, d.address_zip].filter(Boolean).join(', ')

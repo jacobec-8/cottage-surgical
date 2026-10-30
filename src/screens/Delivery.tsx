@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Camera, Plus, Truck } from 'lucide-react'
+import ItemList from '../components/ItemList'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { statusClass, statusLabel } from '../lib/status'
@@ -16,14 +17,14 @@ import { DRIVER_LOCATION_FIELDS } from '../lib/driverLocations'
 import MissedStop from './delivery/MissedStop'
 import NewStopPanel from './delivery/NewStopPanel'
 import StaffStopCard from './delivery/StaffStopCard'
-import { addressLabel, clickableCard, customerLabel, DetailsHint, itemsLabel, lifecycleError, stopOpen, type OpenStop } from './delivery/cardParts'
+import { addressLabel, clickableCard, customerLabel, DetailsHint, lifecycleError, stopOpen, type OpenStop } from './delivery/cardParts'
 import { businessToday, fmtStopDate, isLate, latestAttempt, reasonLabel, sortStops } from './delivery/stopStatus'
 import { hasAddress, type Deliv, type DriverOption } from './delivery/types'
 
 const SELECT =
   'id,leg_type,status,scheduled_date,window_start,window_end,started_at,completed_at,address_line1,address_city,address_state,address_zip,driver_id,requires_driver,location_id,location:pickup_locations!deliveries_location_id_fkey(name),' +
   'driver:drivers!deliveries_driver_id_fkey(first_name,last_name),' +
-  'order:rental_orders(id,order_no,payment_status,payment_preference,customer:customers(full_name),rental_line_items(quantity,equipment:equipment_items(name))),' +
+  'order:rental_orders(id,order_no,payment_status,payment_preference,customer:customers(full_name),rental_line_items(quantity,equipment:equipment_items(name,image_url))),' +
   'delivery_photos(storage_path,captured_at,notes),attempts:stop_attempts(reason,note,created_at)'
 
 export default function Delivery() {
@@ -215,7 +216,6 @@ function DriverStopRow({ d, contact, activeStop, showLocation }: { d: Deliv; con
     }
   }
 
-  const items = itemsLabel(d)
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-4">
       <div className="mb-1 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
@@ -239,7 +239,7 @@ function DriverStopRow({ d, contact, activeStop, showLocation }: { d: Deliv; con
           {hasAddress(d)
             ? <div className="text-sm text-slate-500 mt-0.5">{addressLabel(d)}</div>
             : <div className="mt-0.5 text-sm font-medium text-amber-700">No address on file — contact the store before leaving</div>}
-          {items && <div className="text-sm text-slate-700 mt-1">{items}</div>}
+          <ItemList items={d.order?.rental_line_items ?? []} className="mt-1.5" />
           <div className="text-xs text-slate-500 mt-1">
             {[
               d.scheduled_date ? fmtStopDate(d.scheduled_date) : 'Date TBD',
@@ -291,7 +291,7 @@ function CompletedRow({ d, contact, onOpen, selected }: { d: Deliv; contact?: St
           {d.order && <PaymentBadge paymentStatus={d.order.payment_status} paymentPreference={d.order.payment_preference} />}
         </div>
         <div className="text-sm text-slate-500 mt-0.5">{[d.address_line1, d.address_city].filter(Boolean).join(', ')}</div>
-        {itemsLabel(d) && <div className="text-sm text-slate-700 mt-1">{itemsLabel(d)}</div>}
+        <ItemList items={d.order?.rental_line_items ?? []} className="mt-1.5" />
         <div className="text-xs text-slate-400 mt-1">Completed {d.completed_at ? new Date(d.completed_at).toLocaleString() : ''}</div>
         {photo?.notes && <div className="text-sm text-slate-500 mt-1 italic">“{photo.notes}”</div>}
       </div>

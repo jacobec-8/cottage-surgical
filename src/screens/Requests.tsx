@@ -4,6 +4,7 @@ import { useCallback, useState, type KeyboardEvent } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
 import { AlertTriangle, Building2, ChevronRight, MapPin, Store, Truck } from 'lucide-react'
+import ItemThumb from '../components/ItemThumb'
 import { supabase } from '../lib/supabase'
 import { invalidateOrderWorkflow } from '../lib/workflowKeys'
 import { useStripeReconcile } from '../lib/useStripeReconcile'
@@ -37,7 +38,7 @@ export default function Requests() {
             'location:pickup_locations!rental_orders_location_id_fkey(name),' +
             'pickup_location:pickup_locations!rental_orders_pickup_location_id_fkey(name,address_line1,address_line2,address_city,address_state,address_zip),' +
             'customer:customers(full_name,phone,email),' +
-            'rental_line_items(quantity,is_active,equipment_unit_id,bulk_stock,equipment:equipment_items(id,name,quantity_on_hand,is_serialized,location_inventory:equipment_location_inventory(location_id,quantity_on_hand)))',
+            'rental_line_items(quantity,is_active,equipment_unit_id,bulk_stock,equipment:equipment_items(id,name,image_url,quantity_on_hand,is_serialized,location_inventory:equipment_location_inventory(location_id,quantity_on_hand)))',
         )
         .eq('status', 'requested')
         .order('created_at', { ascending: false })
@@ -186,10 +187,11 @@ export default function Requests() {
                     return (
                       <span
                         key={i}
-                        className={`inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-xs ${
+                        className={`inline-flex items-center gap-1.5 rounded py-0.5 pl-0.5 pr-2 text-xs ${
                           short ? 'bg-amber-50 text-amber-900 border border-amber-200' : 'bg-slate-100 text-slate-700'
                         }`}
                       >
+                        <ItemThumb size="xs" src={li.equipment?.image_url} />
                         {li.equipment?.name ?? 'Unknown item'}
                         {(li.quantity ?? 1) > 1 ? ` ×${li.quantity}` : ''}
                         {li.equipment && (

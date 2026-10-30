@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, type KeyboardEvent, type MouseEvent } from 'react'
-import { Calendar, ChevronRight, Package, Undo2 } from 'lucide-react'
+import { Calendar, ChevronRight, Undo2 } from 'lucide-react'
+import ItemList from '../../components/ItemList'
 import type { Charge } from './types'
-import { depositHeld, itemsLabel, paymentState, rentalPeriod, returnState, type PaymentState, type ReturnState } from './derive'
+import { depositHeld, paymentState, rentalPeriod, returnState, type PaymentState, type ReturnState } from './derive'
 import { fmtDate, fmtMoney } from '../orders/format'
 
 type Props = {
@@ -56,7 +57,6 @@ export default function BillingCard({ c, today, selected, onOpen, onRecordPaymen
   const r = returnState(c, today)
   const period = rentalPeriod(c)
   const deposit = depositHeld(c)
-  const items = itemsLabel(c)
   const orderId = c.order?.id
   // Once a payment advances the charge into a future billing period, showing
   // the same action immediately makes the payment look unsaved. Offer it again
@@ -92,12 +92,7 @@ export default function BillingCard({ c, today, selected, onOpen, onRecordPaymen
           {deposit > 0 && <span className={`${PILL} bg-blue-50 text-blue-700`}>Deposit {fmtMoney(deposit)} held</span>}
         </div>
 
-        {items && (
-          <div className="mt-1.5 flex items-start gap-1.5 text-sm text-slate-700">
-            <Package size={14} className="mt-0.5 text-slate-400 shrink-0" />
-            <span>{items}</span>
-          </div>
-        )}
+        <ItemList items={c.order?.rental_line_items ?? []} className="mt-2" />
 
         <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
           <span className="inline-flex items-center gap-1">
