@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useMemo, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { AlertCircle, Loader2, RefreshCw, Search } from 'lucide-react'
 import { supabase } from '../lib/supabase'
@@ -13,15 +14,28 @@ import { useSchedulePickup } from './orders/useSchedulePickup'
 import { useSelectedOrder } from './orders/useSelectedOrder'
 import { useLocationScope } from '../contexts/LocationContext'
 import { matchesOrderSearch } from './orders/format'
+import { useStaffModuleAccess } from '../lib/useStaffModuleAccess'
+import NewRequests, { RequestPanelActions } from './requests/NewRequests'
+import { useRequests } from './requests/useRequests'
 
-/** Confirmed / in-progress work — excludes inbox and unpaid checkouts; cancelled has its own tab. */
+/** Confirmed / in-progress work — excludes requests and unpaid checkouts; cancelled has its own tab. */
 const WORK_TABS = ['all', 'open', 'scheduled', 'pickup_scheduled', 'closed', 'cancelled'] as const
-type Tab = (typeof WORK_TABS)[number] | 'unpaid'
+type Tab = (typeof WORK_TABS)[number] | 'unpaid' | 'requests'
+/** `/orders?filter=requests` (and the old /requests page) opens on new requests. */
+export const REQUESTS_FILTER = 'requests'
 const OPEN_RENTAL_STATUSES = new Set(['open', 'active', 'overdue'])
 
 export default function Orders() {
   const { selectedLocationId } = useLocationScope()
-  const [tab, setTab] = useState<Tab>('all')
+  const params = useSearchParams()
+  const [tab, setTab] = useState<Tab>(params.get('filter') === REQUESTS_FILTER ? 'requests' : 'all')
+  // Staff module switches: order work and requests can be turned on separately.
+  const access = useStaffModuleAccess()
+  const canOrders = access.canAccess('orders')
+  const canRequests = access.canAccess('requests')
+  const requests = useRequests(selectedLocationId, canRequests)
+  // Without the Orders switch, staff with Requests see only the requests.
+  const view: Tab = canOrders ? tab : 'requests'
   const [actionMsg, setActionMsg] = useState('')
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useSelectedOrder()
@@ -32,6 +46,7 @@ export default function Orders() {
 
   const work = useQuery({
     queryKey: ['orders', selectedLocationId],
+    enabled: canOrders,
     staleTime: 0,
     refetchInterval: 15_000,
     refetchIntervalInBackground: true,
@@ -50,6 +65,7 @@ export default function Orders() {
 
   const unpaid = useQuery({
     queryKey: ['pending_payments', selectedLocationId],
+    enabled: canOrders,
     staleTime: 0,
     refetchInterval: 15_000,
     refetchIntervalInBackground: true,
@@ -69,32 +85,39 @@ export default function Orders() {
   // Search narrows every tab, including its count.
   const workRows = useMemo(() => (work.data ?? []).filter((o) => matchesOrderSearch(o, search)), [work.data, search])
   const unpaidRows = useMemo(() => (unpaid.data ?? []).filter((o) => matchesOrderSearch(o, search)), [unpaid.data, search])
+  const requestRows = useMemo(() => requests.rows.filter((r) => matchesOrderSearch(r, search)), [requests.rows, search])
   const counts = useMemo(() => {
     // "All" = live work; cancelled orders only count under their own tab.
     const live = workRows.filter((o) => o.status !== 'cancelled')
-    const c: Record<string, number> = { all: live.length, unpaid: unpaidRows.length }
+    const c: Record<string, number> = { all: live.length, unpaid: unpaidRows.length, requests: requestRows.length }
     for (const o of workRows) {
       const group = OPEN_RENTAL_STATUSES.has(o.status) ? 'open' : o.status
       c[group] = (c[group] ?? 0) + 1
     }
     return c
-  }, [workRows, unpaidRows])
+  }, [workRows, unpaidRows, requestRows])
 
-  const shown = tab === 'unpaid'
+  const shown = view === 'requests' ? []
+    : view === 'unpaid'
     ? unpaidRows
     : workRows.filter((o) => (
-        tab === 'all' ? o.status !== 'cancelled'
-          : tab === 'open' ? OPEN_RENTAL_STATUSES.has(o.status)
-            : o.status === tab
+        view === 'all' ? o.status !== 'cancelled'
+          : view === 'open' ? OPEN_RENTAL_STATUSES.has(o.status)
+            : o.status === view
       ))
 
-  const isLoading = tab === 'unpaid' ? unpaid.isLoading : work.isLoading
-  const error = tab === 'unpaid' ? unpaid.error : work.error
+  const isLoading = view === 'requests' ? false : view === 'unpaid' ? unpaid.isLoading : work.isLoading
+  const error = view === 'requests' ? null : view === 'unpaid' ? unpaid.error : work.error
 
   const tabs: { id: Tab; label: string }[] = [
-    ...WORK_TABS.map((t) => ({ id: t as Tab, label: t === 'pickup_scheduled' ? 'pickup' : t })),
-    { id: 'unpaid', label: 'unpaid' },
+    ...(canOrders ? [{ id: 'all' as Tab, label: 'all' }] : []),
+    ...(canRequests ? [{ id: 'requests' as Tab, label: 'requests' }] : []),
+    ...(canOrders ? [
+      ...WORK_TABS.filter((t) => t !== 'all').map((t) => ({ id: t as Tab, label: t === 'pickup_scheduled' ? 'pickup' : t })),
+      { id: 'unpaid' as Tab, label: 'unpaid' },
+    ] : []),
   ]
+  const showRequests = canRequests && (view === 'all' || view === 'requests')
 
   const promoted = reconcile.data?.promoted ?? 0
   const closePanel = useCallback(() => setSelected(null), [setSelected])
@@ -103,7 +126,7 @@ export default function Orders() {
     <div>
       <h2 className="sr-only">Orders</h2>
       <p className="text-slate-500 text-sm mb-5">
-        Open includes approved rentals awaiting delivery and rentals currently out. The status changes from Approved to Open after delivery.
+        New website requests are pinned at the top until you approve or decline them. Open includes approved rentals awaiting delivery and rentals currently out.
         Use Schedule pickup to queue a return on the Delivery board. Unpaid checkouts stay under Unpaid.
       </p>
 
@@ -121,34 +144,27 @@ export default function Orders() {
       <div className="flex gap-1 mb-4 flex-wrap">
         {tabs.map((t) => {
           const n = counts[t.id] ?? 0
-          const active = tab === t.id
-          const unpaidTab = t.id === 'unpaid'
+          const active = view === t.id
+          // Unpaid checkouts are amber and new requests blue, so both stand out when they have something.
+          const tone = t.id === 'unpaid' ? 'amber' : t.id === 'requests' ? 'blue' : null
+          const cls = active
+            ? tone === 'amber' ? 'bg-amber-700 text-white' : tone === 'blue' ? 'bg-blue-700 text-white' : 'bg-slate-900 text-white'
+            : tone === 'amber' && n > 0 ? 'text-amber-800 bg-amber-50 hover:bg-amber-100'
+              : tone === 'blue' && n > 0 ? 'text-blue-800 bg-blue-50 font-medium hover:bg-blue-100'
+                : 'text-slate-600 hover:bg-slate-100'
+          const countCls = active
+            ? tone === 'amber' ? 'text-amber-100' : tone === 'blue' ? 'text-blue-100' : 'text-slate-300'
+            : tone === 'amber' ? 'text-amber-600' : tone === 'blue' ? 'text-blue-600' : 'text-slate-400'
           return (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`px-3 py-1.5 text-sm rounded-lg capitalize ${
-                active
-                  ? unpaidTab
-                    ? 'bg-amber-700 text-white'
-                    : 'bg-slate-900 text-white'
-                  : unpaidTab && n > 0
-                    ? 'text-amber-800 bg-amber-50 hover:bg-amber-100'
-                    : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
+            <button key={t.id} onClick={() => setTab(t.id)} className={`px-3 py-1.5 text-sm rounded-lg capitalize ${cls}`}>
               {t.label}{' '}
-              {n ? (
-                <span className={active ? (unpaidTab ? 'text-amber-100' : 'text-slate-300') : unpaidTab ? 'text-amber-600' : 'text-slate-400'}>
-                  · {n}
-                </span>
-              ) : null}
+              {n ? <span className={countCls}>· {n}</span> : null}
             </button>
           )
         })}
       </div>
 
-      {tab === 'unpaid' && (
+      {view === 'unpaid' && (
         <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <div className="flex items-start gap-2">
             <AlertCircle size={16} className="mt-0.5 shrink-0" />
@@ -156,7 +172,7 @@ export default function Orders() {
               <p className="font-medium">Unpaid or unconfirmed checkouts</p>
               <p className="mt-0.5 text-amber-800/90">
                 Abandoned carts stay here. If a customer paid but closed the browser, use{' '}
-                <strong>Verify payment</strong> (or wait for the automatic sweep) — paid orders move to Requests.
+                <strong>Verify payment</strong> (or wait for the automatic sweep) — paid orders move to New requests at the top of Orders.
                 Do not fulfill from this list until payment is confirmed.
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-amber-800/80">
@@ -186,17 +202,21 @@ export default function Orders() {
         </div>
       )}
 
+      {showRequests && (
+        <NewRequests requests={{ ...requests, rows: requestRows }} selected={selected} onOpen={setSelected} showEmpty={view === 'requests'} />
+      )}
+
       {isLoading && <div className="text-slate-500">Loading…</div>}
       {error && <div className="text-red-600 text-sm">Couldn’t load orders. Please try again.</div>}
-      {!isLoading && !error && shown.length === 0 && (
+      {view !== 'requests' && !isLoading && !error && shown.length === 0 && (
         <div className="text-slate-500 text-sm">
-          {search.trim() ? 'No orders match this search.' : tab === 'unpaid' ? 'No unpaid checkouts right now.' : 'No orders here yet.'}
+          {search.trim() ? 'No orders match this search.' : view === 'unpaid' ? 'No unpaid checkouts right now.' : 'No orders here yet.'}
         </div>
       )}
 
       <div className="space-y-2">
         {shown.map((o) =>
-          tab === 'unpaid' ? (
+          view === 'unpaid' ? (
             <UnpaidRow key={o.id} o={o} onOpen={setSelected} />
           ) : (
             <OrderCard
@@ -212,7 +232,10 @@ export default function Orders() {
         )}
       </div>
 
-      {selected && <OrderDetailPanel orderId={selected} onClose={closePanel} />}
+      {selected && (
+        <OrderDetailPanel orderId={selected} onClose={closePanel}
+          actions={canRequests ? <RequestPanelActions requests={requests} orderId={selected} /> : undefined} />
+      )}
     </div>
   )
 }
