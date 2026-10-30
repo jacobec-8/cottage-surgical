@@ -240,10 +240,10 @@ test('cart quantity persists across reload and items can be removed', async ({ p
     .locator('div.border.border-slate-200.rounded-xl')
     .filter({ hasText: 'Playwright Wheelchair' })
   await expect(cartItem).toBeVisible()
-  await expect(drawer.getByRole('button', { name: 'Continue to checkout (1)' })).toBeVisible()
+  await expect(drawer.getByRole('link', { name: 'Continue to checkout (1)' })).toBeVisible()
 
   await cartItem.locator('button').nth(1).click()
-  await expect(drawer.getByRole('button', { name: 'Continue to checkout (2)' })).toBeVisible()
+  await expect(drawer.getByRole('link', { name: 'Continue to checkout (2)' })).toBeVisible()
   await expect(drawer.getByText('$250/mo', { exact: true })).toBeVisible()
   await expect
     .poll(() =>
@@ -257,16 +257,16 @@ test('cart quantity persists across reload and items can be removed', async ({ p
     .toBe(2)
 
   await page.reload({ waitUntil: 'domcontentloaded' })
-  await page.getByRole('button', { name: 'Cart', exact: true }).click()
+  await openCart(page)
 
   const restoredItem = page
     .locator('aside div.border.border-slate-200.rounded-xl')
     .filter({ hasText: 'Playwright Wheelchair' })
   await expect(restoredItem).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Continue to checkout (2)' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Continue to checkout (2)' })).toBeVisible()
 
   await restoredItem.locator('button').first().click()
-  await expect(page.getByRole('button', { name: 'Continue to checkout (1)' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Continue to checkout (1)' })).toBeVisible()
   await expect(drawer.getByText('$125/mo', { exact: true }).last()).toBeVisible()
 
   await restoredItem.locator('button').nth(2).click()
@@ -285,29 +285,31 @@ test('checkout offers assigned pickup locations and keeps hospital beds delivery
   const wheelchair = page.getByRole('link', { name: 'Playwright Wheelchair', exact: true }).locator('..')
   await wheelchair.getByRole('button', { name: 'Rent Now' }).click()
   const drawer = page.locator('aside')
-  await drawer.getByRole('button', { name: 'Continue to checkout (1)' }).click()
+  await drawer.getByRole('link', { name: 'Continue to checkout (1)' }).click()
+  await expect(page).toHaveURL(/\/checkout$/)
 
-  const pickup = drawer.getByRole('radio', { name: /In-store pickup/i })
+  const pickup = page.getByRole('radio', { name: /In-store pickup/i })
   await expect(pickup).toBeEnabled()
-  await drawer.getByText('In-store pickup', { exact: true }).click()
-  await expect(drawer.getByLabel('Pickup location')).toHaveValue('playwright-woodbury')
-  await expect(drawer.getByText(/Same-day pickup may be available/i)).toBeVisible()
-  await expect(drawer.getByPlaceholder('Delivery address')).toHaveCount(0)
-  await expect(drawer.getByText('Pay In Store', { exact: true })).toBeVisible()
-  await expect(drawer.getByText('Pay Online', { exact: true })).toBeVisible()
+  await page.getByText('In-store pickup', { exact: true }).click()
+  await expect(page.getByLabel('Pickup location')).toHaveValue('playwright-woodbury')
+  await expect(page.getByText(/Same-day pickup may be available/i)).toBeVisible()
+  await expect(page.getByPlaceholder('Delivery address')).toHaveCount(0)
+  await expect(page.getByText('Pay In Store', { exact: true })).toBeVisible()
+  await expect(page.getByText('Pay Online', { exact: true })).toBeVisible()
 
   await page.evaluate(() => localStorage.removeItem('cs_cart_v1'))
-  await page.reload({ waitUntil: 'domcontentloaded' })
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
   const bed = page.getByRole('link', { name: 'Playwright Hospital Bed', exact: true }).locator('..')
   await bed.getByRole('button', { name: 'Rent Now' }).click()
-  await drawer.getByRole('button', { name: 'Continue to checkout (1)' }).click()
-  await expect(drawer.getByRole('radio', { name: /In-store pickup/i })).toBeDisabled()
-  await expect(drawer.getByRole('radio', { name: /^Delivery\b/i })).toBeChecked()
-  await expect(drawer.getByPlaceholder('Delivery address')).toBeVisible()
-  await expect(drawer.getByText('Pay Delivery Person', { exact: true })).toBeVisible()
-  await expect(drawer.getByText('Pay Online', { exact: true })).toBeVisible()
-  await expect(drawer.getByText('Pay In Store', { exact: true })).toHaveCount(0)
-  await expect(drawer.getByRole('button', { name: 'Submit Request' })).toBeVisible()
+  await drawer.getByRole('link', { name: 'Continue to checkout (1)' }).click()
+  await expect(page).toHaveURL(/\/checkout$/)
+  await expect(page.getByRole('radio', { name: /In-store pickup/i })).toBeDisabled()
+  await expect(page.getByRole('radio', { name: /^Delivery\b/i })).toBeChecked()
+  await expect(page.getByPlaceholder('Delivery address')).toBeVisible()
+  await expect(page.getByText('Pay Delivery Person', { exact: true })).toBeVisible()
+  await expect(page.getByText('Pay Online', { exact: true })).toBeVisible()
+  await expect(page.getByText('Pay In Store', { exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Submit Request' })).toBeVisible()
 })
 
 test('checkout refreshes pickup settings in a saved cart', async ({ page }) => {
@@ -331,13 +333,14 @@ test('checkout refreshes pickup settings in a saved cart', async ({ page }) => {
   })
 
   await openPublicRoute(page, '/')
-  await page.getByRole('button', { name: 'Cart', exact: true }).click()
+  await openCart(page)
   const drawer = page.locator('aside')
-  await drawer.getByRole('button', { name: 'Continue to checkout (1)' }).click()
+  await drawer.getByRole('link', { name: 'Continue to checkout (1)' }).click()
+  await expect(page).toHaveURL(/\/checkout$/)
 
-  await expect(drawer.getByRole('radio', { name: /In-store pickup/i })).toBeEnabled()
-  await drawer.getByText('In-store pickup', { exact: true }).click()
-  await expect(drawer.getByLabel('Pickup location')).toHaveValue('playwright-woodbury')
+  await expect(page.getByRole('radio', { name: /In-store pickup/i })).toBeEnabled()
+  await page.getByText('In-store pickup', { exact: true }).click()
+  await expect(page.getByLabel('Pickup location')).toHaveValue('playwright-woodbury')
 })
 
 test('double-clicking rental submit sends one request', async ({ page }) => {
@@ -361,16 +364,132 @@ test('double-clicking rental submit sends one request', async ({ page }) => {
   await productDetails.getByRole('button', { name: 'Rent Now' }).click()
 
   const drawer = page.locator('aside')
-  await drawer.getByRole('button', { name: 'Continue to checkout (1)' }).click()
-  await drawer.getByText('In-store pickup', { exact: true }).click()
-  await drawer.getByPlaceholder('Full name').fill('Repeat Customer')
-  await drawer.getByPlaceholder('Phone').fill('5165550100')
-  await drawer.getByPlaceholder('Email').fill('repeat@example.com')
-  await drawer.getByRole('button', { name: 'Submit Request' }).dblclick()
+  await drawer.getByRole('link', { name: 'Continue to checkout (1)' }).click()
+  await expect(page).toHaveURL(/\/checkout$/)
+  await page.getByText('In-store pickup', { exact: true }).click()
+  await page.getByPlaceholder('Full name').fill('Repeat Customer')
+  await page.getByPlaceholder('Phone').fill('5165550100')
+  await page.getByPlaceholder('Email').fill('repeat@example.com')
+  await page.getByRole('button', { name: 'Submit Request' }).dblclick()
 
-  await expect(drawer.getByText('Request received: #4321', { exact: true })).toBeVisible()
-  await expect(drawer).not.toContainText('please wait a moment before sending the rest')
+  await expect(page.getByText('Request received: #4321', { exact: true })).toBeVisible()
+  await expect(page.locator('main')).not.toContainText('please wait a moment before sending the rest')
   expect(submissions).toBe(1)
+})
+
+const ORDER = '4bd8b3c4-6012-4eac-8c42-49cc2d7edb28'
+
+function savedCartItem(mode: 'rent' | 'purchase') {
+  return {
+    id: catalog[0].id,
+    name: catalog[0].name,
+    image_url: null,
+    category: catalog[0].category,
+    mode,
+    price: catalog[0].delivery_rental_price,
+    pickup_price: catalog[0].pickup_rental_price,
+    delivery_price: catalog[0].delivery_rental_price,
+    qty: 1,
+    pickup_enabled: true,
+    delivery_enabled: true,
+    same_day_pickup: false,
+    pickup_locations: [],
+  }
+}
+
+/** A click before the page has hydrated does nothing, so retry until the cart has actually slid in. */
+async function openCart(page: Page) {
+  await expect(async () => {
+    await page.getByRole('button', { name: 'Cart', exact: true }).click()
+    await expect(page.locator('aside')).toBeInViewport({ ratio: 1, timeout: 1000 })
+  }).toPass()
+}
+
+async function mockRpc(page: Page, name: string, reply: unknown) {
+  let calls = 0
+  await page.route(`**/rest/v1/rpc/${name}`, async (route) => {
+    calls += 1
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(reply),
+      headers: { 'access-control-allow-origin': '*' },
+    })
+  })
+  return () => calls
+}
+
+test('the cart is narrow on a desktop and full width on a phone', async ({ page }) => {
+  await mockCatalogReads(page)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await openPublicRoute(page, '/')
+  await openCart(page)
+  await expect.poll(async () => (await page.locator('aside').boundingBox())?.width).toBe(380)
+  await page.setViewportSize({ width: 390, height: 800 })
+  await expect.poll(async () => (await page.locator('aside').boundingBox())?.width).toBe(390)
+})
+
+test('checkout shows the items beside the form', async ({ page }) => {
+  await mockCatalogReads(page)
+  await page.addInitScript((item) => localStorage.setItem('cs_cart_v1', JSON.stringify([item])), savedCartItem('rent'))
+  await openPublicRoute(page, '/checkout')
+  const summary = page.getByRole('region', { name: 'Your order' })
+  await expect(summary.getByText(catalog[0].name, { exact: true })).toBeVisible()
+  await expect(summary.getByText('Due today', { exact: true })).toBeVisible()
+  await expect(page.getByPlaceholder('Full name')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Checkout', exact: true })).toBeVisible()
+})
+
+test('a cart with a purchase pays online as one payment, with no pay-later option', async ({ page }) => {
+  await mockCatalogReads(page)
+  await page.addInitScript((items) => localStorage.setItem('cs_cart_v1', JSON.stringify(items)), [savedCartItem('rent'), savedCartItem('purchase')])
+  await openPublicRoute(page, '/checkout')
+  await expect(page.getByText(/everything is paid online together/)).toBeVisible()
+  await expect(page.getByText('Pay Delivery Person', { exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Continue to Secure Payment' })).toBeVisible()
+})
+
+test('cancelling in Stripe comes back to checkout with the cart and details intact', async ({ page }) => {
+  await mockCatalogReads(page)
+  const cancels = await mockRpc(page, 'cancel_stripe_checkout', { ok: true, paid: false, released: true })
+  await page.addInitScript((item) => {
+    localStorage.setItem('cs_cart_v1', JSON.stringify([item]))
+    sessionStorage.setItem('cs_checkout_draft', JSON.stringify({
+      form: { full_name: 'Back Again', phone: '', email: 'back@example.com', line1: '1 Main St', city: 'Melville', state: 'NY', zip: '11747', notes: '' },
+      fulfillment: 'delivery', pickupLocationId: '', payment: 'online',
+    }))
+  }, savedCartItem('rent'))
+  await openPublicRoute(page, `/checkout?cancelled=${ORDER}`)
+  await expect(page.getByRole('status').filter({ hasText: 'Payment cancelled' })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Your order' }).getByText(catalog[0].name, { exact: true })).toBeVisible()
+  await expect(page.getByPlaceholder('Full name')).toHaveValue('Back Again')
+  await expect(page).toHaveURL(/\/checkout$/)
+  expect(cancels()).toBe(1)
+})
+
+test('coming back to a session that was paid goes to the confirmation, not a second order', async ({ page }) => {
+  await mockCatalogReads(page)
+  await mockRpc(page, 'cancel_stripe_checkout', { ok: true, paid: true, released: false })
+  await mockRpc(page, 'verify_stripe_payment', { ok: true, paid: true, order_ids: [ORDER] })
+  await mockRpc(page, 'dispatch_order_emails', { ok: true })
+  await page.addInitScript(({ item, order }) => {
+    if (!sessionStorage.getItem('seeded')) {
+      sessionStorage.setItem('seeded', '1')
+      localStorage.setItem('cs_cart_v1', JSON.stringify([item]))
+      localStorage.setItem('cs_checkout_pending', order)
+    }
+  }, { item: savedCartItem('rent'), order: ORDER })
+  await openPublicRoute(page, '/checkout')
+  await expect(page).toHaveURL(new RegExp(`/checkout/success\\?ref=${ORDER}$`))
+  await expect(page.getByRole('heading', { name: /Payment received/ })).toBeVisible()
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('cs_cart_v1') || '[]').length)).toBe(0)
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('cs_checkout_pending'))).toBeNull()
+})
+
+test('an empty cart at checkout says so', async ({ page }) => {
+  await mockCatalogReads(page)
+  await openPublicRoute(page, '/checkout')
+  await expect(page.getByRole('heading', { name: 'Your cart is empty' })).toBeVisible()
 })
 
 test('public links use client navigation and support browser history', async ({ page }) => {

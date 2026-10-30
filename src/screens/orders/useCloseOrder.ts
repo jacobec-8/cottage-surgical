@@ -14,6 +14,9 @@ const REASONS: Record<string, string> = {
   refund_not_configured: 'Stripe refunding is not configured. The order was not cancelled.',
   refund_lookup_failed: 'Couldn’t locate the Stripe payment. The order was not cancelled; try again or check Stripe.',
   refund_failed: 'Stripe did not accept the refund. The order was not cancelled; try again or check Stripe.',
+  refund_amount_unknown: 'This order shares a card payment with another order, and its recorded payment doesn’t match what was charged. The order was not cancelled; check the amount in Stripe.',
+  checkout_open: 'The customer’s Stripe payment couldn’t be closed. The order was not cancelled; try again in a moment.',
+  just_paid: 'The customer has just paid. The order was not cancelled; cancel it again to refund them.',
 }
 
 type Result = { ok: boolean; reason?: string; units_released?: number; bulk_released?: number; legs_cancelled?: number; refunded?: boolean }
