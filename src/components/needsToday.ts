@@ -1,7 +1,6 @@
 // "Needs you today": what staff at the chosen pharmacy must act on now.
 // Pure counting and row rules for the sidebar panel. The queries live in
 // needsTodayQuery.ts / useNeedsToday.ts and the markup in NeedsTodayPanel.tsx.
-import { BACKOFFICE_ROLES } from '../lib/roles.ts'
 import type { StaffModule } from '../lib/staffModules'
 import { isLate } from '../screens/delivery/stopStatus.ts'
 
@@ -100,9 +99,9 @@ export function needsTodayTotal(rows: readonly NeedsTodayRow[]): number {
   return rows.reduce((total, row) => total + row.count, 0)
 }
 
-/** Staff, the owner and admins see the panel; drivers never do. */
+/** Store staff only: owners and admins oversee many pharmacies, and drivers have their own screen. */
 export function canSeeNeedsToday(role: string | undefined): boolean {
-  return BACKOFFICE_ROLES.includes(role ?? '')
+  return role === 'staff'
 }
 
 export type NeedsTodayStatus = 'loading' | 'error' | 'ready'

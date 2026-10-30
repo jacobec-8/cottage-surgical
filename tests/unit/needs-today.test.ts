@@ -130,8 +130,8 @@ test('the stops row names what is not started and what is late, only when above 
 
 test('staff, the owner and admins see the panel; drivers and visitors never do', () => {
   assert.equal(canSeeNeedsToday('staff'), true)
-  assert.equal(canSeeNeedsToday('owner'), true)
-  assert.equal(canSeeNeedsToday('admin'), true)
+  assert.equal(canSeeNeedsToday('owner'), false, 'too much for an owner across pharmacies')
+  assert.equal(canSeeNeedsToday('admin'), false)
   assert.equal(canSeeNeedsToday('driver'), false)
   assert.equal(canSeeNeedsToday('customer'), false)
   assert.equal(canSeeNeedsToday(undefined), false)
