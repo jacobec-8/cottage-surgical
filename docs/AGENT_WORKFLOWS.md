@@ -394,6 +394,7 @@ out of stock (red = needs action). Clicking a row switches to that store.
 | Driver stop | Driver: **Start stop**, then **Complete + photo** when the real stop is complete. A second start is refused until the en-route stop is completed, unassigned or cancelled (075). Staff has **⋯ → Mark delivered/picked up (no photo)** for an en-route stop. | Completion, proof photo (or intentional override), order/unit state. Do not fabricate handoff evidence. Outbound stops with unallocated serialized lines are refused; a photo path must be an uploaded image under that stop's `delivery-photos/{delivery_id}/` folder (063). |
 | Missed stop | Driver at the stop: **Couldn’t deliver** / **Couldn’t pick up**. Store staff: **⋯ → Report missed delivery/pickup** on a scheduled or en-route stop. Choose the reason (note required for Other), **Confirm** (`report_missed_stop`, 097). The stop returns to needs-scheduling (no driver, no date), the driver is freed for their next stop, a missed delivery’s order goes back to Approved, and the customer is emailed to rebook. | The stop shows “Missed <date>: <reason>”; staff set a new driver and date. Stops past their date read **Late: was <date>** (a red badge on the driver's screen) and sort first; the owner’s Stores table counts late stops. |
 | Customer collects at store | Staff: **Mark picked up**, no driver or photo required. | Rental becomes `active` (displayed **Open**); units rented; billing starts. Purchase closes instead. |
+| Mark an order paid | Order detail → **Payment** → Paid in store / Paid delivery person / Paid online. From Not paid, a form asks **how much did you take?**, pre-filled with what's due (a purchase's total or a rental's first month) plus any deposit held; change it if a different amount changed hands, then **Confirm paid** (`set_order_payment_state` with `p_amount`/`p_deposit`, 115). Switching back to Not paid saves at once. | The order's **Money records** (owners/admins) show the payment with the amount, method, time and who recorded it, plus "($X was due)" when it differed. Back to Not paid adds a "Payment reversed" record; records are never edited or deleted (114). |
 | Record monthly payment | **Billing → Record payment** after money is actually received. | Last-paid date, next due advanced one month, and order payment badge. This records payment and queues a customer receipt (071); it does not charge a card. Each submission names the due date on screen, so a double-click, retry or concurrent duplicate is refused as already recorded; recording another month after the refresh advances again (064). The first due date is set at handoff: the billing start, or a month later when the first month was already paid (085); Set due date remains for corrections. |
 | Set order payment badge | Order detail **Payment** selection calls `set_order_payment_state`. | Persisted badge and correct payment method. A manually set **Paid Online** badge is not independent proof of Stripe settlement. |
 | Return pickup | **Schedule pickup** on the order, or **Delivery & Pickup → + New**: choose a rental that's out with the customer (active, overdue or delivered, no open return pickup) and optionally its driver, date and time, then **Add pickup** (both call `schedule_pickup`). Then dispatch/start/complete the return stop. Own-store staff and admins can schedule; another store's staff is refused; a repeat returns the existing stop. A rental with no home address (e.g. collected in store) asks for the collection address first; never substitute the store's address. If the customer brings it back to the store, use Close out instead. A driver cannot start a stop with no address (068). | Order closed, billing ended, equipment released. Current implementation makes returned units immediately available. |
@@ -472,6 +473,33 @@ Core status meanings:
 
 The Orders **Open** tab groups approved, active, and overdue orders. Always
 inspect the individual order and its stops before choosing the next action.
+
+## 6. Owner reports and money records
+
+**Reports** (`/reports`, sidebar). The header's store picker decides the scope:
+**All locations** combines every pharmacy the viewer can see and adds a row
+per pharmacy (click one to open it); one pharmacy shows that pharmacy alone.
+Pick **This month / Last month / Last 90 days / This year / Custom**; headline
+numbers compare with the same number of days just before.
+
+- Owners and admins see money: revenue (money received, minus refunds and
+  reversals, plus deposits the pharmacy kept; deposits held are not revenue),
+  overdue now by age, monthly billing, deposits, and the **Money records** tab
+  (search, CSV download). Store staff see only their own pharmacy's rentals,
+  stops, customers and equipment; no money anywhere (`can_see_money`, 114).
+- **Money records** (`money_records`, 114) start on Oct 30, 2026 (no backfill):
+  every order marked paid / not paid / refunded, every **Billing → Record
+  payment**, and every deposit taken, returned or kept, with who, when and how.
+  They can't be changed or deleted. The same list appears per order (order
+  detail) and per customer (customer pane) for owners and admins.
+- Trends: `store_daily_snapshots` (hourly) and `order_events` (every order
+  status change) also start on Oct 30, 2026.
+
+Verify: open Reports as an owner or admin and as store staff; the staff view
+has no Revenue, Overdue now or Money records. Implementation:
+[Reports.tsx](../src/screens/Reports.tsx), `src/screens/reports/`,
+[114](../supabase/migrations/114_money_records_and_reports.sql),
+[115](../supabase/migrations/115_mark_paid_records_amount.sql).
 
 ## Known limitations to recognize, not silently work around
 

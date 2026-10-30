@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import {
   LayoutDashboard, PlusCircle, Users, Package, CreditCard, Truck,
-  LogOut, Shield, ChevronRight, MapPin, Phone, Mail, Inbox, UserCog, ClipboardList, LockKeyhole, UsersRound, Menu, X, Building2,
+  LogOut, Shield, ChevronRight, MapPin, Phone, Mail, Inbox, UserCog, ClipboardList, LockKeyhole, UsersRound, Menu, X, Building2, BarChart3,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useLocationScope } from '../contexts/LocationContext'
@@ -34,6 +34,7 @@ const NAV = [
   { to: '/inventory', label: 'Inventory', icon: Package, roles: STAFF, module: 'inventory' },
   { to: '/billing', label: 'Billing', icon: CreditCard, roles: STAFF, module: 'billing' },
   { to: '/delivery', label: 'Delivery & Pickup', icon: Truck, roles: ALL, workspace: 'delivery' },
+  { to: '/reports', label: 'Reports', icon: BarChart3, roles: STAFF },
   { to: '/staff', label: 'Staff', icon: UsersRound, roles: ['admin', 'owner'], workspace: 'staff' },
   { to: '/locations', label: 'Locations', icon: Building2, roles: ['admin'], adminOnly: true },
 ]
