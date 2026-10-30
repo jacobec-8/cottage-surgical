@@ -8,6 +8,7 @@ import { supabase } from '../../lib/supabase'
 import { useCart } from '../../components/shop/CartContext'
 import ShopHeader from '../../components/shop/ShopHeader'
 import ShopFooter from '../../components/shop/ShopFooter'
+import { clearCheckoutDraft, forgetPendingCheckout } from '../../lib/checkoutSession'
 import { dispatchOrderEmails } from '../../lib/customerEmails'
 
 type State = 'checking' | 'paid' | 'unpaid' | 'error'
@@ -29,7 +30,10 @@ export default function CheckoutSuccess() {
         const { data, error } = await supabase.rpc('verify_stripe_payment', { p_order_id: ref })
         if (!error && data?.ok && data.paid) {
           clear()
-          void dispatchOrderEmails(ref)
+          forgetPendingCheckout()
+          clearCheckoutDraft()
+          // One payment can cover a rental and a purchase (118); each order has its own mail.
+          for (const id of (data.order_ids as string[] | undefined) ?? [ref]) void dispatchOrderEmails(id)
           setState('paid')
           return
         }
@@ -65,7 +69,7 @@ export default function CheckoutSuccess() {
             <CheckCircle className="mx-auto text-emerald-600 mb-4" size={48} />
             <h1 className="font-serif font-bold text-navy text-3xl">Payment received — request submitted!</h1>
             <p className="text-slate-600 mt-3">
-              We received your first rental payment. Our team will review equipment availability and email you when your request is accepted and scheduled.
+              We received your payment. Our team will review equipment availability and email you when your request is accepted and scheduled.
             </p>
             <Link href="/" className="inline-block mt-6 bg-navy text-white rounded-lg px-6 py-3 font-semibold">Back to shop</Link>
           </>

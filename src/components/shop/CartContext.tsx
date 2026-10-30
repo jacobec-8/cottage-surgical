@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { PRODUCT_FIELDS, type PickupLocation, type Product } from '../../lib/shop'
 import { publicSupabase } from '../../lib/publicSupabase'
 import { withLatestProduct } from '../../lib/cartRefresh'
+import { clearCheckoutDraft, forgetPendingCheckout, pendingCheckout } from '../../lib/checkoutSession'
 
 export type CartMode = 'rent' | 'purchase'
 export type CartItem = {
@@ -24,6 +25,8 @@ export type CartItem = {
 
 type Ctx = {
   items: CartItem[]
+  /** False until the saved cart is read, so an empty list isn't mistaken for an empty cart. */
+  hydrated: boolean
   open: boolean
   setOpen: (o: boolean) => void
   add: (i: Omit<CartItem, 'qty'>) => void
@@ -118,6 +121,23 @@ export function CartProvider({ children }: { children: ReactNode }) {
     return () => document.removeEventListener('visibilitychange', onVisible)
   }, [refreshFromStore])
 
+  // Paid, then closed the tab before coming back: don't let them order the same cart again.
+  useEffect(() => {
+    if (!hydrated) return
+    const ref = pendingCheckout()
+    if (!ref) return
+    void publicSupabase.rpc('verify_stripe_payment', { p_order_id: ref }).then(({ data, error }) => {
+      if (error || !data?.ok) return
+      if (data.paid) {
+        setItems([])
+        clearCheckoutDraft()
+      } else if (data.state) {
+        return // Still open in Stripe; they may yet pay.
+      }
+      forgetPendingCheckout()
+    })
+  }, [hydrated])
+
   const add: Ctx['add'] = (i) => {
     setItems((cur) => {
       const ex = cur.find((c) => c.id === i.id && c.mode === i.mode)
@@ -139,7 +159,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const count = items.reduce((n, c) => n + c.qty, 0)
 
   return (
-    <CartContext.Provider value={{ items, open, setOpen, add, setQty, remove, clear, count }}>
+    <CartContext.Provider value={{ items, hydrated, open, setOpen, add, setQty, remove, clear, count }}>
       {children}
     </CartContext.Provider>
   )
