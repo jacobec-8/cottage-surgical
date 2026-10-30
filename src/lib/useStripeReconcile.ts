@@ -18,6 +18,7 @@ const AFFECTED_KEYS = [
   'orders',
   'pending_payments',
   'nav_counts',
+  'needs_today',
   'dashboard',
   'rentals',
   'customers',

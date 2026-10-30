@@ -16,13 +16,13 @@ import type { RealtimeInvalidateMap } from '../lib/useRealtimeInvalidateMany'
 const STAFF_SYNC: RealtimeInvalidateMap = {
   // Order status flips (confirm, complete_delivery, storefront inserts) feed
   // the Orders list, Requests inbox, Dashboard tiles + rentals, and badges.
-  rental_orders: ['orders', 'requests', 'rentals', 'dashboard', 'nav_counts', 'pending_payments'],
+  rental_orders: ['orders', 'requests', 'rentals', 'dashboard', 'nav_counts', 'needs_today', 'pending_payments'],
   // Delivery legs feed the dispatch board, badges, KPIs, and the Orders list
   // (which embeds deliveries(status)).
-  deliveries: ['deliveries', 'nav_counts', 'dashboard', 'orders'],
+  deliveries: ['deliveries', 'nav_counts', 'needs_today', 'dashboard', 'orders'],
   // confirm_rental_request INSERTs charges; complete_delivery flips them
   // current/ended — the Billing page and Billing KPIs must follow.
-  recurring_charges: ['recurring_charges', 'dashboard'],
+  recurring_charges: ['recurring_charges', 'dashboard', 'needs_today'],
   // Storefront/Stripe/Square checkouts and New Order create customers.
   customers: ['customers', 'cust_search', 'dashboard'],
   // refresh_quantity_on_hand rewrites quantity_on_hand on unit reservations
