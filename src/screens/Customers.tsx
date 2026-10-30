@@ -45,7 +45,7 @@ export default function Customers() {
   return (
     <div>
       <h1 className="text-xl font-semibold mb-1">Customer Directory</h1>
-      <p className="text-slate-500 text-sm mb-6">Tap any customer to see their rentals, payments and details.</p>
+      <p className="text-slate-500 text-sm mb-6">Tap any customer to see their rentals and details.</p>
       {isLoading && <div className="text-slate-500">Loading…</div>}
       {error && <div className="text-red-600 text-sm">{(error as Error).message}</div>}
       {data && data.length > 0 && (

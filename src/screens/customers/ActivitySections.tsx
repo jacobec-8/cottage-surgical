@@ -9,7 +9,6 @@ import { Section } from '../orders/DetailSections'
 import { fmtDate, fmtMoney } from '../orders/format'
 import { SELECTED_ORDER_PARAM } from '../orders/useSelectedOrder'
 import { itemsOf, stopKind, type MoneySummary, type SummaryOrder, type UpcomingStop } from './customerSummary'
-import type { CustomerPayment } from './useCustomerDetail'
 
 const orderHref = (id: string) => `/orders?${SELECTED_ORDER_PARAM}=${id}`
 const ROW = 'flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2.5 text-sm hover:bg-slate-50'
@@ -73,24 +72,6 @@ export function UpcomingSection({ stops }: { stops: UpcomingStop[] }) {
                 </span>
                 <span className={`rounded-full px-2 py-0.5 text-xs capitalize ${statusClass(s.status)}`}>{statusLabel(s.status)}</span>
               </Link>
-            </li>
-          ))}
-        </ul>
-      )}
-    </Section>
-  )
-}
-
-export function PaymentsSection({ payments, nextDue }: { payments: CustomerPayment[]; nextDue: string | null }) {
-  return (
-    <Section title="Payments" aside={nextDue ? <span className="text-xs text-slate-500">Next due {fmtDate(nextDue)}</span> : undefined}>
-      {payments.length === 0 ? <None text="No monthly payments recorded yet." /> : (
-        <ul className={LIST}>
-          {payments.map((p) => (
-            <li key={p.id} className="flex flex-wrap items-center gap-x-2 px-3 py-2.5 text-sm">
-              <span className="font-medium">{fmtMoney(p.amount)}</span>
-              <span className="text-slate-500">paid {fmtDate(p.paid_on)}</span>
-              {p.order && <Link href={orderHref(p.order.id)} className="ml-auto text-slate-400 hover:text-blue-700">#{p.order.order_no}</Link>}
             </li>
           ))}
         </ul>

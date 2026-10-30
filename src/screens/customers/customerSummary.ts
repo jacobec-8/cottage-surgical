@@ -44,17 +44,15 @@ export function itemsOf(o: Pick<SummaryOrder, 'rental_line_items'>): string {
     .join(', ')
 }
 
-export type MoneySummary = { overdue: number; monthly: number; depositsHeld: number; nextDue: string | null }
+export type MoneySummary = { overdue: number; monthly: number; depositsHeld: number }
 
 export function moneySummary(orders: readonly SummaryOrder[]): MoneySummary {
   const charges = orders.flatMap((o) => o.recurring_charges)
   const billing = charges.filter((c) => BILLING.has(c.status))
-  const nextDue = billing.map((c) => c.next_due_date).filter((d): d is string => Boolean(d)).sort()[0] ?? null
   return {
     overdue: sum(charges.filter((c) => c.status === 'overdue').map((c) => c.amount)),
     monthly: sum(billing.map((c) => c.amount)),
     depositsHeld: sum(orders.flatMap((o) => o.deposits).filter((d) => d.status === 'held').map((d) => d.amount)),
-    nextDue,
   }
 }
 

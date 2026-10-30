@@ -3,7 +3,7 @@
 import { useMemo, useRef } from 'react'
 import { Loader2, Mail, Phone, X } from 'lucide-react'
 import { useDialogFocus } from '../../lib/useDialogFocus'
-import { HistorySection, OutNowSection, PaymentsSection, SummaryTiles, UpcomingSection } from './ActivitySections'
+import { HistorySection, OutNowSection, SummaryTiles, UpcomingSection } from './ActivitySections'
 import ContactSection from './ContactSection'
 import { moneySummary, newestFirst, outNow, upcomingStops } from './customerSummary'
 import { useCustomerDetail, type CustomerDetail } from './useCustomerDetail'
@@ -41,7 +41,7 @@ export default function CustomerPanel({ customerId, onClose }: { customerId: str
 }
 
 function PanelBody({ detail, onClose }: { detail: CustomerDetail; onClose: () => void }) {
-  const { customer: c, orders, payments } = detail
+  const { customer: c, orders } = detail
   const view = useMemo(() => ({
     out: outNow(orders), money: moneySummary(orders), stops: upcomingStops(orders), history: newestFirst(orders),
   }), [orders])
@@ -68,7 +68,6 @@ function PanelBody({ detail, onClose }: { detail: CustomerDetail; onClose: () =>
         <OutNowSection orders={view.out} />
         <UpcomingSection stops={view.stops} />
         <ContactSection key={c.id} c={c} />
-        <PaymentsSection payments={payments} nextDue={view.money.nextDue} />
         <HistorySection orders={view.history} />
         <MoneyRecordsSection scope={{ kind: 'customer', customerId: c.id }} filename={`money-records-${c.full_name.replace(/\W+/g, '-').toLowerCase()}.csv`} />
       </div>

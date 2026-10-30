@@ -34,8 +34,8 @@ test('money: overdue and monthly come from billing charges, deposits only while 
     order({ recurring_charges: [{ amount: 30, status: 'current', next_due_date: '2026-11-02' }, { amount: 99, status: 'ended', next_due_date: '2026-01-01' }],
       deposits: [{ amount: 40, status: 'refunded' }] }),
   ]
-  assert.deepEqual(moneySummary(orders), { overdue: 50, monthly: 80, depositsHeld: 100, nextDue: '2026-10-05' })
-  assert.deepEqual(moneySummary([]), { overdue: 0, monthly: 0, depositsHeld: 0, nextDue: null })
+  assert.deepEqual(moneySummary(orders), { overdue: 50, monthly: 80, depositsHeld: 100 })
+  assert.deepEqual(moneySummary([]), { overdue: 0, monthly: 0, depositsHeld: 0 })
 })
 
 test('upcoming stops: open ones only, soonest first, undated last, tagged with the order', () => {
