@@ -32,8 +32,16 @@ const BILLING: ReadonlySet<string> = new Set(['current', 'overdue'])
 
 const sum = (values: number[]) => values.reduce((total, v) => total + Number(v || 0), 0)
 
-export function outNow(orders: readonly SummaryOrder[]): SummaryOrder[] {
+export function outNow<T extends Pick<SummaryOrder, 'order_type' | 'status'>>(orders: readonly T[]): T[] {
   return orders.filter((o) => o.order_type === 'rental' && OUT_STATUSES.has(o.status))
+}
+
+/** "JC" for Jacob Chandran: the first and last word of the name. */
+export function customerInitials(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean)
+  if (words.length === 0) return '?'
+  const picked = words.length === 1 ? words : [words[0], words[words.length - 1]]
+  return picked.map((word) => word[0].toUpperCase()).join('')
 }
 
 /** "2× Hospital Bed, Walker"; lines already returned are left out. */

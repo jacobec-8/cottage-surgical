@@ -22,7 +22,7 @@ export type CatalogItem = {
 
 type Props = { items: CatalogItem[]; locationId: string; locationName: string; added: readonly string[]; onAdded: (id: string) => void }
 
-/** Catalog products this store doesn't carry yet, each with "Add to <store>". */
+/** Catalog products this store doesn't carry yet, each with an Add button. */
 export default function CatalogPicker({ items, locationId, locationName, added, onAdded }: Props) {
   const qc = useQueryClient()
   const add = useMutation({
@@ -52,11 +52,11 @@ export default function CatalogPicker({ items, locationId, locationName, added, 
         return (
           <div key={item.id} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3">
             {item.image_url
-              ? <img src={item.image_url} alt="" className="h-12 w-12 shrink-0 rounded-lg bg-slate-100 object-cover" />
-              : <div className="h-12 w-12 shrink-0 rounded-lg bg-slate-100" />}
+              ? <img src={item.image_url} alt="" className="h-14 w-14 shrink-0 rounded-lg bg-slate-100 object-cover" />
+              : <div className="h-14 w-14 shrink-0 rounded-lg bg-slate-100" />}
             <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-semibold">{item.name}</div>
-              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+              <div className="truncate text-base font-semibold">{item.name}</div>
+              <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-500">
                 <span className="rounded-full bg-slate-100 px-2 py-0.5 capitalize text-slate-600">{item.category}</span>
                 <span>{item.is_rentable ? 'Rental' : 'For sale'}{item.is_serialized ? ' · tracked by unit' : ' · counted stock'}</span>
               </div>
@@ -70,9 +70,11 @@ export default function CatalogPicker({ items, locationId, locationName, added, 
                 type="button"
                 onClick={() => add.mutate(item)}
                 disabled={add.isPending}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                aria-label={`Add ${item.name} to ${locationName}`}
+                title={`Add to ${locationName}`}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
               >
-                <Plus size={15} /> Add to {locationName}
+                <Plus size={15} /> Add
               </button>
             )}
           </div>
