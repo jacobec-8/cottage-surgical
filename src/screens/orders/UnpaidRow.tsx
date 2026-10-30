@@ -5,6 +5,7 @@ import type { Order } from './types'
 import { ageLabel, amountOf } from './format'
 import { PaymentBadge, StatusBadge, TypeBadge } from './badges'
 import { useVerifyPayment } from './useVerifyPayment'
+import ItemThumb from '../../components/ItemThumb'
 
 /** Abandoned / unconfirmed storefront checkout — verify at Stripe before fulfilling. */
 export default function UnpaidRow({ o, onOpen }: { o: Order; onOpen: (id: string) => void }) {
@@ -29,7 +30,8 @@ export default function UnpaidRow({ o, onOpen }: { o: Order; onOpen: (id: string
         )}
         <div className="mt-2">
           {o.rental_line_items.map((li, i) => (
-            <span key={li.id ?? i} className="inline-block bg-slate-100 rounded px-2 py-0.5 text-xs mr-1 mb-1">
+            <span key={li.id ?? i} className="mb-1 mr-1 inline-flex items-center gap-1.5 rounded bg-slate-100 py-0.5 pl-0.5 pr-2 text-xs">
+              <ItemThumb size="xs" src={li.equipment?.image_url} />
               {li.equipment?.name}{li.quantity > 1 ? ` ×${li.quantity}` : ''}
             </span>
           ))}

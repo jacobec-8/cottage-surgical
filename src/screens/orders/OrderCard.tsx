@@ -2,6 +2,7 @@
 
 import type { KeyboardEvent, MouseEvent } from 'react'
 import { ChevronRight, MapPin, Phone, Truck, Undo2 } from 'lucide-react'
+import ItemThumb from '../../components/ItemThumb'
 import { isReturnLeg, isStoreCollection } from '../../lib/legs'
 import { PICKUP_ELIGIBLE, type Order, type OrderDelivery } from './types'
 import { addressOf, ageLabel, amountOf, fmtDate, legSummary, lineStatus, unallocatedCount, unitLabel } from './format'
@@ -77,10 +78,11 @@ export default function OrderCard({ o, selected, onOpen, onSchedulePickup, picku
             return (
               <span
                 key={li.id ?? i}
-                className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs ${
+                className={`inline-flex items-center gap-1.5 rounded py-0.5 pl-0.5 pr-2 text-xs ${
                   st === 'unallocated' && !cancelled ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-slate-100 text-slate-700'
                 }`}
               >
+                <ItemThumb size="xs" src={li.equipment?.image_url} />
                 {li.equipment?.name ?? 'Item'}
                 {li.quantity > 1 && <span className="text-slate-500">×{li.quantity}</span>}
                 {tag && <span className="font-mono text-[11px] text-slate-500">{tag}</span>}

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { RotateCcw, Store, Truck } from 'lucide-react'
+import ItemList from '../../components/ItemList'
 import { supabase } from '../../lib/supabase'
 import { invalidateOrderWorkflow } from '../../lib/workflowKeys'
 import { orderPaymentState, paymentStateLabel } from '../orders/format'
@@ -11,7 +12,7 @@ import ScheduleForm from './ScheduleForm'
 import StopMenu, { type StopMenuItem } from './StopMenu'
 import StopProgressView from './StopProgressView'
 import { latestAttempt } from './stopStatus'
-import { addressLabel, clickableCard, customerLabel, DetailsHint, itemsLabel, lifecycleError, stopOpen, type OpenStop } from './cardParts'
+import { addressLabel, clickableCard, customerLabel, DetailsHint, lifecycleError, stopOpen, type OpenStop } from './cardParts'
 import { hasAddress, type Deliv, type DriverOption } from './types'
 
 const SAVED_MESSAGE_MS = 4000
@@ -67,7 +68,6 @@ export default function StaffStopCard({ d, drivers, onOpen, selected }: { d: Del
       : []),
     ...(canMiss ? [{ label: isPickup ? 'Report missed pickup' : 'Report missed delivery', onSelect: () => setReporting(true) }] : []),
   ]
-  const items = itemsLabel(d)
 
   return (
     <div className={`rounded-xl border border-slate-200 bg-white p-4 ${card.className}`} {...card.props}>
@@ -83,9 +83,8 @@ export default function StaffStopCard({ d, drivers, onOpen, selected }: { d: Del
           ) : (
             <div className="mt-0.5 text-sm font-medium text-amber-700">No address on file. Add one below before dispatch.</div>
           )}
-          <div className="mt-0.5 text-sm text-slate-700">
-            {items}{items && d.order ? <span className="text-slate-300"> · </span> : null}<Payment d={d} />
-          </div>
+          <ItemList items={d.order?.rental_line_items ?? []} className="mt-1.5" />
+          {d.order && <div className="mt-1 text-sm"><Payment d={d} /></div>}
         </div>
         <DetailsHint show={Boolean(onOpen)} />
       </div>

@@ -27,7 +27,7 @@ export type Deliv = {
     payment_status: string | null
     payment_preference: string | null
     customer: { full_name: string } | null
-    rental_line_items: { quantity: number; equipment: { name: string } | null }[]
+    rental_line_items: { quantity: number; equipment: { name: string; image_url?: string | null } | null }[]
   } | null
   delivery_photos: Photo[]
   attempts: StopAttempt[]

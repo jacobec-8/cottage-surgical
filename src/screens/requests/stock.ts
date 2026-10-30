@@ -3,6 +3,7 @@
 export type RequestItem = {
   id: string
   name: string
+  image_url?: string | null
   quantity_on_hand: number | null
   is_serialized: boolean | null
 } | null
