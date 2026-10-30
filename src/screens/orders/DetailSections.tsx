@@ -6,6 +6,8 @@ import { Camera, Mail, MapPin, Phone } from 'lucide-react'
 import { statusClass, statusLabel } from '../../lib/status'
 import type { Deposit, OrderDelivery, OrderDetail, OrderLine, RecurringCharge } from './types'
 import { addressOf, driverName, fmtDate, fmtDateTime, fmtMoney, lineStatus, unitLabel, windowOf } from './format'
+import { UnitCell } from './UnitCell'
+import { canScanUnit } from './unitScan'
 import { useAllocateLine } from './useAllocateLine'
 import { useSettleDeposit, type DepositOutcome } from './useSettleDeposit'
 
@@ -82,7 +84,7 @@ type LinesProps = { o: OrderDetail; pendingConfirm?: boolean; released?: boolean
 /**
  * `pendingConfirm`: request not yet confirmed — units are reserved on Confirm, so no line is "unallocated" yet.
  * `released`: order was cancelled — its units went back to stock rather than being returned.
- * `canAllocate`: staff may give unallocated lines a unit (fulfillment is blocked until they do).
+ * `canAllocate`: staff may give unallocated lines a unit (fulfillment is blocked until they do) and scan another unit onto a line.
  */
 export function LinesSection({ o, pendingConfirm = false, released = false, canAllocate = false }: LinesProps) {
   const lines: OrderLine[] = o.rental_line_items
@@ -115,7 +117,11 @@ export function LinesSection({ o, pendingConfirm = false, released = false, canA
                   <td className="px-3 py-2">
                     {li.equipment?.name ?? 'Item'}{li.quantity > 1 ? <span className="text-slate-500"> ×{li.quantity}</span> : null}
                   </td>
-                  <td className="px-3 py-2 font-mono text-xs text-slate-600">{tag ?? <span className="text-slate-300">—</span>}</td>
+                  <td className="px-3 py-2 font-mono text-xs text-slate-600">
+                    {canAllocate && li.id && canScanUnit(li)
+                      ? <UnitCell lineId={li.id} itemName={li.equipment?.name ?? 'this item'} label={tag} onMessage={setAllocMsg} />
+                      : tag ?? <span className="text-slate-300">—</span>}
+                  </td>
                   <td className="px-3 py-2 text-right whitespace-nowrap">{fmtMoney(price)}{isRental && price != null ? '/mo' : ''}</td>
                   <td className="px-3 py-2">
                     <span className={`text-xs px-2 py-0.5 rounded-full capitalize ${LINE_STATUS_CLS[st]}`}>{st}</span>
