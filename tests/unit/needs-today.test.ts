@@ -66,7 +66,17 @@ test('rows with a zero count are hidden', () => {
   const rows = needsTodayRows({ ...zero, overdueRentals: 2, depositsToRefund: 1 })
   assert.deepEqual(rows.map((r) => [r.label, r.count, r.href]), [
     ['Overdue rentals', 2, '/orders'],
-    ['Deposits to refund', 1, '/billing'],
+    ['Deposit to refund', 1, '/billing'],
+  ])
+})
+
+test('a count of one reads in the singular', () => {
+  const rows = needsTodayRows({
+    stopsToday: 1, notStarted: 0, late: 1, needsDriverOrDate: 1, waitingInStore: 1,
+    overdueRentals: 1, paymentsOverdue: 1, depositsToRefund: 1,
+  })
+  assert.deepEqual(rows.map((r) => r.label), [
+    'Stop today', 'Needs a driver or date', 'Overdue rental', 'Payment overdue', 'Waiting in store', 'Deposit to refund',
   ])
 })
 

@@ -79,15 +79,18 @@ export function stopDetail(counts: Pick<NeedsTodayCounts, 'notStarted' | 'late'>
   return parts.length ? parts.join(' · ') : null
 }
 
+/** "1 stop today" but "3 stops today". */
+const named = (count: number, one: string, many: string) => (count === 1 ? one : many)
+
 /** Panel rows in display order; rows with nothing to do, or behind a locked module, are left out. */
 export function needsTodayRows(counts: NeedsTodayCounts, canOpen: CanOpen = OPEN_ALL): NeedsTodayRow[] {
   const rows: NeedsTodayRow[] = [
-    { id: 'stops', label: 'Stops today', count: counts.stopsToday, href: '/delivery', module: 'delivery', tone: counts.late > 0 ? 'red' : 'amber', detail: stopDetail(counts) },
-    { id: 'pending', label: 'Need a driver or date', count: counts.needsDriverOrDate, href: '/delivery', module: 'delivery', tone: 'amber', detail: null },
-    { id: 'overdue_rentals', label: 'Overdue rentals', count: counts.overdueRentals, href: '/orders', module: 'orders', tone: 'red', detail: null },
-    { id: 'payments', label: 'Payments overdue', count: counts.paymentsOverdue, href: '/billing', module: 'billing', tone: 'red', detail: null },
+    { id: 'stops', label: named(counts.stopsToday, 'Stop today', 'Stops today'), count: counts.stopsToday, href: '/delivery', module: 'delivery', tone: counts.late > 0 ? 'red' : 'amber', detail: stopDetail(counts) },
+    { id: 'pending', label: named(counts.needsDriverOrDate, 'Needs a driver or date', 'Need a driver or date'), count: counts.needsDriverOrDate, href: '/delivery', module: 'delivery', tone: 'amber', detail: null },
+    { id: 'overdue_rentals', label: named(counts.overdueRentals, 'Overdue rental', 'Overdue rentals'), count: counts.overdueRentals, href: '/orders', module: 'orders', tone: 'red', detail: null },
+    { id: 'payments', label: named(counts.paymentsOverdue, 'Payment overdue', 'Payments overdue'), count: counts.paymentsOverdue, href: '/billing', module: 'billing', tone: 'red', detail: null },
     { id: 'in_store', label: 'Waiting in store', count: counts.waitingInStore, href: '/delivery', module: 'delivery', tone: 'slate', detail: null },
-    { id: 'deposits', label: 'Deposits to refund', count: counts.depositsToRefund, href: '/billing', module: 'billing', tone: 'amber', detail: null },
+    { id: 'deposits', label: named(counts.depositsToRefund, 'Deposit to refund', 'Deposits to refund'), count: counts.depositsToRefund, href: '/billing', module: 'billing', tone: 'amber', detail: null },
   ]
   return rows.filter((row) => row.count > 0 && canOpen(row.module))
 }
