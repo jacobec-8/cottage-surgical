@@ -71,8 +71,9 @@ def branch(key, stock): return {"key": key, "location": {"name": f"V074 {key} {t
 payload = {
     "business": {"name": f"V074 Biz {tag}", "contact_name": "Owner QA", "contact_email": "owner@example.com", "contact_phone": ""},
     "owner": {"first_name": "Owner", "last_name": "QA", "phone": "", "username": f"v074-owner-{tag}", "password": "verify-074-pass"},
-    "branches": [branch("north", [{"item_id": SER, "quantity": 3}, {"item_id": BULK, "quantity": 5}]),
-                 branch("east", [{"item_id": SER, "quantity": 3}]),
+    # Enough units for every staff order below: since 116 an order the store can't stock is refused.
+    "branches": [branch("north", [{"item_id": SER, "quantity": 8}, {"item_id": BULK, "quantity": 5}]),
+                 branch("east", [{"item_id": SER, "quantity": 8}]),
                  branch("west", [{"item_id": BULK, "quantity": 3}])],
     "drivers": [{"first_name": "Shared", "last_name": "Driver", "phone": "", "email": "", "login": True, "username": f"v074-drv-{tag}", "password": "verify-074-pass", "branches": ["north", "east"]},
                 {"first_name": "West", "last_name": "Driver", "phone": "", "email": "", "login": True, "username": f"v074-wdrv-{tag}", "password": "verify-074-pass", "branches": ["west"]}],
@@ -562,8 +563,9 @@ r, e = call(OWNER, "UPDATE staff_module_access SET enabled=false WHERE location_
 check("the owner switches a module off for one store", r == 1 and q("SELECT enabled FROM staff_module_access WHERE location_id=%s AND module_key='billing'", (LOC["east"],))[0][0] is True, r or e)
 r, e = call(NORTH, "UPDATE staff_module_access SET enabled=true WHERE location_id=%s AND module_key='billing' RETURNING 1", (LOC["north"],))
 check("store staff cannot change their module switches", r is None, r or e)
-on1, _ = order(NORTH, LOC["north"], item=BULK)
+# Restock first: since 116 North can only order what it has left after the checks above.
 q("UPDATE equipment_location_inventory SET quantity_on_hand=quantity_on_hand+7 WHERE equipment_item_id=%s AND location_id=%s", (BULK, LOC["north"]))
+on1, _ = order(NORTH, LOC["north"], item=BULK)
 east_after = seen_by(EAST)
 changed = [t for t in VIS_TABLES if east_before[t] != east_after[t]]
 check("everything North did changed nothing East can see (all store tables)", changed == [], changed)
