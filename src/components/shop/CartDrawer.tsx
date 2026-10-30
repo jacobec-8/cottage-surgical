@@ -1,259 +1,31 @@
 'use client'
 
-import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import Link from 'next/link'
-import { useQuery } from '@tanstack/react-query'
-import { X, ShoppingCart, Trash2, Plus, Minus, CheckCircle, CreditCard, Store, Truck, MapPin, Zap } from 'lucide-react'
-import { dispatchOrderEmails } from '../../lib/customerEmails'
+import { X, ShoppingCart, Trash2, Plus, Minus } from 'lucide-react'
+import type { Fulfillment } from '../../lib/checkoutPlan'
 import { commonPickupLocations, pickupLocationSelection } from '../../lib/fulfillment'
-import { publicSupabase } from '../../lib/publicSupabase'
 import { shopPrice } from '../../lib/shopPrice'
-import { outOfStockMessage, refusalStands, type Shortage } from '../../lib/stockMessage'
 import { useCart } from './CartContext'
-
-const REASONS: Record<string, string> = {
-  missing_name: 'Please enter your name.',
-  invalid_item: 'One of your items isn’t available right now. Please remove it and try again.',
-  purchases_disabled: 'The store that serves this address doesn’t sell online yet. Please call us to buy this item.',
-  outside_delivery_area: 'We don’t deliver to that ZIP code yet. Please call us, or choose in-store pickup.',
-  no_items: 'Your cart is empty.',
-  invalid_fulfillment: 'Choose pickup or delivery.',
-  invalid_pickup_location: 'Choose an available pickup location.',
-  pickup_unavailable: 'Pickup is no longer available for one of your items. Choose delivery or update your cart.',
-  delivery_unavailable: 'Delivery is not available for one of your items. Choose pickup or update your cart.',
-  out_of_stock: 'Sorry — something in your cart just sold out. Update your cart or call us.',
-  invalid_payment_method: 'Choose a payment method that matches pickup or delivery.',
-}
-// While the cart is open, recheck stock so it follows staff changes both ways.
-const STOCK_RECHECK_MS = 15_000
+import { useCartQuote } from './useCartQuote'
 
 export default function CartDrawer() {
-  const { items, open, setOpen, setQty, remove, clear, count } = useCart()
-  const [checkout, setCheckout] = useState(false)
-  const [paymentChoice, setPaymentChoice] = useState<'in_store' | 'on_delivery' | 'online'>('on_delivery')
-  const [fulfillmentChoice, setFulfillmentChoice] = useState<'pickup' | 'delivery'>('delivery')
-  const [pickupLocationId, setPickupLocationId] = useState('')
-  const [form, setForm] = useState({ full_name: '', phone: '', email: '', line1: '', city: '', state: 'NY', zip: '', notes: '' })
-  const [busy, setBusy] = useState(false)
-  const submittingRef = useRef(false)
-  const [error, setError] = useState('')
-  const [stockRefusal, setStockRefusal] = useState<{ message: string; at: number } | null>(null)
-  const [done, setDone] = useState<{ numbers: number[]; fulfillment: 'pickup' | 'delivery' } | null>(null)
-
-  const rentItems = items.filter((i) => i.mode === 'rent')
-  const buyItems = items.filter((i) => i.mode === 'purchase')
-  // The server charges the chosen store's rental price; quote it with the same
-  // store selection checkout uses (066). Catalog prices show until it loads.
-  const quoteItems = rentItems.map((i) => ({ item_id: i.id, quantity: i.qty }))
-  // Delivery goes only to a stocked location that lists this ZIP (100); quote with the same ZIP checkout sends.
-  const deliveryZip = fulfillmentChoice === 'delivery' && /^\d{5}/.test(form.zip.trim()) ? form.zip.trim().slice(0, 5) : null
-  const quote = useQuery({
-    queryKey: ['storefront_rental_quote', fulfillmentChoice, pickupLocationId, deliveryZip, quoteItems],
-    enabled: open && quoteItems.length > 0 && (fulfillmentChoice === 'delivery' || Boolean(pickupLocationId)),
-    refetchInterval: STOCK_RECHECK_MS,
-    queryFn: async () => {
-      const { data, error } = await publicSupabase.rpc('quote_storefront_rentals', {
-        p_items: quoteItems,
-        p_fulfillment: { method: fulfillmentChoice, pickup_location_id: fulfillmentChoice === 'pickup' ? pickupLocationId : null, delivery_zip: deliveryZip },
-      })
-      if (error) throw error
-      return data as { ok: boolean; reason?: string; zip?: string; prices?: Record<string, number | null>; shortages?: Shortage[] }
-    },
-  })
-  // A shortage reply carries no prices; keep this store's last quote rather than fall back to list price.
-  const quoteKey = `${fulfillmentChoice}|${pickupLocationId ?? ''}|${deliveryZip ?? ''}`
-  const [lastQuote, setLastQuote] = useState<{ key: string; prices: Record<string, number | null> } | null>(null)
-  useEffect(() => {
-    if (quote.data?.ok) setLastQuote({ key: quoteKey, prices: quote.data.prices ?? {} })
-  }, [quote.data, quoteKey])
-  const quotedPrices = quote.data?.ok
-    ? quote.data.prices ?? {}
-    : quote.data?.reason === 'out_of_stock' && lastQuote?.key === quoteKey ? lastQuote.prices : {}
-  // The server refuses quantities it can't hold right now (088); say so before checkout.
-  const quotedShortage = quote.data?.reason === 'out_of_stock' ? outOfStockMessage(quote.data.shortages, fulfillmentChoice) : null
-  // A refused submit clears itself once a newer check finds the stock again (e.g. staff restocked).
-  const refusedForStock = stockRefusal && refusalStands(stockRefusal.at, { ok: quote.data?.ok, updatedAt: quote.dataUpdatedAt })
-    ? stockRefusal.message
-    : null
-  const areaProblem = quote.data?.reason === 'outside_delivery_area'
-    ? `We don’t deliver to ${quote.data.zip ?? 'that ZIP code'} yet. Please call us, or choose in-store pickup.` : null
-  const stockProblem = quotedShortage ?? refusedForStock ?? areaProblem
-  // Tell the customer when an open cart's price changes (store restocked, price updated) — never silently (100).
-  const lastPrices = useRef<Record<string, number | null> | null>(null)
-  const [priceNotice, setPriceNotice] = useState('')
-  useEffect(() => {
-    const prices = quote.data?.ok ? quote.data.prices ?? null : null
-    if (!prices) return
-    const before = lastPrices.current
-    lastPrices.current = prices
-    if (!before) return
-    const changed = rentItems.filter((i) => before[i.id] != null && prices[i.id] != null && Number(before[i.id]) !== Number(prices[i.id]))
-    if (changed.length) {
-      setPriceNotice(changed.map((i) => `${i.name}: now ${shopPrice(Number(prices[i.id]))}/mo (was ${shopPrice(Number(before[i.id]))})`).join('; '))
-    }
-  }, [quote.data, rentItems])
-  const effectivePrice = (item: typeof items[number]) => item.mode === 'purchase'
-    ? item.price
-    : Number(quotedPrices[item.id] ?? (fulfillmentChoice === 'pickup'
-      ? item.pickup_price ?? item.price
-      : item.delivery_price ?? item.price))
-  const rentTotal = rentItems.reduce((s, i) => s + effectivePrice(i) * i.qty, 0)
-  const buyTotal = buyItems.reduce((s, i) => s + i.price * i.qty, 0)
-  const pickupLocations = commonPickupLocations(items)
-  const pickupAvailable = pickupLocations.length > 0
-  const deliveryAvailable = items.length > 0 && items.every((item) => item.delivery_enabled)
-  const selectedPickupLocation = pickupLocations.find((location) => location.id === pickupLocationId)
-  const set = (k: keyof typeof form) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-    setForm({ ...form, [k]: e.target.value })
-
-  useEffect(() => {
-    if (deliveryAvailable) setFulfillmentChoice((choice) => choice === 'pickup' && pickupAvailable ? choice : 'delivery')
-    else if (pickupAvailable) setFulfillmentChoice('pickup')
-  }, [deliveryAvailable, pickupAvailable])
-
-  useEffect(() => {
-    const next = pickupLocationSelection(pickupLocations, pickupLocationId)
-    if (next !== pickupLocationId) setPickupLocationId(next)
-  }, [pickupLocationId, pickupLocations])
-
-  useEffect(() => {
-    setPaymentChoice((current) => current === 'online'
-      ? current
-      : fulfillmentChoice === 'delivery' ? 'on_delivery' : 'in_store')
-  }, [fulfillmentChoice])
-
-  const submit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    if (submittingRef.current) return
-    submittingRef.current = true
-    setBusy(true)
-    setError('')
-    setStockRefusal(null)
-    try {
-      if (fulfillmentChoice === 'pickup' && !selectedPickupLocation) {
-        throw new Error('Choose an available pickup location.')
-      }
-      if (fulfillmentChoice === 'delivery' && !deliveryAvailable) {
-        throw new Error('Delivery is not available for every item in your cart.')
-      }
-      const customer = { full_name: form.full_name, phone: form.phone, email: form.email }
-      const address = fulfillmentChoice === 'delivery'
-        ? { line1: form.line1, city: form.city, state: form.state, zip: form.zip }
-        : { line1: '', city: '', state: 'NY', zip: '' }
-      const fulfillment = {
-        method: fulfillmentChoice,
-        pickup_location_id: fulfillmentChoice === 'pickup' ? pickupLocationId : null,
-        delivery_zip: deliveryZip,
-        payment_method: paymentChoice,
-      }
-
-      // Rentals remain rentals whichever payment rail the customer chooses.
-      // Online = first month through Stripe, then the paid request enters the
-      // same staff review/stock workflow. In-store/on-delivery = submit immediately.
-      let rentNo: number | null = null
-      if (rentItems.length) {
-        if (paymentChoice === 'online') {
-          const { data, error } = await publicSupabase.rpc('create_stripe_rental_checkout_with_fulfillment', {
-            p_items: rentItems.map((i) => ({ item_id: i.id, quantity: i.qty })),
-            p_customer: customer,
-            p_address: address,
-            p_notes: form.notes || null,
-            p_redirect_base: window.location.origin,
-            p_fulfillment: fulfillment,
-          })
-          if (error) throw new Error('Couldn’t start checkout. Please try again or call us.')
-          if (!data?.ok) {
-            if (data?.reason === 'invalid_redirect') {
-              throw new Error('Checkout is misconfigured for this site. Please call us.')
-            }
-            if (data?.reason === 'missing_email') {
-              throw new Error('Please enter a valid email for payment and order updates.')
-            }
-            if (data?.reason === 'out_of_stock') {
-              setStockRefusal({ message: outOfStockMessage(data.shortages, fulfillmentChoice), at: quote.dataUpdatedAt })
-              void quote.refetch()
-              return
-            }
-            throw new Error(REASONS[data?.reason] || 'We couldn’t start your payment. Please call us.')
-          }
-          clear()
-          window.location.assign(data.checkout_url)
-          return
-        } else {
-          const { data, error } = await publicSupabase.rpc('submit_rental_request_with_fulfillment', {
-            p_order_type: 'rental', p_items: rentItems.map((i) => ({ item_id: i.id, quantity: i.qty })),
-            p_customer: customer, p_address: address, p_notes: form.notes || null,
-            p_fulfillment: fulfillment,
-          })
-          if (error) throw new Error('Something went wrong. Please try again or call us.')
-          if (data?.reason === 'out_of_stock') {
-            setStockRefusal({ message: outOfStockMessage(data.shortages, fulfillmentChoice), at: quote.dataUpdatedAt })
-            void quote.refetch()
-            return
-          }
-          if (!data?.ok) throw new Error(REASONS[data?.reason] || 'We couldn’t submit your rental request. Please call us.')
-          rentNo = data.order_no
-          // Guests may send only their own order's mail (100); the scheduler is the backstop.
-          void dispatchOrderEmails(data.order_id)
-        }
-      }
-
-      // Purchases → Stripe Checkout; the server refuses them while retail sales are off (094).
-      if (buyItems.length) {
-        const { data, error } = await publicSupabase.rpc('create_stripe_checkout_with_fulfillment', {
-          p_items: buyItems.map((i) => ({ item_id: i.id, quantity: i.qty })),
-          p_customer: customer,
-          p_address: address,
-          p_redirect_base: window.location.origin,
-          p_fulfillment: fulfillment,
-        })
-        if (error) throw new Error('Couldn’t start checkout. Please try again or call us.')
-        if (!data?.ok) {
-          if (data?.reason === 'invalid_redirect') {
-            throw new Error('Checkout is misconfigured for this site. Please call us.')
-          }
-          if (data?.reason === 'out_of_stock') throw new Error(outOfStockMessage(data.shortages, fulfillmentChoice))
-          throw new Error(REASONS[data?.reason] || 'We couldn’t start your payment. Please call us.')
-        }
-        clear()
-        window.location.assign(data.checkout_url) // → Stripe, then back to /checkout/success
-        return
-      }
-
-      clear()
-      setDone({ numbers: rentNo ? [rentNo] : [], fulfillment: fulfillmentChoice })
-    } catch (e) {
-      setError((e as Error).message)
-    } finally {
-      submittingRef.current = false
-      setBusy(false)
-    }
-  }
-
-  const close = () => { setOpen(false); setError(''); setStockRefusal(null) }
-  const inp = 'border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-navy/20'
+  const { items, open, setOpen, setQty, remove, count } = useCart()
+  // Pickup or delivery is chosen at checkout; until then show what delivery costs, if it's on offer.
+  const fulfillment: Fulfillment = items.every((item) => item.delivery_enabled) ? 'delivery' : 'pickup'
+  const pickupLocationId = fulfillment === 'pickup' ? pickupLocationSelection(commonPickupLocations(items), '') : ''
+  const { priceOf, rentTotal, buyTotal, problem } = useCartQuote({ items, fulfillment, pickupLocationId, deliveryZip: null, enabled: open })
+  const close = () => setOpen(false)
 
   return (
     <>
       {open && <div className="fixed inset-0 bg-black/40 z-40" onClick={close} />}
-      <aside className={`fixed top-0 right-0 h-full w-full max-w-md bg-white z-50 shadow-2xl flex flex-col font-poppins transition-transform duration-300 lg:w-1/2 lg:max-w-none ${open ? 'translate-x-0' : 'translate-x-full'}`}>
+      <aside className={`fixed top-0 right-0 h-full w-full sm:w-[380px] bg-white z-50 shadow-2xl flex flex-col font-poppins transition-transform duration-300 ${open ? 'translate-x-0' : 'translate-x-full'}`}>
         <div className="bg-navy text-white px-5 py-4 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2 font-semibold"><ShoppingCart size={18} /> Your Cart</div>
-          <button onClick={close} className="p-1 hover:bg-white/10 rounded"><X size={20} /></button>
+          <button onClick={close} aria-label="Close cart" className="p-1 hover:bg-white/10 rounded"><X size={20} /></button>
         </div>
 
-        {done ? (
-          <div className="flex-1 grid place-items-center p-8 text-center">
-            <div>
-              <CheckCircle className="mx-auto text-emerald-600 mb-3" size={42} />
-              <div className="font-semibold text-navy text-lg">Request received: {done.numbers.map((n) => `#${n}`).join(' & ')}</div>
-              <p className="text-slate-500 text-sm mt-2">
-                Our team will review availability and contact you to confirm {done.fulfillment === 'pickup' ? 'your pickup' : 'delivery'}.
-              </p>
-              <button onClick={() => { setDone(null); setCheckout(false); close() }} className="mt-5 bg-navy text-white rounded-lg px-6 py-2.5 text-sm font-semibold">Done</button>
-            </div>
-          </div>
-        ) : items.length === 0 ? (
+        {items.length === 0 ? (
           <div className="flex-1 grid place-items-center p-8 text-center">
             <div>
               <ShoppingCart className="mx-auto text-slate-300 mb-3" size={42} />
@@ -262,100 +34,6 @@ export default function CartDrawer() {
               <Link href="/" onClick={close} className="inline-block mt-4 text-terracotta font-semibold text-sm">Browse Equipment →</Link>
             </div>
           </div>
-        ) : checkout ? (
-          <form onSubmit={submit} className="flex-1 overflow-auto p-5 space-y-3">
-            <button type="button" onClick={() => setCheckout(false)} className="text-sm text-slate-500">← Back to cart</button>
-            <div className="grid grid-cols-2 gap-3">
-              <input required placeholder="Full name" value={form.full_name} onChange={set('full_name')} className={`col-span-2 ${inp}`} />
-              <input placeholder="Phone" value={form.phone} onChange={set('phone')} className={inp} />
-              <input required type="email" placeholder="Email" value={form.email} onChange={set('email')} className={inp} />
-            </div>
-            <fieldset>
-              <legend className="mb-2 text-sm font-semibold text-navy">How would you like to receive your order?</legend>
-              <div className="grid grid-cols-2 gap-2">
-                <label className={`rounded-xl border p-3 transition ${pickupAvailable ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'} ${fulfillmentChoice === 'pickup' ? 'border-navy bg-navy/5 ring-1 ring-navy' : 'border-slate-200'}`}>
-                  <input type="radio" name="fulfillment-choice" value="pickup" disabled={!pickupAvailable} checked={fulfillmentChoice === 'pickup'} onChange={() => setFulfillmentChoice('pickup')} className="sr-only" />
-                  <Store size={20} className="mb-2 text-navy" />
-                  <span className="block text-sm font-semibold text-navy">In-store pickup</span>
-                  <span className="mt-0.5 block text-xs leading-5 text-slate-500">{pickupAvailable ? 'Choose a store location.' : 'Not available for this cart.'}</span>
-                </label>
-                <label className={`rounded-xl border p-3 transition ${deliveryAvailable ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'} ${fulfillmentChoice === 'delivery' ? 'border-navy bg-navy/5 ring-1 ring-navy' : 'border-slate-200'}`}>
-                  <input type="radio" name="fulfillment-choice" value="delivery" disabled={!deliveryAvailable} checked={fulfillmentChoice === 'delivery'} onChange={() => setFulfillmentChoice('delivery')} className="sr-only" />
-                  <Truck size={20} className="mb-2 text-navy" />
-                  <span className="block text-sm font-semibold text-navy">Delivery</span>
-                  <span className="mt-0.5 block text-xs leading-5 text-slate-500">Delivered to your address.</span>
-                </label>
-              </div>
-            </fieldset>
-            {fulfillmentChoice === 'pickup' ? (
-              <div className="space-y-2">
-                <label className="block text-sm font-semibold text-navy" htmlFor="pickup-location">Pickup location</label>
-                <select id="pickup-location" required value={pickupLocationId} onChange={(event) => setPickupLocationId(event.target.value)} className={`w-full ${inp}`}>
-                  {pickupLocations.length > 1 && <option value="">Select a pickup location…</option>}
-                  {pickupLocations.map((location) => <option key={location.id} value={location.id}>{location.name} — {location.address_city}</option>)}
-                </select>
-                {selectedPickupLocation && (
-                  <div className="rounded-xl bg-slate-50 p-3 text-xs leading-5 text-slate-600">
-                    <div className="flex items-start gap-2"><MapPin size={14} className="mt-0.5 shrink-0" /><span>{selectedPickupLocation.address_line1}{selectedPickupLocation.address_line2 ? `, ${selectedPickupLocation.address_line2}` : ''}<br />{selectedPickupLocation.address_city}, {selectedPickupLocation.address_state} {selectedPickupLocation.address_zip}</span></div>
-                    {items.every((item) => item.same_day_pickup) && <div className="mt-2 inline-flex items-center gap-1 font-semibold text-emerald-700"><Zap size={13} /> Same-day pickup may be available</div>}
-                    {selectedPickupLocation.instructions && <div className="mt-2">{selectedPickupLocation.instructions}</div>}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-3">
-                <input required placeholder="Delivery address" value={form.line1} onChange={set('line1')} className={`col-span-2 ${inp}`} />
-                <input required placeholder="City" value={form.city} onChange={set('city')} className={inp} />
-                <input required placeholder="ZIP" value={form.zip} onChange={set('zip')} className={inp} />
-              </div>
-            )}
-            <textarea placeholder={`${fulfillmentChoice === 'pickup' ? 'Pickup' : 'Delivery'} instructions (optional)`} value={form.notes} onChange={set('notes')} rows={2} className={`w-full ${inp}`} />
-            {rentItems.length > 0 && (
-              <fieldset>
-                <legend className="mb-2 text-sm font-semibold text-navy">How would you like to pay?</legend>
-                <div className="grid grid-cols-2 gap-2">
-                  <label className={`cursor-pointer rounded-xl border p-3 transition ${paymentChoice !== 'online' ? 'border-navy bg-navy/5 ring-1 ring-navy' : 'border-slate-200 hover:border-slate-300'}`}>
-                    <input
-                      type="radio"
-                      name="payment-choice"
-                      value={fulfillmentChoice === 'delivery' ? 'on_delivery' : 'in_store'}
-                      checked={paymentChoice !== 'online'}
-                      onChange={() => setPaymentChoice(fulfillmentChoice === 'delivery' ? 'on_delivery' : 'in_store')}
-                      className="sr-only"
-                    />
-                    {fulfillmentChoice === 'delivery'
-                      ? <Truck size={20} className="mb-2 text-navy" />
-                      : <Store size={20} className="mb-2 text-navy" />}
-                    <span className="block text-sm font-semibold text-navy">{fulfillmentChoice === 'delivery' ? 'Pay Delivery Person' : 'Pay In Store'}</span>
-                    <span className="mt-0.5 block text-xs leading-5 text-slate-500">{fulfillmentChoice === 'delivery' ? 'Pay when your equipment arrives.' : 'Pay when you pick up your equipment.'}</span>
-                  </label>
-                  <label className={`cursor-pointer rounded-xl border p-3 transition ${paymentChoice === 'online' ? 'border-navy bg-navy/5 ring-1 ring-navy' : 'border-slate-200 hover:border-slate-300'}`}>
-                    <input type="radio" name="payment-choice" value="online" checked={paymentChoice === 'online'} onChange={() => setPaymentChoice('online')} className="sr-only" />
-                    <CreditCard size={20} className="mb-2 text-navy" />
-                    <span className="block text-sm font-semibold text-navy">Pay Online</span>
-                    <span className="mt-0.5 block text-xs leading-5 text-slate-500">Pay {shopPrice(rentTotal)} securely with Stripe.</span>
-                  </label>
-                </div>
-              </fieldset>
-            )}
-            {priceNotice && <div role="status" className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">Price updated — {priceNotice}</div>}
-            {stockProblem && !error && <div role="alert" className="text-sm text-red-600">{stockProblem}</div>}
-            {error && <div role="alert" className="text-sm text-red-600">{error}</div>}
-            <button disabled={busy || Boolean(stockProblem)} className="w-full bg-terracotta hover:opacity-90 text-white rounded-lg py-3 font-semibold disabled:opacity-50">
-              {busy
-                ? (buyItems.length || paymentChoice === 'online' ? 'Redirecting…' : 'Submitting…')
-                : buyItems.length || paymentChoice === 'online' ? 'Continue to Secure Payment' : 'Submit Request'}
-            </button>
-            <p className="text-xs text-slate-400 text-center">
-              {buyItems.length
-                ? 'Purchases are paid securely with Stripe on the next step.'
-                : paymentChoice === 'online'
-                  ? 'Stripe collects the first month’s rental. Your equipment is held for you while you pay; we then confirm your delivery or pickup time.'
-                  : fulfillmentChoice === 'delivery'
-                    ? 'No payment is taken now. Pay the delivery person when your equipment arrives.'
-                    : 'No payment is taken now. Pay in store when you pick up your equipment.'}
-            </p>
-          </form>
         ) : (
           <>
             <div className="flex-1 overflow-auto p-4 space-y-3">
@@ -369,7 +47,7 @@ export default function CartDrawer() {
                       <span className={`text-[10px] font-semibold rounded px-1.5 py-0.5 ${i.mode === 'rent' ? 'bg-navy text-white' : 'bg-terracotta text-white'}`}>{i.mode === 'rent' ? 'Rent' : 'Buy'}</span>
                       <span className="text-sm font-medium text-navy truncate">{i.name}</span>
                     </div>
-                    <div className="text-sm text-slate-500 mt-0.5">{shopPrice(effectivePrice(i))}{i.mode === 'rent' ? `/mo ${fulfillmentChoice === 'pickup' ? 'pickup' : 'delivery + return pickup'}` : ''}</div>
+                    <div className="text-sm text-slate-500 mt-0.5">{shopPrice(priceOf(i))}{i.mode === 'rent' ? `/mo ${fulfillment === 'pickup' ? 'pickup' : 'delivery + return pickup'}` : ''}</div>
                     <div className="mt-1 flex flex-wrap gap-1 text-[10px] font-medium">
                       {i.pickup_enabled && <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-emerald-700">Pickup</span>}
                       {i.delivery_enabled && <span className="rounded bg-blue-50 px-1.5 py-0.5 text-blue-700">Delivery</span>}
@@ -388,10 +66,10 @@ export default function CartDrawer() {
             <div className="border-t border-slate-200 p-5 shrink-0">
               {rentTotal > 0 && <div className="flex justify-between text-sm mb-1"><span className="text-slate-500">Rental / month</span><span className="font-semibold text-navy">{shopPrice(rentTotal)}/mo</span></div>}
               {buyTotal > 0 && <div className="flex justify-between text-sm mb-1"><span className="text-slate-500">Purchase</span><span className="font-semibold text-navy">{shopPrice(buyTotal)}</span></div>}
-              {stockProblem && <div role="alert" className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">{stockProblem}</div>}
-              <button onClick={() => setCheckout(true)} className="w-full mt-2 bg-navy hover:bg-navy-800 text-white rounded-lg py-3 font-semibold">
+              {problem && <div role="alert" className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">{problem}</div>}
+              <Link href="/checkout" onClick={close} className="block w-full mt-2 bg-navy hover:bg-navy-800 text-white text-center rounded-lg py-3 font-semibold">
                 Continue to checkout ({count})
-              </button>
+              </Link>
               <p className="text-xs text-slate-400 text-center pt-2">You’ll choose pickup or delivery and confirm payment next.</p>
             </div>
           </>

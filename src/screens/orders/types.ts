@@ -20,7 +20,7 @@ export type OrderLine = {
   equipment_unit_id: string | null
   /** Bulk stock state: held while out, then consumed (sold) or released. Null for serialized. */
   bulk_stock?: 'held' | 'consumed' | 'released' | null
-  equipment: { name: string; image_url?: string | null } | null
+  equipment: { name: string; image_url?: string | null; is_serialized?: boolean } | null
   unit: OrderUnit
 }
 
@@ -111,7 +111,7 @@ export type OrderDetail = Order & {
 
 const LINE_SELECT =
   'rental_line_items(id,quantity,line_type,monthly_rate,sale_price,is_active,equipment_unit_id,bulk_stock,' +
-  'equipment:equipment_items(name,image_url),unit:equipment_units(asset_tag,serial_number))'
+  'equipment:equipment_items(name,image_url,is_serialized),unit:equipment_units(asset_tag,serial_number))'
 
 const DELIVERY_LIST_SELECT =
   'deliveries(id,leg_type,requires_driver,status,scheduled_date,window_start,window_end,window_label,' +

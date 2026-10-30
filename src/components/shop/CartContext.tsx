@@ -24,6 +24,8 @@ export type CartItem = {
 
 type Ctx = {
   items: CartItem[]
+  /** False until the saved cart is read, so an empty list isn't mistaken for an empty cart. */
+  hydrated: boolean
   open: boolean
   setOpen: (o: boolean) => void
   add: (i: Omit<CartItem, 'qty'>) => void
@@ -139,7 +141,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const count = items.reduce((n, c) => n + c.qty, 0)
 
   return (
-    <CartContext.Provider value={{ items, open, setOpen, add, setQty, remove, clear, count }}>
+    <CartContext.Provider value={{ items, hydrated, open, setOpen, add, setQty, remove, clear, count }}>
       {children}
     </CartContext.Provider>
   )
