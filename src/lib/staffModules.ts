@@ -21,7 +21,7 @@ export type StaffModuleAccessRow = {
 
 export const STAFF_MODULE_ROUTES: Record<StaffModule, string> = {
   dashboard: '/admin',
-  requests: '/requests',
+  requests: '/orders?filter=requests',
   orders: '/orders',
   new_order: '/new-order',
   customers: '/customers',

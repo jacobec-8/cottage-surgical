@@ -5,7 +5,8 @@ type WorkspaceTab = {
   to: string
   label: string
   roles: readonly string[]
-  module?: StaffModule
+  /** Staff need any one of these switches on to see the tab. */
+  module?: StaffModule | readonly StaffModule[]
   badge?: string
 }
 
@@ -19,8 +20,8 @@ const STAFF = BACKOFFICE_ROLES
 const WORKSPACES: readonly Workspace[] = [
   {
     id: 'orders', label: 'Orders', tabs: [
-      { to: '/orders', label: 'Orders', roles: STAFF, module: 'orders', badge: 'orders' },
-      { to: '/requests', label: 'Requests', roles: STAFF, module: 'requests', badge: 'requests' },
+      // New requests live at the top of Orders: either switch opens it, and the badge counts both.
+      { to: '/orders', label: 'Orders', roles: STAFF, module: ['orders', 'requests'], badge: 'orders_and_requests' },
       { to: '/new-order', label: 'New Order', roles: STAFF, module: 'new_order' },
     ],
   },
@@ -44,7 +45,7 @@ export function getVisibleWorkspaces(role: string | undefined, canAccess: (modul
   return WORKSPACES.map((workspace) => ({
     ...workspace,
     tabs: workspace.tabs.filter((tab) => (
-      tab.roles.includes(role ?? '') && (role !== 'staff' || !tab.module || canAccess(tab.module))
+      tab.roles.includes(role ?? '') && (role !== 'staff' || !tab.module || [tab.module].flat().some(canAccess))
     )),
   })).filter((workspace) => workspace.tabs.length > 0)
 }

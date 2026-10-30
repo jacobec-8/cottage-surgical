@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import {
   LayoutDashboard, PlusCircle, Users, Package, CreditCard, Truck,
-  LogOut, Shield, ChevronRight, MapPin, Phone, Mail, Inbox, UserCog, ClipboardList, LockKeyhole, UsersRound, Menu, X, Building2, BarChart3,
+  LogOut, Shield, ChevronRight, MapPin, Phone, Mail, UserCog, ClipboardList, LockKeyhole, UsersRound, Menu, X, Building2, BarChart3,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useLocationScope } from '../contexts/LocationContext'
@@ -24,7 +24,7 @@ import { useNeedsToday } from './useNeedsToday'
 const STAFF = BACKOFFICE_ROLES
 const ALL = STAFF_APP_ROLES
 const TAB_ICONS = {
-  '/orders': ClipboardList, '/requests': Inbox, '/new-order': PlusCircle,
+  '/orders': ClipboardList, '/new-order': PlusCircle,
   '/delivery': Truck, '/drivers': UserCog, '/staff': UsersRound, '/staff-access': LockKeyhole,
 }
 const NAV = [
@@ -79,6 +79,11 @@ export default function Layout({ children }: { children: ReactNode }) {
       return { requests: req.count ?? 0, orders: ord.count ?? 0, deliveries: del.count ?? 0 } as Record<string, number>
     },
   })
+  // The Orders badge counts approved orders plus new requests (when staff may see requests).
+  const badges: Record<string, number> = {
+    ...counts,
+    orders_and_requests: (counts?.orders ?? 0) + (access.canAccess('requests') ? counts?.requests ?? 0 : 0),
+  }
   // "Needs you today": the chosen pharmacy's action list. Staff, owner and
   // admin only; never totalled across pharmacies, so "All stores" shows none.
   // Rows behind a locked staff module stay out, and the panel waits for the
@@ -129,7 +134,7 @@ export default function Layout({ children }: { children: ReactNode }) {
     const isActive = workspace
       ? workspace.id === activeWorkspace?.id
       : n.end ? pathname === n.to : pathname === n.to || pathname.startsWith(`${n.to}/`)
-    const count = workspace?.tabs.reduce((total, tab) => total + (tab.badge ? counts?.[tab.badge] ?? 0 : 0), 0) ?? 0
+    const count = workspace?.tabs.reduce((total, tab) => total + (tab.badge ? badges[tab.badge] ?? 0 : 0), 0) ?? 0
     return (
       <Link
         key={n.to}
@@ -290,7 +295,7 @@ export default function Layout({ children }: { children: ReactNode }) {
                 {activeWorkspace.tabs.map((tab) => {
                   const active = matchesWorkspaceTab(pathname, tab.to)
                   const Icon = TAB_ICONS[tab.to as keyof typeof TAB_ICONS]
-                  const count = tab.badge ? counts?.[tab.badge] ?? 0 : 0
+                  const count = tab.badge ? badges[tab.badge] ?? 0 : 0
                   return (
                     <Link
                       key={tab.to}

@@ -4,7 +4,9 @@ import { redirect } from 'next/navigation'
 import { createClient } from './supabase/server'
 import type { StaffModule } from './staffModules'
 
-export async function requireStaffModule(module: StaffModule, allowDriver = false) {
+/** Staff need one of `module`'s switches on (a list means any of them). */
+export async function requireStaffModule(module: StaffModule | readonly StaffModule[], allowDriver = false) {
+  const modules = [module].flat()
   const supabase = await createClient()
   const claims = await supabase.auth.getClaims().catch(() => null)
   const userId = claims?.data?.claims?.sub
@@ -19,18 +21,17 @@ export async function requireStaffModule(module: StaffModule, allowDriver = fals
   if (!profile?.is_active) redirect('/admin-login')
   if (profile.role === 'admin' || profile.role === 'owner') return
   if (profile.role === 'driver') {
-    if (allowDriver && module === 'delivery') return
+    if (allowDriver && modules.includes('delivery')) return
     redirect('/delivery')
   }
   if (profile.role !== 'staff') redirect('/admin-login')
 
-  const { data: setting, error } = await supabase
+  const { data: settings, error } = await supabase
     .from('staff_module_access')
     .select('enabled')
-    .eq('module_key', module)
-    .maybeSingle()
+    .in('module_key', modules)
 
-  if (error || !setting?.enabled) redirect(`/access-limited?module=${module}`)
+  if (error || !settings?.some((setting) => setting.enabled)) redirect(`/access-limited?module=${modules[0]}`)
 }
 
 /** Admins, plus business owners managing their own team's logins (migration 087). */
