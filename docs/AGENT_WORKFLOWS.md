@@ -63,9 +63,10 @@ a driver login retained My Deliveries and was redirected away from `/drivers`.
 
 **Needs you today** sits at the bottom of the expanded sidebar (on a phone the
 menu button carries one count badge instead; the opened drawer shows the panel).
-Staff, the owner and admins see it for the pharmacy chosen in the store picker
-only; it never totals across pharmacies, so "All stores" shows a prompt to pick
-one. Drivers never see it. A row appears only when its count is above zero and
+Store staff only, for their own pharmacy: owners and admins don't get it
+(across many pharmacies it would be too much; they use **Reports** and the
+Stores table instead), and drivers never see it. It never totals across
+pharmacies. A row appears only when its count is above zero and
 links to the page where staff act on it:
 
 | Row | Counts | Opens |
