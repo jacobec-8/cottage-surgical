@@ -1,17 +1,14 @@
 'use client'
 
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { Loader2, Pencil, X } from 'lucide-react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../../contexts/AuthContext'
-import { supabase } from '../../lib/supabase'
 import { useDialogFocus } from '../../lib/useDialogFocus'
 import { useStaffModuleAccess } from '../../lib/useStaffModuleAccess'
 import { SELECTED_CUSTOMER_PARAM } from '../customers/useSelectedCustomer'
-import { invalidateOrderWorkflow } from '../../lib/workflowKeys'
 import { isReturnLeg } from '../../lib/legs'
 import { PICKUP_ELIGIBLE, type OrderDetail } from './types'
-import { ageLabel, amountOf, fmtDate, fmtDateTime, fmtMoney, orderPaymentState, paymentStateLabel, sourceLabel, unallocatedCount, type OrderPaymentState } from './format'
+import { ageLabel, amountOf, fmtDate, fmtDateTime, fmtMoney, orderPaymentState, paymentStateLabel, sourceLabel, unallocatedCount } from './format'
 import { PaymentBadge, SourceBadge, StatusBadge, TypeBadge, UnallocatedBadge } from './badges'
 import { BillingSection, CustomerSection, DeliveriesSection, Field, LinesSection, Section } from './DetailSections'
 import { useOrderDetail } from './useOrderDetail'
@@ -21,6 +18,10 @@ import { useVerifyPayment } from './useVerifyPayment'
 import { useCloseOrder } from './useCloseOrder'
 import CloseOutControls from './CloseOutControls'
 import EditRentalModal from './EditRentalModal'
+import MoneyRecordsSection from '../reports/MoneyRecordsSection'
+import MarkPaidForm from './MarkPaidForm'
+import { amountDue, depositHeld } from './paymentDue'
+import { usePaymentState, type SettablePaymentState } from './usePaymentState'
 
 type Props = {
   orderId: string
@@ -78,6 +79,7 @@ function PanelBody({ o, onClose, actions, focusDeliveryId }: BodyProps) {
   // Drivers can't reach the back-office routes, so don't offer those links.
   const backofficeLinks = profile?.role !== 'driver'
   const [msg, setMsg] = useState('')
+  const payment = usePaymentState(o, setMsg)
   const [editing, setEditing] = useState(false)
   const schedulePickup = useSchedulePickup(setMsg)
   const [askAddress, setAskAddress] = useState(false)
@@ -181,7 +183,7 @@ function PanelBody({ o, onClose, actions, focusDeliveryId }: BodyProps) {
             <Field label={isRental ? 'Monthly rate' : 'Total'}>{amountOf(o)}</Field>
             <Field label="Payment">
               {backofficeLinks
-                ? <PaymentStateSetting order={o} onMessage={setMsg} />
+                ? <PaymentStateSetting order={o} payment={payment} />
                 : paymentStateLabel(orderPaymentState(o.payment_status, o.payment_preference))}
             </Field>
             <Field label="Source">{sourceLabel(o.source) ?? '—'}</Field>
@@ -191,12 +193,17 @@ function PanelBody({ o, onClose, actions, focusDeliveryId }: BodyProps) {
             <Field label="Created">{fmtDateTime(o.created_at)}</Field>
             <Field label="Last updated">{fmtDateTime(o.updated_at)}</Field>
           </div>
+          {payment.confirming && (
+            <MarkPaidForm method={PAID_LABEL[payment.confirming]} due={amountDue(o)} deposit={depositHeld(o.deposits)} pending={payment.pending}
+              onConfirm={payment.confirm} onCancel={payment.cancel} />
+          )}
         </Section>
 
         <CustomerSection o={o} customerHref={backofficeLinks && access.canAccess('customers') && o.customer?.id ? `/customers?${SELECTED_CUSTOMER_PARAM}=${o.customer.id}` : null} />
         <LinesSection o={o} pendingConfirm={isRequest} released={o.status === 'cancelled'} canAllocate={backofficeLinks && !isRequest && !isClosed} />
         <DeliveriesSection o={o} focusDeliveryId={focusDeliveryId} showBoardLink={backofficeLinks} />
         <BillingSection o={o} showBillingLink={backofficeLinks} canSettleDeposits={backofficeLinks} />
+        <MoneyRecordsSection scope={{ kind: 'order', orderId: o.id }} filename={`money-records-order-${o.order_no}.csv`} />
 
         {o.special_notes && (
           <Section title="Notes">
@@ -223,50 +230,20 @@ function PanelBody({ o, onClose, actions, focusDeliveryId }: BodyProps) {
   )
 }
 
-function PaymentStateSetting({ order, onMessage }: { order: OrderDetail; onMessage: (message: string) => void }) {
-  const qc = useQueryClient()
-  const stored = orderPaymentState(order.payment_status, order.payment_preference)
-  const [value, setValue] = useState<OrderPaymentState>(stored)
+const PAID_LABEL: Record<SettablePaymentState, string> = {
+  not_paid: 'Not paid', paid_online: 'Paid online', paid_in_store: 'Paid in store', paid_on_delivery: 'Paid delivery person',
+}
+
+function PaymentStateSetting({ order, payment }: { order: OrderDetail; payment: ReturnType<typeof usePaymentState> }) {
   const isDelivery = order.fulfillment_method === 'delivery'
     || order.deliveries.some((delivery) => delivery.leg_type === 'delivery')
-
-  useEffect(() => setValue(stored), [stored])
-
-  const update = useMutation({
-    mutationFn: async (next: Exclude<OrderPaymentState, 'refunded'>) => {
-      const { data, error } = await supabase.rpc('set_order_payment_state', {
-        p_order_id: order.id,
-        p_payment_state: next,
-      })
-      if (error) throw error
-      if (!data?.ok) {
-        if (data?.reason === 'invalid_payment_method_for_fulfillment') {
-          throw new Error('Choose the payment method that matches this order’s fulfillment.')
-        }
-        throw new Error(data?.reason || 'Couldn’t update payment state.')
-      }
-    },
-    onSuccess: () => {
-      invalidateOrderWorkflow(qc)
-      onMessage('Payment state updated.')
-    },
-    onError: (error) => {
-      setValue(stored)
-      onMessage((error as Error).message)
-    },
-  })
-
-  if (stored === 'refunded') return <span>{paymentStateLabel(stored)}</span>
+  if (payment.stored === 'refunded') return <span>{paymentStateLabel(payment.stored)}</span>
   return (
     <select
       aria-label="Payment state"
-      value={value}
-      disabled={update.isPending}
-      onChange={(event) => {
-        const next = event.target.value as Exclude<OrderPaymentState, 'refunded'>
-        setValue(next)
-        update.mutate(next)
-      }}
+      value={payment.value}
+      disabled={payment.pending}
+      onChange={(event) => payment.choose(event.target.value as SettablePaymentState)}
       className="w-full min-w-32 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:opacity-60"
     >
       <option value="not_paid">Not Paid</option>

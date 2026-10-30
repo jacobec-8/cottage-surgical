@@ -7,6 +7,7 @@ import { HistorySection, OutNowSection, PaymentsSection, SummaryTiles, UpcomingS
 import ContactSection from './ContactSection'
 import { moneySummary, newestFirst, outNow, upcomingStops } from './customerSummary'
 import { useCustomerDetail, type CustomerDetail } from './useCustomerDetail'
+import MoneyRecordsSection from '../reports/MoneyRecordsSection'
 
 /** Right-hand slide-over with one customer. Closes on backdrop click, X, or Esc. */
 export default function CustomerPanel({ customerId, onClose }: { customerId: string; onClose: () => void }) {
@@ -69,6 +70,7 @@ function PanelBody({ detail, onClose }: { detail: CustomerDetail; onClose: () =>
         <ContactSection key={c.id} c={c} />
         <PaymentsSection payments={payments} nextDue={view.money.nextDue} />
         <HistorySection orders={view.history} />
+        <MoneyRecordsSection scope={{ kind: 'customer', customerId: c.id }} filename={`money-records-${c.full_name.replace(/\W+/g, '-').toLowerCase()}.csv`} />
       </div>
     </>
   )
