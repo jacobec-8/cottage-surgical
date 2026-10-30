@@ -14,6 +14,7 @@ export const ORDER_WORKFLOW_KEYS = [
   'rentals',
   'dashboard',
   'nav_counts', // sidebar badges (replaces orphan 'requests_count')
+  'needs_today', // sidebar "Needs you today" panel
   'recurring_charges',
   'customers',
   'cust_search',
@@ -26,6 +27,7 @@ export const DISPATCH_KEYS = [
   'deliveries',
   'orders',
   'nav_counts',
+  'needs_today',
   'dashboard',
   'rentals',
 ] as const

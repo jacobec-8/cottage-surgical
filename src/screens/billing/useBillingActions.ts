@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../lib/supabase'
 
-const KEYS = ['recurring_charges', 'orders', 'dashboard', 'rentals']
+const KEYS = ['recurring_charges', 'orders', 'dashboard', 'rentals', 'needs_today']
 const invalidate = (qc: ReturnType<typeof useQueryClient>) => KEYS.forEach((k) => qc.invalidateQueries({ queryKey: [k] }))
 
 const PAYMENT_REASONS: Record<string, string> = {

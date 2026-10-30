@@ -61,6 +61,31 @@ On 2026-10-06, the local production build passed lint, type checking, and all
 46 unit tests. nu-yin checks covered the admin tabs and staff detail navigation;
 a driver login retained My Deliveries and was redirected away from `/drivers`.
 
+**Needs you today** sits at the bottom of the expanded sidebar (on a phone the
+menu button carries one count badge instead; the opened drawer shows the panel).
+Staff, the owner and admins see it for the pharmacy chosen in the store picker
+only; it never totals across pharmacies, so "All stores" shows a prompt to pick
+one. Drivers never see it. A row appears only when its count is above zero and
+links to the page where staff act on it:
+
+| Row | Counts | Opens |
+| --- | --- | --- |
+| Stops today | Open stops due today or earlier at that pharmacy, with "N not started · N late" when above zero | Delivery & Pickup |
+| Need a driver or date | Stops still pending (no driver, or an in-store pickup with no date) | Delivery & Pickup |
+| Overdue rentals | Rental orders in status `overdue` | Orders |
+| Payments overdue | Recurring charges in status `overdue` | Billing |
+| Waiting in store | In-store pickups with a date set, not yet handed off | Delivery & Pickup |
+| Deposits to refund | Deposits in status `pending_refund` | Billing |
+
+"All caught up ✓" appears when every count is zero, and "Couldn't load" if the
+query fails. Counting and row rules live in `src/components/needsToday.ts`
+(unit tests in `tests/unit/needs-today.test.ts`), the query in
+`src/components/useNeedsToday.ts`, and the markup in
+`src/components/NeedsTodayPanel.tsx`. "Today" and "late" use the Delivery board's
+`businessToday`/`isLate` helpers (America/New_York). The panel refreshes with the
+sidebar badges: 20-second poll, realtime events and the `needs_today` query key
+in `workflowKeys.ts`.
+
 Login is `/admin-login`. The form accepts configured usernames and the explicitly
 allowed owner email; an arbitrary email is not necessarily a valid login.
 Local authorized credentials are in the ignored `LOGINS.local.md`. Read/use them

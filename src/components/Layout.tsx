@@ -17,6 +17,9 @@ import NotificationsBell from './NotificationsBell'
 import { dispatchCustomerEmails } from '../lib/customerEmails'
 import { getVisibleWorkspaces, matchesWorkspaceTab } from '../lib/workspaceNavigation'
 import { BACKOFFICE_ROLES, STAFF_APP_ROLES, canSwitchStores, roleLabel } from '../lib/roles'
+import { NeedsTodayBadge, NeedsTodayPanel } from './NeedsTodayPanel'
+import { NEEDS_TODAY_MODULES, canSeeNeedsToday, needsTodayTotal, type NeedsTodayModule, type NeedsTodayStatus } from './needsToday'
+import { useNeedsToday } from './useNeedsToday'
 
 const STAFF = BACKOFFICE_ROLES
 const ALL = STAFF_APP_ROLES
@@ -75,6 +78,19 @@ export default function Layout({ children }: { children: ReactNode }) {
       return { requests: req.count ?? 0, orders: ord.count ?? 0, deliveries: del.count ?? 0 } as Record<string, number>
     },
   })
+  // "Needs you today": the chosen pharmacy's action list. Staff, owner and
+  // admin only; never totalled across pharmacies, so "All stores" shows none.
+  // Rows behind a locked staff module stay out, and the panel waits for the
+  // module switches rather than flashing a false "All caught up".
+  const canOpenNeeds = (module: NeedsTodayModule) => access.canAccess(module)
+  const showNeeds = canSeeNeedsToday(profile?.role) && !access.loadingAccess && NEEDS_TODAY_MODULES.some(canOpenNeeds)
+  const needs = useNeedsToday(selectedLocationId, showNeeds, canOpenNeeds)
+  const needsRows = needs.data ?? []
+  const needsStatus: NeedsTodayStatus = needs.status === 'error' ? 'error' : needs.status === 'pending' ? 'loading' : 'ready'
+  const needsPanel = showNeeds
+    ? <NeedsTodayPanel rows={needsRows} status={needsStatus} needsLocation={!selectedLocationId} />
+    : null
+  const needsTotal = showNeeds && selectedLocationId ? needsTodayTotal(needsRows) : 0
   useQuery({
     queryKey: ['customer_email_dispatch'],
     enabled: Boolean(profile?.id),
@@ -139,7 +155,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen min-h-dvh flex bg-slate-50">
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-slate-200 bg-white lg:flex">
+      <aside className="hidden w-64 shrink-0 flex-col border-r border-slate-200 bg-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:h-dvh">
         <div className="px-5 py-4 flex items-center gap-3 border-b border-slate-100">
           <div className="w-9 h-9 rounded-xl bg-blue-600 grid place-items-center text-white">
             <Shield size={18} />
@@ -152,9 +168,10 @@ export default function Layout({ children }: { children: ReactNode }) {
         <div className="px-5 pt-4 pb-1 text-[11px] font-semibold tracking-wider text-slate-400">
           NAVIGATION
         </div>
-        <nav className="flex-1 px-3 space-y-1">
+        <nav className="flex-1 overflow-y-auto px-3 space-y-1">
           {navLinks}
         </nav>
+        {needsPanel}
       </aside>
 
       {mobileNavOpen && (
@@ -184,9 +201,10 @@ export default function Layout({ children }: { children: ReactNode }) {
               </button>
             </div>
             <div className="px-5 pb-1 pt-4 text-[11px] font-semibold tracking-wider text-slate-400">NAVIGATION</div>
-            <nav className="flex-1 space-y-1 overflow-y-auto px-3 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+            <nav className={`flex-1 space-y-1 overflow-y-auto px-3 ${needsPanel ? 'pb-2' : 'pb-[calc(1rem+env(safe-area-inset-bottom))]'}`}>
               {navLinks}
             </nav>
+            {needsPanel}
           </aside>
         </>
       )}
@@ -196,13 +214,14 @@ export default function Layout({ children }: { children: ReactNode }) {
           <div className="flex min-w-0 items-center gap-2 lg:hidden">
             <button
               type="button"
-              aria-label="Open navigation"
+              aria-label={needsTotal > 0 ? `Open navigation, ${needsTotal} need you today` : 'Open navigation'}
               aria-expanded={mobileNavOpen}
               aria-controls="mobile-navigation"
               onClick={() => setMobileNavOpen(true)}
-              className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              className="relative grid h-11 w-11 shrink-0 place-items-center rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900"
             >
               <Menu size={22} />
+              <NeedsTodayBadge total={needsTotal} />
             </button>
             <div className="flex min-w-0 items-center gap-2.5">
               <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-blue-600 text-white">
