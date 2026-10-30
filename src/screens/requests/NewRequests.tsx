@@ -1,6 +1,5 @@
 'use client'
 
-import { Inbox } from 'lucide-react'
 import RequestActions from './RequestActions'
 import RequestCard, { ShortageNote } from './RequestCard'
 import type { useRequests } from './useRequests'
@@ -18,15 +17,8 @@ export default function NewRequests({ requests, selected, onOpen, showEmpty = fa
   const { rows, isLoading, loadError, error, note } = requests
   if (!showEmpty && rows.length === 0 && !error && !note && !loadError) return null
   return (
-    <section aria-label="New requests" className="mb-5 rounded-2xl border border-blue-200 bg-blue-50/50 p-3 sm:p-4">
-      <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <h3 className="inline-flex items-center gap-2 text-sm font-semibold text-blue-900">
-          <Inbox size={16} /> New requests{rows.length ? ` (${rows.length})` : ''}
-        </h3>
-        <p className="text-xs text-blue-900/70">
-          From the website. <strong>Approve</strong> reserves the equipment and creates the pickup or delivery; <strong>Decline</strong> cancels it.
-        </p>
-      </div>
+    <section aria-labelledby="new-requests-title" className="mb-6">
+      <h3 id="new-requests-title" className="mb-3 text-base font-semibold text-slate-900">New Requests</h3>
       {isLoading && <div className="text-sm text-slate-500">Loading…</div>}
       {loadError && <div className="text-sm text-red-600">Couldn’t load requests. Please try again.</div>}
       {error && <div role="alert" className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">{error}</div>}
