@@ -4,6 +4,7 @@ import { useRef, useState, type ReactNode } from 'react'
 import { Loader2, Pencil, X } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useDialogFocus } from '../../lib/useDialogFocus'
+import { useSlideClose } from '../../lib/useSlideClose'
 import { useStaffModuleAccess } from '../../lib/useStaffModuleAccess'
 import { SELECTED_CUSTOMER_PARAM } from '../customers/useSelectedCustomer'
 import { isReturnLeg } from '../../lib/legs'
@@ -37,17 +38,19 @@ export default function OrderDetailPanel({ orderId, onClose, actions, focusDeliv
   const { data, isLoading, error } = useOrderDetail(orderId)
   const asideRef = useRef<HTMLElement>(null)
   // The loading-state close button unmounts when data arrives; re-seat focus inside the dialog.
-  useDialogFocus(asideRef, onClose, `${Boolean(data)}:${orderId}`)
+  const { leaving, close } = useSlideClose(onClose)
+  useDialogFocus(asideRef, close, `${Boolean(data)}:${orderId}`)
 
   return (
     <div className="fixed inset-0 z-40" role="presentation">
-      <div className="absolute inset-0 bg-slate-900/30" onClick={onClose} aria-hidden="true" />
+      <div className="slide-backdrop absolute inset-0 bg-slate-900/30" data-leaving={leaving} onClick={close} aria-hidden="true" />
       <aside
         ref={asideRef}
         role="dialog"
         aria-modal="true"
         aria-label={data ? `Order #${data.order_no}` : 'Order details'}
-        className="absolute inset-y-0 right-0 w-full max-w-2xl bg-slate-50 shadow-2xl border-l border-slate-200 flex flex-col"
+        data-leaving={leaving}
+        className="slide-panel-right absolute inset-y-0 right-0 w-full max-w-2xl bg-slate-50 shadow-2xl border-l border-slate-200 flex flex-col"
       >
         {isLoading && (
           <div className="flex-1 grid place-items-center text-slate-500 text-sm">
@@ -60,9 +63,9 @@ export default function OrderDetailPanel({ orderId, onClose, actions, focusDeliv
         {!isLoading && !error && !data && (
           <div className="p-6 text-sm text-slate-500">This order no longer exists or you don’t have access to it.</div>
         )}
-        {data && <PanelBody o={data} onClose={onClose} actions={actions} focusDeliveryId={focusDeliveryId ?? null} />}
+        {data && <PanelBody o={data} onClose={close} actions={actions} focusDeliveryId={focusDeliveryId ?? null} />}
         {(isLoading || error || !data) && (
-          <button type="button" onClick={onClose} aria-label="Close" className="absolute top-3 right-3 p-2 rounded-lg text-slate-500 hover:bg-slate-200">
+          <button type="button" onClick={close} aria-label="Close" className="absolute top-3 right-3 p-2 rounded-lg text-slate-500 hover:bg-slate-200">
             <X size={18} />
           </button>
         )}

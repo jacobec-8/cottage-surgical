@@ -1,9 +1,13 @@
 import type { ReactNode } from 'react'
+import { Inter, JetBrains_Mono } from 'next/font/google'
 import { redirect } from 'next/navigation'
 import { createClient } from '../../lib/supabase/server'
 import type { Profile } from '../../contexts/AuthContext'
 import StaffShell from './StaffShell'
 import { STAFF_APP_ROLES } from '../../lib/roles'
+
+const staffSans = Inter({ subsets: ['latin'], variable: '--font-staff-sans', display: 'swap' })
+const staffMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-staff-mono', display: 'swap' })
 
 export const dynamic = 'force-dynamic'
 
@@ -30,8 +34,10 @@ export default async function StaffLayout({ children }: { children: ReactNode })
   const authorized = Boolean(profile?.is_active && STAFF_APP_ROLES.includes(profile.role))
 
   return (
-    <StaffShell initialUserId={userId} initialProfile={profile} authorized={authorized}>
-      {authorized ? children : null}
-    </StaffShell>
+    <div className={`staff-theme ${staffSans.variable} ${staffMono.variable}`}>
+      <StaffShell initialUserId={userId} initialProfile={profile} authorized={authorized}>
+        {authorized ? children : null}
+      </StaffShell>
+    </div>
   )
 }

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { itemsOf, moneySummary, newestFirst, outNow, stopKind, upcomingStops, type SummaryOrder } from '../../src/screens/customers/customerSummary.ts'
+import { customerInitials, itemsOf, moneySummary, newestFirst, outNow, stopKind, upcomingStops, type SummaryOrder } from '../../src/screens/customers/customerSummary.ts'
 import {
   addressChange, addressLabel, birthDateChange, coverageChange, coverageLabel, emailChange, nameChange, phoneChange, textChange,
 } from '../../src/screens/customers/contactRules.ts'
@@ -88,4 +88,16 @@ test('address saves as a whole and never guesses a state', () => {
   assert.equal(typeof addressChange({ line1: '1 Main St', city: 'X', state: '', zip: '123' }), 'string')
   assert.equal(addressLabel({ address_line1: null, address_city: null, address_state: 'NY', address_zip: null }), '')
   assert.equal(addressLabel({ address_line1: '1 Main St', address_city: 'Woodbury', address_state: 'NY', address_zip: '11797' }), '1 Main St, Woodbury, NY 11797')
+})
+
+test('customerInitials: first and last word, ignoring case and extra spaces', () => {
+  assert.equal(customerInitials('Jacob Chandran'), 'JC')
+  assert.equal(customerInitials('  margaret   ann alvarez '), 'MA')
+  assert.equal(customerInitials('Madonna'), 'M')
+  assert.equal(customerInitials('   '), '?')
+})
+
+test('outNow also counts rentals from just their type and status', () => {
+  const rows = [{ order_type: 'rental', status: 'active' }, { order_type: 'purchase', status: 'active' }, { order_type: 'rental', status: 'closed' }]
+  assert.equal(outNow(rows).length, 1)
 })

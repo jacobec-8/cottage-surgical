@@ -2,25 +2,13 @@
 
 import { useCallback, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronRight, Search } from 'lucide-react'
+import { Search } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useLocationScope } from '../contexts/LocationContext'
 import { matchesCustomerSearch } from '../lib/customerSearch'
 import CustomerPanel from './customers/CustomerPanel'
-import { coverageLabel } from './customers/contactRules'
+import CustomerTable, { type CustomerRow } from './customers/CustomerTable'
 import { useSelectedCustomer } from './customers/useSelectedCustomer'
-
-type Customer = {
-  id: string
-  full_name: string
-  phone: string | null
-  email: string | null
-  coverage_type: string | null
-  address_line1: string | null
-  address_city: string | null
-  address_state: string | null
-  address_zip: string | null
-}
 
 export default function Customers() {
   const { selectedLocationId } = useLocationScope()
@@ -32,12 +20,12 @@ export default function Customers() {
     queryFn: async () => {
       let query = supabase
         .from('customers')
-        .select('id,full_name,phone,email,coverage_type,address_line1,address_city,address_state,address_zip')
+        .select('id,full_name,phone,email,coverage_type,address_line1,address_city,address_state,address_zip,rental_orders(order_type,status)')
         .order('full_name')
       if (selectedLocationId) query = query.eq('location_id', selectedLocationId)
       const { data, error } = await query
       if (error) throw error
-      return data as Customer[]
+      return data as CustomerRow[]
     },
   })
   const shown = useMemo(() => (data ?? []).filter((c) => matchesCustomerSearch(c, search)), [data, search])
@@ -63,32 +51,7 @@ export default function Customers() {
       )}
       {data && data.length === 0 && <div className="text-slate-500 text-sm">No customers yet.</div>}
       {data && data.length > 0 && shown.length === 0 && <div className="text-slate-500 text-sm">No customers match “{search.trim()}”.</div>}
-      <div className="grid md:grid-cols-2 gap-3 items-start">
-        {shown.map((c) => {
-          const coverage = coverageLabel(c.coverage_type)
-          return (
-            <button
-              key={c.id}
-              type="button"
-              onClick={() => setSelected(c.id)}
-              aria-haspopup="dialog"
-              className={`flex w-full items-start justify-between gap-3 rounded-xl border bg-white p-4 text-left hover:border-blue-300 ${selected === c.id ? 'border-blue-300' : 'border-slate-200'}`}
-            >
-              <div className="min-w-0">
-                <div className="font-medium">{c.full_name}</div>
-                <div className="text-sm text-slate-500">
-                  {c.phone}
-                  {c.address_city ? ` · ${c.address_city}` : ''}
-                </div>
-                {coverage && (
-                  <span className="inline-block mt-2 text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-600">{coverage}</span>
-                )}
-              </div>
-              <ChevronRight size={16} className="mt-1 shrink-0 text-slate-400" />
-            </button>
-          )
-        })}
-      </div>
+      {shown.length > 0 && <CustomerTable customers={shown} selected={selected} onOpen={setSelected} />}
       {selected && <CustomerPanel customerId={selected} onClose={closePanel} />}
     </div>
   )

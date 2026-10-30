@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useLocationScope } from '../contexts/LocationContext'
+import { useSlideClose } from '../lib/useSlideClose'
 import { supabase } from '../lib/supabase'
 import type { StaffModule } from '../lib/staffModules'
 import { useStaffModuleAccess } from '../lib/useStaffModuleAccess'
@@ -49,15 +50,17 @@ export default function Layout({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   useEffect(() => setMobileNavOpen(false), [pathname])
+  const closeMobileNav = useCallback(() => setMobileNavOpen(false), [])
+  const { leaving: mobileNavLeaving, close: slideNavClosed } = useSlideClose(closeMobileNav)
 
   useEffect(() => {
     if (!mobileNavOpen) return
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key === 'Escape') setMobileNavOpen(false)
+      if (event.key === 'Escape') slideNavClosed()
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [mobileNavOpen])
+  }, [mobileNavOpen, slideNavClosed])
   // Live work-queue counts, auto-refreshed so approving a request updates the
   // Orders + Delivery badges (and screens) without a manual refresh.
   const { data: counts } = useQuery({
@@ -162,19 +165,19 @@ export default function Layout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen min-h-dvh flex bg-slate-50">
       <aside className="hidden w-64 shrink-0 flex-col border-r border-slate-200 bg-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:h-dvh">
-        <div className="px-5 py-4 flex items-center gap-3 border-b border-slate-100">
-          <div className="w-9 h-9 rounded-xl bg-blue-600 grid place-items-center text-white">
+        <div className="flex h-[72px] shrink-0 items-center gap-2.5 border-b border-slate-200 px-4">
+          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-blue-600 text-white">
             <Shield size={18} />
           </div>
-          <div>
-            <div className="font-semibold text-slate-900 leading-tight">{businessName}</div>
-            <div className="text-[11px] text-slate-500">DME Rental Management System</div>
+          <div className="min-w-0">
+            <div className="truncate font-semibold leading-tight text-slate-900">{businessName}</div>
+            <div className="truncate text-[10.5px] text-slate-500">DME Rental Management System</div>
           </div>
         </div>
         <div className="px-5 pt-4 pb-1 text-[11px] font-semibold tracking-wider text-slate-400">
           NAVIGATION
         </div>
-        <nav className="flex-1 overflow-y-auto px-3 space-y-1">
+        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-1">
           {navLinks}
         </nav>
         {needsPanel}
@@ -185,10 +188,11 @@ export default function Layout({ children }: { children: ReactNode }) {
           <button
             type="button"
             aria-label="Close navigation"
-            className="fixed inset-0 z-40 bg-slate-950/40 lg:hidden"
-            onClick={() => setMobileNavOpen(false)}
+            className="slide-backdrop fixed inset-0 z-40 bg-slate-950/40 lg:hidden"
+            data-leaving={mobileNavLeaving}
+            onClick={slideNavClosed}
           />
-          <aside id="mobile-navigation" className="fixed inset-y-0 left-0 z-50 flex w-[min(20rem,86vw)] flex-col bg-white shadow-2xl lg:hidden">
+          <aside id="mobile-navigation" data-leaving={mobileNavLeaving} className="slide-panel-left fixed inset-y-0 left-0 z-50 flex w-[min(20rem,86vw)] flex-col bg-white shadow-2xl lg:hidden">
             <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-4">
               <div className="grid h-9 w-9 place-items-center rounded-xl bg-blue-600 text-white">
                 <Shield size={18} />
@@ -200,14 +204,14 @@ export default function Layout({ children }: { children: ReactNode }) {
               <button
                 type="button"
                 aria-label="Close navigation"
-                onClick={() => setMobileNavOpen(false)}
+                onClick={slideNavClosed}
                 className="grid h-11 w-11 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800"
               >
                 <X size={21} />
               </button>
             </div>
             <div className="px-5 pb-1 pt-4 text-[11px] font-semibold tracking-wider text-slate-400">NAVIGATION</div>
-            <nav className={`flex-1 space-y-1 overflow-y-auto px-3 ${needsPanel ? 'pb-2' : 'pb-[calc(1rem+env(safe-area-inset-bottom))]'}`}>
+            <nav className={`flex-1 space-y-1 overflow-y-auto px-3 pt-1 ${needsPanel ? 'pb-2' : 'pb-[calc(1rem+env(safe-area-inset-bottom))]'}`}>
               {navLinks}
             </nav>
             {needsPanel}
@@ -216,7 +220,7 @@ export default function Layout({ children }: { children: ReactNode }) {
       )}
 
       <div className="flex-1 min-w-0 flex flex-col">
-        <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-slate-200 bg-white px-3 py-3 sm:px-6 lg:static lg:justify-end lg:gap-6 lg:py-2.5">
+        <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-slate-200 bg-white px-3 py-3 sm:px-6 lg:static lg:h-[72px] lg:shrink-0 lg:justify-end lg:gap-6 lg:py-0">
           <div className="flex min-w-0 items-center gap-2 lg:hidden">
             <button
               type="button"

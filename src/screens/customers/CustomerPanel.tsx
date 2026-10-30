@@ -3,6 +3,7 @@
 import { useMemo, useRef } from 'react'
 import { Loader2, Mail, Phone, X } from 'lucide-react'
 import { useDialogFocus } from '../../lib/useDialogFocus'
+import { useSlideClose } from '../../lib/useSlideClose'
 import { HistorySection, OutNowSection, SummaryTiles, UpcomingSection } from './ActivitySections'
 import ContactSection from './ContactSection'
 import { moneySummary, newestFirst, outNow, upcomingStops } from './customerSummary'
@@ -13,13 +14,14 @@ import MoneyRecordsSection from '../reports/MoneyRecordsSection'
 export default function CustomerPanel({ customerId, onClose }: { customerId: string; onClose: () => void }) {
   const { data, isLoading, error } = useCustomerDetail(customerId)
   const asideRef = useRef<HTMLElement>(null)
-  useDialogFocus(asideRef, onClose, `${Boolean(data)}:${customerId}`)
+  const { leaving, close } = useSlideClose(onClose)
+  useDialogFocus(asideRef, close, `${Boolean(data)}:${customerId}`)
 
   return (
     <div className="fixed inset-0 z-40" role="presentation">
-      <div className="absolute inset-0 bg-slate-900/30" onClick={onClose} aria-hidden="true" />
-      <aside ref={asideRef} role="dialog" aria-modal="true" aria-label={data ? data.customer.full_name : 'Customer details'}
-        className="absolute inset-y-0 right-0 flex w-full max-w-2xl flex-col border-l border-slate-200 bg-slate-50 shadow-2xl">
+      <div className="slide-backdrop absolute inset-0 bg-slate-900/30" data-leaving={leaving} onClick={close} aria-hidden="true" />
+      <aside ref={asideRef} role="dialog" aria-modal="true" aria-label={data ? data.customer.full_name : 'Customer details'} data-leaving={leaving}
+        className="slide-panel-right absolute inset-y-0 right-0 flex w-full max-w-2xl flex-col border-l border-slate-200 bg-slate-50 shadow-2xl">
         {isLoading && (
           <div className="grid flex-1 place-items-center text-sm text-slate-500">
             <span className="inline-flex items-center gap-2"><Loader2 size={16} className="animate-spin" /> Loading customer…</span>
@@ -29,9 +31,9 @@ export default function CustomerPanel({ customerId, onClose }: { customerId: str
         {!isLoading && !error && !data && (
           <div className="p-6 text-sm text-slate-500">This customer no longer exists or isn’t at your store.</div>
         )}
-        {data && <PanelBody detail={data} onClose={onClose} />}
+        {data && <PanelBody detail={data} onClose={close} />}
         {(isLoading || error || !data) && (
-          <button type="button" onClick={onClose} aria-label="Close" className="absolute right-3 top-3 rounded-lg p-2 text-slate-500 hover:bg-slate-200">
+          <button type="button" onClick={close} aria-label="Close" className="absolute right-3 top-3 rounded-lg p-2 text-slate-500 hover:bg-slate-200">
             <X size={18} />
           </button>
         )}

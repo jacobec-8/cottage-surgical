@@ -47,7 +47,7 @@ The sidebar groups related screens into horizontal tabs:
 | --- | --- |
 | **Orders** | **Orders** (`/orders`, with **New requests** pinned at the top and a **Requests** filter; the old `/requests` opens it), **New Order** (`/new-order`). Staff with either the Orders or the Requests switch can open Orders; without Orders they see only the requests. |
 | **Delivery & Pickup** | **Delivery & Pickup** (`/delivery`), **Drivers** (`/drivers`). Driver accounts keep the standalone **My Deliveries** screen, without the roster tab. |
-| **Staff** (admin only) | **Staff & Users** (`/staff`), **Staff Access** (`/staff-access`). Staff detail (`/staff/[id]`) keeps the users tab active. |
+| **Staff** (admin only) | **Staff & Users** (`/staff`, with All, Admins, Owners, Store staff and Drivers tabs; `?type=driver` opens a tab), **Staff Access** (`/staff-access`). Staff detail (`/staff/[id]`) keeps the users tab active. |
 
 Each tab keeps its own role/module permission. The sidebar opens the first
 permitted tab and hides a group when none are permitted. Its badge combines
@@ -161,7 +161,7 @@ verify the effective order price as well as the displayed catalog price.
 With a store selected (staff always have theirs), **Inventory** has two tabs:
 **In [store]** and **Add from catalog**. The catalog tab lists every active
 product the store does not carry yet, with search and a category filter;
-**Add to [store]** assigns it, then **Added · set stock** opens the item to
+**+ Add** assigns it to the store, then **Added · set stock** opens the item to
 enter the quantity (counted items) or add units (unit-tracked items).
 
 The catalog includes the Cottage Pharmacy retail list (246 products, loaded by
@@ -516,8 +516,8 @@ has no Revenue, Overdue now or Money records. Implementation:
    outbound handoff; only a driver pickup is a return. Billing, order cards and
    order detail use `isReturnLeg`. Still check the stop type before reporting
    equipment returned.
-2. **Customer Directory:** fixed. A card expands to contact details and the
-   customer's order history; each order links to its detail.
+2. **Customer Directory:** fixed. One customer per row; a row opens the customer
+   pane with contact details and order history, and each order links to its detail.
 3. **Staff pickup creation:** fixed (110). New Order offers **Delivery** or
    **In-store pickup**; a pickup order needs the store's pickup switch on for
    the item and charges the store's pickup price.

@@ -3,8 +3,8 @@
 import { useState } from 'react'
 import { Package } from 'lucide-react'
 
-const SIZES = { xs: 'h-6 w-6', sm: 'h-7 w-7', md: 'h-9 w-9' } as const
-const ICON = { xs: 12, sm: 14, md: 16 } as const
+const SIZES = { xs: 'h-6 w-6', sm: 'h-7 w-7', md: 'h-9 w-9', lg: 'h-12 w-12' } as const
+const ICON = { xs: 12, sm: 14, md: 16, lg: 20 } as const
 
 /**
  * The product's picture, small and square, shown next to its name on list

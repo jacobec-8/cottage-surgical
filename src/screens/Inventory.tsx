@@ -1,23 +1,20 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Search, Pencil, Trash2, X, ChevronDown, ChevronRight, ImagePlus, MapPin, Truck, Zap, Building2 } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, X, ImagePlus, Building2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { fulfillmentLabel } from '../lib/fulfillment'
 import { useLocationScope } from '../contexts/LocationContext'
 import { canSwitchStores } from '../lib/roles'
 import { useCatalogManager } from '../lib/useCatalogManager'
 import { refreshWebsite } from '../lib/websiteRefresh'
 import { canManageStore, parseAssetTags, removeProductMessage, startingStockProblem } from '../lib/storeProducts'
 import { useAuth } from '../contexts/AuthContext'
-import StockStatusBadges, { LOW_STOCK_THRESHOLD } from '../components/StockStatusBadges'
 import { CATEGORIES } from '../lib/categories'
 import CatalogPicker from './inventory/CatalogPicker'
-import ProductPanel from './inventory/ProductPanel'
+import InventoryTable from './inventory/InventoryTable'
 
-type Item = {
+export type InventoryItem = {
   id: string
   name: string
   description: string | null
@@ -49,9 +46,9 @@ const SELECT = 'id,name,description,category,sku,monthly_rental_price,pickup_ren
 export default function Inventory() {
   const qc = useQueryClient()
   const { profile } = useAuth()
-  const { locations, selectedLocationId, selectedLocation, setSelectedLocationId, isAllLocations } = useLocationScope()
+  const { locations, selectedLocationId, selectedLocation, setSelectedLocationId } = useLocationScope()
   const [q, setQ] = useState('')
-  const [editing, setEditing] = useState<Partial<Item> | null>(null) // null=closed, {} = new
+  const [editing, setEditing] = useState<Partial<InventoryItem> | null>(null) // null=closed, {} = new
   const catalogManager = useCatalogManager()
   const [expandedId, setExpandedId] = useState<string | null>(null)
   // The row pencil opens the row with its first field ready to edit.
@@ -66,7 +63,7 @@ export default function Inventory() {
     queryFn: async () => {
       const { data, error } = await supabase.from('equipment_items').select(SELECT).order('category').order('name')
       if (error) throw error
-      return data as Item[]
+      return data as InventoryItem[]
     },
   })
 
@@ -96,7 +93,7 @@ export default function Inventory() {
   })
   const canRemoveHere = Boolean(selectedLocationId) && canManageStore(profile, selectedLocation)
 
-  const inStore = (it: Item) => Boolean(selectedLocationId && it.location_inventory?.some((entry) => entry.location_id === selectedLocationId))
+  const inStore = (it: InventoryItem) => Boolean(selectedLocationId && it.location_inventory?.some((entry) => entry.location_id === selectedLocationId))
   // A scanner types a unit's asset tag or serial number: find the product that unit belongs to.
   const scanTerm = q.trim()
   const scanned = useQuery({
@@ -111,7 +108,7 @@ export default function Inventory() {
       return new Set((data ?? []).map((u) => u.item_id as string))
     },
   })
-  const matches = (it: Item) => (category === 'all' || it.category === category)
+  const matches = (it: InventoryItem) => (category === 'all' || it.category === category)
     && ([it.name, it.description, it.sku, it.category, ...(it.location_inventory ?? []).filter((row) => !selectedLocationId || row.location_id === selectedLocationId).map((row) => row.scan_code)].filter(Boolean).join(' ').toLowerCase().includes(q.toLowerCase())
       || Boolean(scanned.data?.has(it.id)))
   const filtered = (data ?? []).filter((it) => matches(it) && (!selectedLocationId || inStore(it)))
@@ -119,6 +116,36 @@ export default function Inventory() {
   const addable = selectedLocationId ? (data ?? []).filter((it) => it.is_active && (!inStore(it) || justAdded.includes(`${selectedLocationId}:${it.id}`)) && matches(it)) : []
   const showCatalog = Boolean(selectedLocation) && view === 'catalog'
   const usedCategories = CATEGORIES.filter((c) => (data ?? []).some((it) => it.category === c))
+  const rowActions = (it: InventoryItem) => (
+    <>
+    <button type="button" onClick={() => { setExpandedId(it.id); setEditTarget((cur) => ({ id: it.id, n: (cur?.n ?? 0) + 1 })) }} aria-label={`Edit ${it.name}`} title="Edit" className="grid h-10 w-10 place-items-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600">
+      <Pencil size={16} />
+    </button>
+    {selectedLocationId ? canRemoveHere && <button
+      aria-label={it.location_id ? `Delete ${it.name}` : `Remove ${it.name} from ${storeName}`}
+      title={it.location_id ? 'Delete product' : `Remove from ${storeName}`}
+      disabled={removeFromStore.isPending}
+      onClick={() => {
+        const question = it.location_id
+          ? `Delete "${it.name}"? It is removed from ${storeName} and from the website.`
+          : `Remove "${it.name}" from ${storeName}? It stays in the catalog, and the website stops showing it unless another store carries it.`
+        if (confirm(question)) removeFromStore.mutate(it.id)
+      }}
+      className="grid h-10 w-10 place-items-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+    >
+      <Trash2 size={16} />
+    </button> : catalogManager && <button
+      aria-label={`Remove ${it.name} from the catalog`}
+      title="Remove from the catalog"
+      onClick={() => {
+        if (confirm(`Remove "${it.name}" from the catalog? Every store stops carrying it and it leaves the website.`)) deactivate.mutate(it.id)
+      }}
+      className="grid h-10 w-10 place-items-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600"
+    >
+      <Trash2 size={16} />
+    </button>}
+    </>
+  )
 
   return (
     <div>
@@ -187,113 +214,12 @@ export default function Inventory() {
 
       {showCatalog && selectedLocation && <CatalogPicker items={addable} locationId={selectedLocation.id} locationName={selectedLocation.name} added={justAdded.filter((key) => key.startsWith(`${selectedLocation.id}:`)).map((key) => key.split(':')[1])} onAdded={(id) => setJustAdded((prev) => [...prev, `${selectedLocation.id}:${id}`])} />}
 
-      <div className={`space-y-3 ${showCatalog ? 'hidden' : ''}`}>
-        {filtered.map((it) => {
-          const open = expandedId === it.id
-          const scopedInventory = selectedLocationId
-            ? it.location_inventory?.find((entry) => entry.location_id === selectedLocationId)
-            : null
-          const scopedStock = selectedLocationId
-            ? scopedInventory?.quantity_on_hand ?? 0
-            : (it.location_inventory ?? []).reduce((sum, entry) => sum + entry.quantity_on_hand, 0)
-          const outOfStockStores = (it.location_inventory ?? []).filter((entry) => entry.quantity_on_hand <= 0).length
-          const lowStockStores = (it.location_inventory ?? []).filter((entry) => entry.quantity_on_hand > 0 && entry.quantity_on_hand <= LOW_STOCK_THRESHOLD).length
-          const hiddenPickupStores = it.pickup_enabled
-            ? (it.location_inventory ?? []).filter((entry) => entry.quantity_on_hand <= 0 || !entry.pickup_enabled).length
-            : 0
-          return (
-            <div
-              key={it.id}
-              className={`bg-white border border-slate-200 rounded-xl ${it.is_active ? '' : 'opacity-50'}`}
-            >
-              <div className="flex flex-col p-3 sm:flex-row sm:items-center sm:gap-4 sm:p-4">
-                <div className="flex min-w-0 items-start gap-3 sm:flex-1 sm:items-center sm:gap-4">
-                  <button
-                    type="button"
-                    onClick={() => setExpandedId(open ? null : it.id)}
-                    className="grid h-10 w-8 shrink-0 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                    aria-label={open ? `Collapse ${it.name}` : `Expand ${it.name}`}
-                  >
-                    {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                  </button>
-                  {it.image_url ? (
-                    <img src={it.image_url} alt="" className="h-16 w-16 shrink-0 rounded-lg bg-slate-100 object-cover" />
-                  ) : (
-                    <div className="h-16 w-16 shrink-0 rounded-lg bg-slate-100" />
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <Link href={`/inventory/${it.id}`} className="block font-semibold leading-snug hover:text-blue-600 sm:truncate">
-                      {it.name}
-                      {!it.is_active && <span className="ml-2 text-xs text-slate-400">(inactive)</span>}
-                    </Link>
-                    <div className="mt-0.5 line-clamp-2 text-sm text-slate-500 sm:truncate">{it.description}</div>
-                    <div className="mt-2 flex flex-wrap items-center gap-2 sm:gap-3">
-                      <span className="rounded-full bg-slate-100 px-2 py-1 text-xs capitalize text-slate-600">{it.category}</span>
-                      <span className="text-xs text-slate-500">Qty on hand{selectedLocation ? ` at ${selectedLocation.name}` : isAllLocations ? ' across stores' : ''}: {scopedStock}</span>
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium ${it.pickup_enabled ? 'bg-emerald-50 text-emerald-700' : 'bg-blue-50 text-blue-700'}`}>
-                        {it.pickup_enabled ? <MapPin size={11} /> : <Truck size={11} />}{fulfillmentLabel(it)}
-                      </span>
-                      {it.same_day_pickup && it.pickup_enabled && <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-700"><Zap size={11} /> Same-day pickup</span>}
-                      {it.is_rentable && !it.is_purchasable && <span className="rounded-full bg-violet-50 px-2 py-1 text-[11px] font-medium text-violet-700">Rent only</span>}
-                      {selectedLocationId ? (
-                        <StockStatusBadges quantity={scopedStock} pickupEligible={it.pickup_enabled} pickupEnabled={scopedInventory?.pickup_enabled ?? false} />
-                      ) : (
-                        <>
-                          {outOfStockStores > 0 && <span className="rounded-full bg-red-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-red-700">{outOfStockStores} {outOfStockStores === 1 ? 'store' : 'stores'} out of stock</span>}
-                          {lowStockStores > 0 && <span className="rounded-full bg-amber-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-800">{lowStockStores} low stock</span>}
-                          {hiddenPickupStores > 0 && <span className="rounded-full bg-slate-200 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-700">{hiddenPickupStores} hidden from pickup</span>}
-                        </>
-                      )}
-                    </div>
-                    {it.sku && <div className="mt-1 text-xs text-slate-400">SN: {it.sku}</div>}
-                  </div>
-                </div>
-                <div className="mt-3 flex items-center justify-between gap-3 border-t border-slate-100 pt-3 sm:mt-0 sm:shrink-0 sm:border-0 sm:pt-0">
-                  <div className="sm:text-right">
-                    <div className="text-sm font-semibold">
-                      {it.is_rentable ? [it.pickup_enabled && it.pickup_rental_price != null ? `$${Number(it.pickup_rental_price).toFixed(0)} pickup` : null, it.delivery_enabled && it.delivery_rental_price != null ? `$${Number(it.delivery_rental_price).toFixed(0)} delivered` : null].filter(Boolean).join(' · ') : 'Not rentable'}
-                    </div>
-                    <div className="text-xs text-slate-500">
-                      {it.is_purchasable && it.sale_price != null ? `$${Number(it.sale_price).toFixed(0)} sale` : 'Not for sale'}
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1">
-                    <button type="button" onClick={() => { setExpandedId(it.id); setEditTarget((cur) => ({ id: it.id, n: (cur?.n ?? 0) + 1 })) }} aria-label={`Edit ${it.name}`} title="Edit" className="grid h-10 w-10 place-items-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600">
-                      <Pencil size={16} />
-                    </button>
-                    {selectedLocationId ? canRemoveHere && <button
-                      aria-label={it.location_id ? `Delete ${it.name}` : `Remove ${it.name} from ${storeName}`}
-                      title={it.location_id ? 'Delete product' : `Remove from ${storeName}`}
-                      disabled={removeFromStore.isPending}
-                      onClick={() => {
-                        const question = it.location_id
-                          ? `Delete "${it.name}"? It is removed from ${storeName} and from the website.`
-                          : `Remove "${it.name}" from ${storeName}? It stays in the catalog, and the website stops showing it unless another store carries it.`
-                        if (confirm(question)) removeFromStore.mutate(it.id)
-                      }}
-                      className="grid h-10 w-10 place-items-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
-                    >
-                      <Trash2 size={16} />
-                    </button> : catalogManager && <button
-                      aria-label={`Remove ${it.name} from the catalog`}
-                      title="Remove from the catalog"
-                      onClick={() => {
-                        if (confirm(`Remove "${it.name}" from the catalog? Every store stops carrying it and it leaves the website.`)) deactivate.mutate(it.id)
-                      }}
-                      className="grid h-10 w-10 place-items-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600"
-                    >
-                      <Trash2 size={16} />
-                    </button>}
-                  </div>
-                </div>
-              </div>
-              {open && <ProductPanel key={editTarget?.id === it.id ? `edit-${editTarget.n}` : it.id} startField={editTarget?.id === it.id ? (selectedLocationId ? 'stock' : 'name') : null} item={it} stock={scopedStock} locationId={selectedLocationId} storeName={selectedLocation?.name ?? null} storeOpen={selectedLocation?.is_active ?? true} />}
-            </div>
-          )
-        })}
-      </div>
+      {filtered.length > 0 && (
+        <div className={showCatalog ? 'hidden' : ''}>
+          <InventoryTable items={filtered} expandedId={expandedId} onToggle={(id) => setExpandedId(expandedId === id ? null : id)} editTarget={editTarget}
+            locationId={selectedLocationId} location={selectedLocation} actions={rowActions} />
+        </div>
+      )}
 
       {!showCatalog && !isLoading && !error && filtered.length === 0 && (
         <div className="rounded-xl border border-slate-200 bg-white py-10 text-center text-sm text-slate-500">
@@ -308,7 +234,7 @@ export default function Inventory() {
   )
 }
 
-function initialForm(item: Partial<Item>) {
+function initialForm(item: Partial<InventoryItem>) {
   return {
     name: item.name ?? '',
     description: item.description ?? '',
@@ -329,7 +255,7 @@ function initialForm(item: Partial<Item>) {
   }
 }
 
-function ItemModal({ item, onClose }: { item: Partial<Item>; onClose: () => void }) {
+function ItemModal({ item, onClose }: { item: Partial<InventoryItem>; onClose: () => void }) {
   const qc = useQueryClient()
   const { profile } = useAuth()
   const isNew = !item.id
