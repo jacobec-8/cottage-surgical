@@ -10,6 +10,7 @@ import { invalidateOrderWorkflow } from '../lib/workflowKeys'
 import { useLocationScope } from '../contexts/LocationContext'
 import { DRIVER_LOCATION_FIELDS, driversForLocation, type DriverWithLocations } from '../lib/driverLocations'
 import { DRIVER_BUSY_MSG, dispatchErrorMessage, windowProblem } from '../lib/dispatchErrors'
+import { canAddMore, nextQty, outOfStockMessage, stockLabel, storeStock, type Shortage } from './neworder/stock'
 
 type Item = {
   id: string
@@ -92,9 +93,14 @@ export default function NewOrder() {
       return (data ?? []) as any[]
     },
   })
+  // Stock decides what can be ordered, so the list is always re-read: on opening,
+  // every 20s, and on live stock changes (RealtimeSync, migration 116).
   const items = useQuery({
     queryKey: ['neworder_items', selectedLocationId],
     enabled: Boolean(selectedLocationId),
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchInterval: 20_000,
     queryFn: async () => {
       const { data, error } = await supabase.from('equipment_items')
         .select('id,name,image_url,category,delivery_rental_price,pickup_rental_price,sale_price,is_rentable,is_purchasable,delivery_enabled,location_inventory:equipment_location_inventory!inner(location_id,quantity_on_hand,pickup_enabled,pickup_rental_price,delivery_rental_price,sale_price)')
@@ -133,17 +139,28 @@ export default function NewOrder() {
     [items.data, itemSearch, mode, method],
   )
   const total = cart.reduce((s, l) => s + (l.rate ?? 0) * l.qty, 0)
+  // Only what this pharmacy has can be ordered: out-of-stock items can't be
+  // picked, and a line can't go above the store's count.
+  const stockById = useMemo(
+    () => new Map((items.data ?? []).map((it) => [it.id, storeStock(it)])),
+    [items.data],
+  )
+  const availableFor = (id: string) => stockById.get(id) ?? 0
+  const inCart = (id: string) => cart.find((l) => l.item_id === id)?.qty ?? 0
+  const overStock = cart.filter((l) => l.qty > availableFor(l.item_id))
 
   const addItem = (it: Item) => {
+    const available = availableFor(it.id)
     setCart((c) => {
+      // Checked against the latest cart, so a fast double click can't go over stock.
       const ex = c.find((l) => l.item_id === it.id)
+      if (!canAddMore(available, ex?.qty ?? 0)) return c
       if (ex) return c.map((l) => (l.item_id === it.id ? { ...l, qty: l.qty + 1 } : l))
       return [...c, { item_id: it.id, name: it.name, image_url: it.image_url, qty: 1, rate: rateFor(it) }]
     })
   }
-  // Clamp to 1..20 to match the server (create_staff_order caps at 20) so the
-  // cart total and the created order can't silently disagree.
-  const setQty = (id: string, d: number) => setCart((c) => c.map((l) => (l.item_id === id ? { ...l, qty: Math.min(20, Math.max(1, l.qty + d)) } : l)))
+  // Clamp to 1..store stock (and the server's 20) so the cart and the order agree.
+  const setQty = (id: string, d: number) => setCart((c) => c.map((l) => (l.item_id === id ? { ...l, qty: nextQty(l.qty, d, availableFor(id)) } : l)))
   const removeItem = (id: string) => setCart((c) => c.filter((l) => l.item_id !== id))
 
   const create = async () => {
@@ -151,6 +168,7 @@ export default function NewOrder() {
     try {
       if (!selectedLocationId) throw new Error('Select a store before creating an order.')
       if (cart.length === 0) throw new Error('Add at least one item.')
+      if (overStock.length > 0) throw new Error('Lower the quantities marked in red: the store doesn’t have that many.')
       const timeProblem = windowProblem(deliv.time, deliv.end)
       if (timeProblem) throw new Error(timeProblem)
       // Existing vs new customer — the new customer is created INSIDE the RPC
@@ -178,6 +196,11 @@ export default function NewOrder() {
         p_new_customer: newCustomer,
       })
       if (error) throw new Error(dispatchErrorMessage(error, 'Couldn’t create the order. Please try again.'))
+      if (data?.reason === 'out_of_stock') {
+        // Someone took the last unit first: nothing was created; show the real counts.
+        const refreshed = await items.refetch()
+        throw new Error(outOfStockMessage((data.shortages ?? []) as Shortage[], selectedLocation?.name ?? 'this store', !refreshed.error))
+      }
       if (!data?.ok) throw new Error(orderErrorMessage(data?.reason))
       setResult({ order_no: data.order_no, unallocated: data.unallocated, method })
       setCart([]); setCust(null); setNc({ full_name: '', phone: '', email: '', dob: '', coverage: '', line1: '', city: '', state: 'NY', zip: '' })
@@ -300,12 +323,32 @@ export default function NewOrder() {
         </div>
         {itemSearch && (
           <div className="border border-slate-200 rounded-lg divide-y divide-slate-100 mb-3 max-h-56 overflow-auto">
-            {filteredItems.map((it) => (
-              <button key={it.id} onClick={() => addItem(it)} className="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center justify-between gap-3 text-sm">
-                <span className="flex min-w-0 items-center gap-2"><ItemThumb src={it.image_url} /><span>{it.name}</span></span>
-                <span className="text-slate-500">${Number(rateFor(it) ?? 0).toFixed(0)}{mode === 'rental' ? '/mo' : ''}</span>
-              </button>
-            ))}
+            {filteredItems.map((it) => {
+              const available = availableFor(it.id)
+              const price = `$${Number(rateFor(it) ?? 0).toFixed(0)}${mode === 'rental' ? '/mo' : ''}`
+              if (available === 0) {
+                return (
+                  <div key={it.id} aria-disabled="true" className="flex w-full cursor-not-allowed items-center justify-between gap-3 px-3 py-2 text-sm text-slate-400">
+                    <span className="flex min-w-0 items-center gap-2"><span className="opacity-50"><ItemThumb src={it.image_url} /></span><span>{it.name}</span></span>
+                    <span className="flex shrink-0 items-center gap-3">
+                      <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">Out of stock</span>
+                      <span>{price}</span>
+                    </span>
+                  </div>
+                )
+              }
+              const full = !canAddMore(available, inCart(it.id))
+              return (
+                <button key={it.id} onClick={() => addItem(it)} disabled={full}
+                  className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400 disabled:hover:bg-transparent">
+                  <span className="flex min-w-0 items-center gap-2"><ItemThumb src={it.image_url} /><span>{it.name}</span></span>
+                  <span className="flex shrink-0 items-center gap-3">
+                    <span className="text-xs text-slate-500">{full ? `All ${available} in the order` : stockLabel(available)}</span>
+                    <span className="text-slate-500">{price}</span>
+                  </span>
+                </button>
+              )
+            })}
             {filteredItems.length === 0 && <div className="px-3 py-2 text-sm text-slate-400">No matching {mode} items.</div>}
           </div>
         )}
@@ -313,19 +356,27 @@ export default function NewOrder() {
           <div className="text-sm text-slate-400">No items yet — search and add equipment.</div>
         ) : (
           <div className="space-y-2">
-            {cart.map((l) => (
+            {cart.map((l) => {
+              const available = availableFor(l.item_id)
+              const over = l.qty > available
+              return (
               <div key={l.item_id} className="flex items-center gap-3 bg-slate-50 rounded-lg px-3 py-2">
                 <ItemThumb src={l.image_url} />
-                <div className="flex-1 text-sm font-medium">{l.name}</div>
+                <div className="flex-1 text-sm font-medium">
+                  {l.name}
+                  {over && <span className="block text-xs font-normal text-red-600">{available === 0 ? 'Out of stock now. Remove it.' : `Only ${available} in stock now.`}</span>}
+                </div>
                 <div className="flex items-center gap-1">
-                  <button onClick={() => setQty(l.item_id, -1)} className="w-6 h-6 rounded border border-slate-300 grid place-items-center text-slate-500"><Minus size={13} /></button>
-                  <span className="w-6 text-center text-sm">{l.qty}</span>
-                  <button onClick={() => setQty(l.item_id, 1)} className="w-6 h-6 rounded border border-slate-300 grid place-items-center text-slate-500"><Plus size={13} /></button>
+                  <button onClick={() => setQty(l.item_id, -1)} aria-label={`One fewer ${l.name}`} className="w-6 h-6 rounded border border-slate-300 grid place-items-center text-slate-500"><Minus size={13} /></button>
+                  <span className={`w-6 text-center text-sm ${over ? 'font-semibold text-red-600' : ''}`}>{l.qty}</span>
+                  <button onClick={() => setQty(l.item_id, 1)} disabled={!canAddMore(available, l.qty)} aria-label={`One more ${l.name}`}
+                    className="w-6 h-6 rounded border border-slate-300 grid place-items-center text-slate-500 disabled:cursor-not-allowed disabled:opacity-40"><Plus size={13} /></button>
                 </div>
                 <div className="w-24 text-right text-sm font-medium">${((l.rate ?? 0) * l.qty).toFixed(0)}{mode === 'rental' ? '/mo' : ''}</div>
-                <button onClick={() => removeItem(l.item_id)} className="text-slate-400 hover:text-red-600"><Trash2 size={15} /></button>
+                <button onClick={() => removeItem(l.item_id)} aria-label={`Remove ${l.name}`} className="text-slate-400 hover:text-red-600"><Trash2 size={15} /></button>
               </div>
-            ))}
+              )
+            })}
             <div className="flex justify-end text-sm font-semibold pt-1">Total: ${total.toFixed(0)}{mode === 'rental' ? '/mo' : ''}</div>
           </div>
         )}
@@ -351,7 +402,7 @@ export default function NewOrder() {
 
       {err && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{err}</div>}
       <div className="flex justify-end">
-        <button onClick={create} disabled={busy || !selectedLocationId} className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-6 py-2.5 text-sm font-medium disabled:opacity-50">
+        <button onClick={create} disabled={busy || !selectedLocationId || overStock.length > 0} className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-6 py-2.5 text-sm font-medium disabled:opacity-50">
           {busy ? 'Creating…' : `Create ${mode} order${method === 'pickup' ? ' for pickup' : ''}`}
         </button>
       </div>

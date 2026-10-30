@@ -29,6 +29,10 @@ const STAFF_SYNC: RealtimeInvalidateMap = {
   // and returns; pricing/active edits must reach other staff too. Requests
   // embeds quantity_on_hand for its stock gate, so it must follow as well.
   equipment_items: ['equipment_items', 'neworder_items', 'requests'],
+  // A store's own stock count (116). Unit status changes rewrite it too (089).
+  // New Order only offers what the store has, so new stock must lift the limit
+  // on every open screen.
+  equipment_location_inventory: ['equipment_items', 'neworder_items', 'requests'],
   // New drivers must appear in other users' dispatch dropdowns.
   drivers: ['drivers'],
   // Bell list + exact unread count (prefix-matches per-user keys).

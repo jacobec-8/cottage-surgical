@@ -225,8 +225,13 @@ enough to distinguish two customers; use existing contact details.
    address is used for delivery; verify it before committing.
 3. **Search equipment…**, select the intended models, and set quantities.
    This picker uses inventory assigned to the store. Rental choices require
-   delivery enabled and a delivery rental price. Quantities are capped at 20
-   per cart line in this staff flow.
+   delivery enabled and a delivery rental price. Each result shows how many the
+   selected pharmacy has ("3 in stock"); an item it has none of reads **Out of
+   stock** and cannot be selected, and a line cannot go above the store's count
+   (or 20). The list re-reads stock on opening, every 20 seconds and on live stock
+   changes, so adding units or stock in Inventory lifts the limit (116). If the
+   last unit goes while the cart is open, the line turns red and Create is
+   blocked until the quantity is lowered.
 4. Set **Schedule delivery → Date**, **Delivery time**, **Until** (blank means one
    hour), and driver when supplied. The driver list shows the store's own and
    shared drivers, marking those already booked then; a double booking is refused.
@@ -235,11 +240,13 @@ enough to distinguish two customers; use existing contact details.
 5. Choose **Create rental order** or **Create purchase order** once.
 6. Verify the returned order number in **Orders**, its customer and line items,
    unit allocation, and its stop's date/time/driver in **Delivery & Pickup**.
-   Check the billing/deposit records if relevant. The staff RPC can succeed
-   with unallocated lines; disclose that condition instead of reporting all
-   equipment reserved. Do not create another order to fix missing allocation.
-   Once a unit is in stock at that store, use **Allocate unit** on the line in
-   the order detail (`allocate_line_item`). A serialized order with any
+   Check the billing/deposit records if relevant. Since 116 `create_staff_order`
+   refuses (`out_of_stock`, with `shortages`) when the store lacks any item, and
+   writes nothing; the screen names each short item and its count. Orders made
+   before 116 can still carry unallocated lines: once a unit is in stock at that
+   store, use **Allocate unit** on the line in the order detail
+   (`allocate_line_item`). Do not create another order to fix missing
+   allocation. A serialized order with any
    unallocated line cannot be started, completed (including staff override) or
    marked picked up (063).
 7. The equipment list and total use the selected store's delivery price
