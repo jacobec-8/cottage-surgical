@@ -10,16 +10,8 @@ import { PRODUCT_FIELDS, type Product } from '../../lib/shop'
 import ShopHeader from '../../components/shop/ShopHeader'
 import ShopFooter from '../../components/shop/ShopFooter'
 import ProductCard from '../../components/shop/ProductCard'
+import { SHOP_CATEGORIES } from './shopCategories'
 
-// Three headline "Shop by category" tiles (JustWalkers style). Labels, taglines
-// and images all reflect REAL inventory: q= filters the live catalog, so each
-// tile resolves to actual DB items (wheelchair→4, bed→3, knee→1). No true
-// walker/rollator is stocked yet, so the third tile is honestly "Knee Walkers".
-const CATS = [
-  { label: 'Wheelchairs', tagline: 'Transport, lightweight & reclining chairs', q: 'wheelchair', img: 'https://cdn.shopify.com/s/files/1/0083/8687/1358/products/f9e676d2-a92a-42ec-a1ce-238fbc831e12._CR0_0_300_300_PT0_SX300__-Copy.jpg?v=1635358384' },
-  { label: 'Hospital Beds', tagline: 'Adjustable beds, over-bed tables & trapeze bars', q: 'bed', img: 'https://cdn.shopify.com/s/files/1/0083/8687/1358/products/bed.jpg?v=1550251687' },
-  { label: 'Knee Walkers', tagline: 'Steerable knee scooters — a hands-free crutch alternative', q: 'knee', img: 'https://cdn.shopify.com/s/files/1/0083/8687/1358/products/Knee_Scooter.jpg?v=1550251688' },
-]
 const BENEFITS = [
   { icon: Truck, title: 'Same-Day Delivery', sub: 'Order by 2 PM across Nassau & Suffolk' },
   { icon: Wrench, title: 'Setup Included', sub: 'Delivered & assembled by our techs' },
@@ -120,18 +112,18 @@ export default function Shop({ initialProducts }: { initialProducts?: Product[] 
             View all equipment <ArrowRight size={16} />
           </button>
         </div>
-        <div className="grid sm:grid-cols-3 gap-5">
-          {CATS.map((c) => (
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+          {SHOP_CATEGORIES.map((c) => (
             <Link key={c.label} href={`/?q=${encodeURIComponent(c.q)}`}
               className="group bg-white border border-slate-200 rounded-xl overflow-hidden hover:shadow-lg hover:border-brand-200 transition flex flex-col">
               <div className="aspect-[4/3] bg-slate-50 grid place-items-center overflow-hidden">
-                <img src={c.img} alt={c.label} className="w-full h-full object-contain p-6 group-hover:scale-105 transition-transform duration-300" />
+                <img src={c.img} alt={c.label} className="w-full h-full object-contain p-4 group-hover:scale-105 transition-transform duration-300" />
               </div>
-              <div className="p-5">
-                <div className="font-bold text-slate-900 text-lg">{c.label}</div>
-                <div className="text-sm text-slate-500 mt-0.5">{c.tagline}</div>
-                <span className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-600 group-hover:gap-2.5 transition-all">
-                  Shop {c.label} <ArrowRight size={16} />
+              <div className="flex flex-1 flex-col p-4">
+                <div className="font-bold text-slate-900 leading-snug">{c.label}</div>
+                <div className="text-sm text-slate-500 mt-1">{c.tagline}</div>
+                <span className="mt-auto pt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-600 group-hover:gap-2.5 transition-all">
+                  {c.cta} <ArrowRight size={16} className="shrink-0" />
                 </span>
               </div>
             </Link>
