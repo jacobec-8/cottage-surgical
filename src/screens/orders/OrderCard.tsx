@@ -4,6 +4,7 @@ import type { KeyboardEvent, MouseEvent } from 'react'
 import { ChevronRight, MapPin, Phone, Truck, Undo2 } from 'lucide-react'
 import ItemThumb from '../../components/ItemThumb'
 import { isReturnLeg, isStoreCollection } from '../../lib/legs'
+import { orderTone, TONE_CARD } from '../../lib/status'
 import { PICKUP_ELIGIBLE, type Order, type OrderDelivery } from './types'
 import { addressOf, ageLabel, amountOf, fmtDate, legSummary, lineStatus, unallocatedCount, unitLabel } from './format'
 import { PaymentBadge, SourceBadge, StatusBadge, TypeBadge, UnallocatedBadge } from './badges'
@@ -47,8 +48,8 @@ export default function OrderCard({ o, selected, onOpen, onSchedulePickup, picku
       aria-expanded={selected}
       onClick={open}
       onKeyDown={onKey}
-      className={`group bg-white border rounded-xl p-4 flex items-start justify-between gap-4 cursor-pointer transition-colors ${
-        selected ? 'border-blue-400 ring-2 ring-blue-100' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50/60'
+      className={`group border border-l-4 rounded-xl p-4 flex items-start justify-between gap-4 cursor-pointer transition-colors ${TONE_CARD[orderTone(o)]} ${
+        selected ? 'border-blue-400 ring-2 ring-blue-100' : 'border-slate-200 hover:border-slate-300'
       }`}
     >
       <div className="min-w-0 flex-1">

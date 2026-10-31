@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useLocationScope } from '../contexts/LocationContext'
+import { TONE_PILL } from '../lib/status'
 import { useSlideClose } from '../lib/useSlideClose'
 import { supabase } from '../lib/supabase'
 import type { StaffModule } from '../lib/staffModules'
@@ -155,7 +156,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           {n.label}
         </span>
         {count > 0 ? (
-          <span className="min-w-[20px] rounded-full bg-blue-600 px-2 py-0.5 text-center text-xs text-white">
+          <span className={`min-w-[20px] rounded-full px-2 py-0.5 text-center text-xs font-medium ${TONE_PILL[n.to === '/orders' ? 'yellow' : 'blue']}`}>
             {count}
           </span>
         ) : (
@@ -314,7 +315,7 @@ export default function Layout({ children }: { children: ReactNode }) {
                     >
                       <Icon size={16} aria-hidden="true" />
                       {tab.label}
-                      {count > 0 && <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700">{count}</span>}
+                      {count > 0 && <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${TONE_PILL[tab.to === '/orders' ? 'yellow' : 'blue']}`}>{count}</span>}
                     </Link>
                   )
                 })}

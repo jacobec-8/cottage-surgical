@@ -9,6 +9,7 @@ import { useStripeReconcile } from '../lib/useStripeReconcile'
 import { ORDER_LIST_SELECT, type Order } from './orders/types'
 import OrderCard from './orders/OrderCard'
 import UnpaidRow from './orders/UnpaidRow'
+import { TONE_TAB, type Tone } from '../lib/status'
 import OrderDetailPanel from './orders/OrderDetailPanel'
 import { useSchedulePickup } from './orders/useSchedulePickup'
 import { useSelectedOrder } from './orders/useSelectedOrder'
@@ -19,6 +20,7 @@ import NewRequests, { RequestPanelActions } from './requests/NewRequests'
 import { useRequests } from './requests/useRequests'
 
 /** Confirmed / in-progress work — excludes requests and unpaid checkouts; cancelled has its own tab. */
+const TAB_TONE: Partial<Record<string, Tone>> = { requests: 'yellow', unpaid: 'yellow', open: 'green', scheduled: 'blue', pickup_scheduled: 'blue' }
 const WORK_TABS = ['all', 'open', 'scheduled', 'pickup_scheduled', 'closed', 'cancelled'] as const
 type Tab = (typeof WORK_TABS)[number] | 'unpaid' | 'requests'
 /** `/orders?filter=requests` (and the old /requests page) opens on new requests. */
@@ -145,16 +147,10 @@ export default function Orders() {
         {tabs.map((t) => {
           const n = counts[t.id] ?? 0
           const active = view === t.id
-          // Unpaid checkouts are amber and new requests blue, so both stand out when they have something.
-          const tone = t.id === 'unpaid' ? 'amber' : t.id === 'requests' ? 'blue' : null
-          const cls = active
-            ? tone === 'amber' ? 'bg-amber-700 text-white' : tone === 'blue' ? 'bg-blue-700 text-white' : 'bg-slate-900 text-white'
-            : tone === 'amber' && n > 0 ? 'text-amber-800 bg-amber-50 hover:bg-amber-100'
-              : tone === 'blue' && n > 0 ? 'text-blue-800 bg-blue-50 font-medium hover:bg-blue-100'
-                : 'text-slate-600 hover:bg-slate-100'
-          const countCls = active
-            ? tone === 'amber' ? 'text-amber-100' : tone === 'blue' ? 'text-blue-100' : 'text-slate-300'
-            : tone === 'amber' ? 'text-amber-600' : tone === 'blue' ? 'text-blue-600' : 'text-slate-400'
+          // Colored while they hold something, so a waiting request or unpaid checkout stands out.
+          const tone = TAB_TONE[t.id] ?? 'gray'
+          const cls = active ? TONE_TAB[tone].active : n > 0 ? `${TONE_TAB[tone].idle} font-medium` : TONE_TAB.gray.idle
+          const countCls = active ? 'opacity-80' : 'opacity-70'
           return (
             <button key={t.id} onClick={() => setTab(t.id)} className={`px-3 py-1.5 text-sm rounded-lg capitalize ${cls}`}>
               {t.label}{' '}

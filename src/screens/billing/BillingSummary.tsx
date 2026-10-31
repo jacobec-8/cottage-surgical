@@ -21,11 +21,11 @@ function Tile({ label, value, sub, tone }: { label: string; value: string; sub?:
 export default function BillingSummary({ s }: { s: Summary }) {
   return (
     <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
-      <Tile label="Overdue" value={fmtMoney(s.overdue.amount)} sub={`${s.overdue.count} payment${s.overdue.count === 1 ? '' : 's'}`} tone={s.overdue.count ? 'red' : 'slate'} />
+      <Tile label="Overdue" value={fmtMoney(s.overdue.amount)} sub={`${s.overdue.count} payment${s.overdue.count === 1 ? '' : 's'}`} tone={s.overdue.count ? 'red' : 'emerald'} />
       <Tile label="Due in 7 days" value={fmtMoney(s.dueSoon.amount)} sub={`${s.dueSoon.count} payment${s.dueSoon.count === 1 ? '' : 's'}`} tone={s.dueSoon.count ? 'amber' : 'slate'} />
       <Tile label="Returns due" value={String(s.returnsDue)} sub="next 7 days or late" tone={s.returnsDue ? 'blue' : 'slate'} />
       <Tile label="Open rentals" value={String(s.active)} sub="being billed" tone="emerald" />
-      <Tile label="Deposits held" value={fmtMoney(s.depositsHeld)} tone="slate" />
+      <Tile label="Deposits held" value={fmtMoney(s.depositsHeld)} tone={s.depositsHeld ? 'amber' : 'slate'} />
     </div>
   )
 }

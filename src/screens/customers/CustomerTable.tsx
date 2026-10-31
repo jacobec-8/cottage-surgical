@@ -1,6 +1,7 @@
 'use client'
 
 import { ChevronRight } from 'lucide-react'
+import { TONE_CARD, TONE_PILL } from '../../lib/status'
 import { coverageLabel } from './contactRules'
 import { customerInitials, outNow } from './customerSummary'
 
@@ -30,7 +31,7 @@ export default function CustomerTable({ customers, selected, onOpen }: {
 }) {
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-      <div aria-hidden="true" className={`hidden border-b border-slate-200 bg-slate-50 py-2.5 text-[11px] uppercase tracking-wider text-slate-500 sm:grid ${COLUMNS}`}>
+      <div aria-hidden="true" className={`hidden border-b border-l-4 border-slate-200 border-l-transparent bg-slate-50 py-2.5 text-[11px] uppercase tracking-wider text-slate-500 sm:grid ${COLUMNS}`}>
         <span>Customer</span>
         <span className="hidden md:block">Phone</span>
         <span className="hidden lg:block">Email</span>
@@ -41,7 +42,9 @@ export default function CustomerTable({ customers, selected, onOpen }: {
       </div>
       <ul className="divide-y divide-slate-100">
         {customers.map((c) => {
-          const out = outNow(c.rental_orders).length
+          const rentals = outNow(c.rental_orders)
+          const out = rentals.length
+          const late = rentals.some((order) => order.status === 'overdue')
           const coverage = coverageLabel(c.coverage_type)
           return (
             <li key={c.id}>
@@ -49,7 +52,7 @@ export default function CustomerTable({ customers, selected, onOpen }: {
                 type="button"
                 onClick={() => onOpen(c.id)}
                 aria-haspopup="dialog"
-                className={`grid w-full py-3 text-left text-sm hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ${COLUMNS} ${selected === c.id ? 'bg-blue-50' : ''}`}
+                className={`grid w-full border-l-4 py-3 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ${COLUMNS} ${selected === c.id ? 'border-l-blue-500 bg-blue-50' : late ? TONE_CARD.red : out > 0 ? TONE_CARD.green : 'border-l-transparent hover:bg-slate-50'}`}
               >
                 <span className="flex min-w-0 items-center gap-3">
                   <span aria-hidden="true" className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-slate-100 text-xs font-medium text-slate-600">{customerInitials(c.full_name)}</span>
@@ -68,7 +71,7 @@ export default function CustomerTable({ customers, selected, onOpen }: {
                 <span className="hidden truncate text-slate-600 xl:block">{c.address_city || <Empty />}</span>
                 <span className="hidden truncate text-slate-600 xl:block">{coverage || <Empty />}</span>
                 <span className="hidden sm:block">
-                  {out > 0 ? <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium tabular-nums text-blue-700">{out}</span> : <Empty />}
+                  {out > 0 ? <span className={`rounded-full px-2 py-0.5 text-xs font-medium tabular-nums ${TONE_PILL[late ? 'red' : 'green']}`}>{out}</span> : <Empty />}
                 </span>
                 <ChevronRight size={16} className="text-slate-400" />
               </button>

@@ -15,11 +15,14 @@ const ROW = 'flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2.5 text-sm hov
 const LIST = 'divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200 bg-white'
 const None = ({ text }: { text: string }) => <div className="rounded-lg border border-dashed border-slate-200 px-3 py-2.5 text-sm text-slate-400">{text}</div>
 
-function Tile({ label, value, tone = 'plain' }: { label: string; value: string; tone?: 'plain' | 'alert' }) {
+const TILE_BOX = { plain: 'border-slate-200 bg-white', alert: 'border-red-200 bg-red-50', good: 'border-emerald-200 bg-emerald-50', wait: 'border-amber-200 bg-amber-50', info: 'border-blue-200 bg-blue-50' }
+const TILE_VALUE = { plain: 'text-slate-800', alert: 'text-red-700', good: 'text-emerald-700', wait: 'text-amber-800', info: 'text-blue-700' }
+
+function Tile({ label, value, tone = 'plain' }: { label: string; value: string; tone?: keyof typeof TILE_BOX }) {
   return (
-    <div className={`rounded-lg border px-3 py-2 ${tone === 'alert' ? 'border-red-200 bg-red-50' : 'border-slate-200 bg-white'}`}>
+    <div className={`rounded-lg border px-3 py-2 ${TILE_BOX[tone]}`}>
       <div className="text-[11px] uppercase tracking-wide text-slate-400">{label}</div>
-      <div className={`text-base font-semibold ${tone === 'alert' ? 'text-red-700' : 'text-slate-800'}`}>{value}</div>
+      <div className={`text-base font-semibold ${TILE_VALUE[tone]}`}>{value}</div>
     </div>
   )
 }
@@ -28,10 +31,10 @@ function Tile({ label, value, tone = 'plain' }: { label: string; value: string; 
 export function SummaryTiles({ out, money }: { out: number; money: MoneySummary }) {
   return (
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-      <Tile label="Out now" value={`${out} rental${out === 1 ? '' : 's'}`} />
-      <Tile label="Overdue" value={money.overdue ? fmtMoney(money.overdue) : 'Nothing'} tone={money.overdue ? 'alert' : 'plain'} />
-      <Tile label="Monthly billing" value={money.monthly ? `${fmtMoney(money.monthly)}/mo` : 'None'} />
-      <Tile label="Deposits held" value={money.depositsHeld ? fmtMoney(money.depositsHeld) : 'None'} />
+      <Tile label="Out now" value={`${out} rental${out === 1 ? '' : 's'}`} tone={out ? 'good' : 'plain'} />
+      <Tile label="Overdue" value={money.overdue ? fmtMoney(money.overdue) : 'Nothing'} tone={money.overdue ? 'alert' : 'good'} />
+      <Tile label="Monthly billing" value={money.monthly ? `${fmtMoney(money.monthly)}/mo` : 'None'} tone={money.monthly ? 'info' : 'plain'} />
+      <Tile label="Deposits held" value={money.depositsHeld ? fmtMoney(money.depositsHeld) : 'None'} tone={money.depositsHeld ? 'wait' : 'plain'} />
     </div>
   )
 }

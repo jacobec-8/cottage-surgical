@@ -4,6 +4,7 @@ import type { KeyboardEvent } from 'react'
 import Link from 'next/link'
 import { AlertTriangle, Building2, ChevronRight, MapPin, Store, Truck } from 'lucide-react'
 import ItemThumb from '../../components/ItemThumb'
+import { TONE_CARD, TONE_PILL } from '../../lib/status'
 import { PaymentBadge } from '../orders/badges'
 import RequestActions from './RequestActions'
 import { lineShortage } from './stock'
@@ -33,16 +34,16 @@ export default function RequestCard({ r, s, selected, onOpen, onConfirm, onDecli
   return (
     <div role="button" tabIndex={0} aria-label={`Open request #${r.order_no}`} aria-expanded={selected}
       onClick={() => onOpen(r.id)} onKeyDown={onKey}
-      className={`group cursor-pointer rounded-xl border bg-white p-4 transition-colors hover:bg-slate-50/60 ${
+      className={`group cursor-pointer rounded-xl border border-l-4 p-4 transition-colors ${TONE_CARD[s.blocked ? 'red' : 'yellow']} ${
         selected ? 'border-blue-400 ring-2 ring-blue-100' : s.blocked ? 'border-amber-200 hover:border-amber-300' : 'border-slate-200 hover:border-slate-300'
       }`}>
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-medium">{r.customer?.full_name ?? 'Customer'}</span>
-            <span className={`rounded-full px-2 py-0.5 text-xs capitalize ${r.order_type === 'purchase' ? 'bg-violet-100 text-violet-700' : 'bg-blue-100 text-blue-700'}`}>{r.order_type}</span>
+            <span className={`rounded-full px-2 py-0.5 text-xs capitalize ${TONE_PILL.gray}`}>{r.order_type}</span>
             <span className="text-xs text-slate-400">#{r.order_no}</span>
-            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${isPickup ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${TONE_PILL.gray}`}>
               {isPickup ? <Store size={12} /> : <Truck size={12} />}
               {isPickup ? 'IN-STORE PICKUP' : 'DELIVERY'}
             </span>

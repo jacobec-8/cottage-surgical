@@ -61,6 +61,11 @@ On 2026-10-06, the local production build passed lint, type checking, and all
 46 unit tests. nu-yin checks covered the admin tabs and staff detail navigation;
 a driver login retained My Deliveries and was redirected away from `/drivers`.
 
+**Colors on staff screens** have one meaning each (`src/lib/status.ts`): red needs
+action now, yellow is waiting on staff, blue is in motion or the main button, green
+is fine, gray is finished or just information. Records carry a strip in their color,
+and red and yellow records are tinted. Use these tones for anything new.
+
 **Needs you today** sits at the bottom of the expanded sidebar (on a phone the
 menu button carries one count badge instead; the opened drawer shows the panel).
 Store staff only, for their own pharmacy: owners and admins don't get it

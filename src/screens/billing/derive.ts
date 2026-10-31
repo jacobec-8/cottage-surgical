@@ -1,4 +1,5 @@
 import { isReturnLeg } from '../../lib/legs.ts'
+import type { Tone } from '../../lib/status.ts'
 import type { BillingLeg, Charge } from './types'
 
 const DAY_MS = 86_400_000
@@ -123,4 +124,12 @@ export function inTab(c: Charge, tab: BillingTab, today: string): boolean {
   const p = paymentState(c, today), r = returnState(c, today)
   return ['overdue', 'due_today', 'due_soon', 'no_due_date'].includes(p.kind)
     || r.kind === 'return_overdue' || (r.kind === 'due_back' && r.days <= DUE_SOON_DAYS)
+}
+
+/** The charge's color: anything late is red, a payment coming up is yellow, finished is gray. */
+export function billingTone(p: PaymentState, r: ReturnState): Tone {
+  if (p.kind === 'overdue' || r.kind === 'return_overdue') return 'red'
+  if (p.kind === 'due_today' || p.kind === 'due_soon' || p.kind === 'no_due_date') return 'yellow'
+  if (p.kind === 'awaiting_delivery') return 'blue'
+  return p.kind === 'ended' ? 'gray' : 'green'
 }

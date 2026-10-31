@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { ChevronRight } from 'lucide-react'
 import { authEmailToUsername } from '../../lib/staffLogin'
 import { roleLabel } from '../../lib/roles'
+import { TONE_PILL } from '../../lib/status'
 import { customerInitials } from '../customers/customerSummary'
 import type { StaffRole } from './staffTypes'
 
@@ -66,7 +67,7 @@ export default function StaffTable({ people }: { people: StaffPerson[] }) {
                 <span className="hidden truncate text-slate-600 xl:block">{person.location?.name || <Empty />}</span>
                 <span className="hidden truncate tabular-nums text-slate-600 xl:block">{person.phone || <Empty />}</span>
                 <span className="hidden sm:block"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${ROLE_TONE[person.role]}`}>{roleLabel(person.role)}</span></span>
-                <span><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${person.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>{person.is_active ? 'Active' : 'Inactive'}</span></span>
+                <span><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${TONE_PILL[person.is_active ? 'green' : 'gray']}`}>{person.is_active ? 'Active' : 'Inactive'}</span></span>
                 <ChevronRight size={16} className="text-slate-400" />
               </Link>
             </li>

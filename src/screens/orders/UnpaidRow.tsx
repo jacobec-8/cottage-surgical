@@ -13,7 +13,7 @@ export default function UnpaidRow({ o, onOpen }: { o: Order; onOpen: (id: string
   const verify = useVerifyPayment(o.id, setMsg)
 
   return (
-    <div className="bg-white border border-amber-200 rounded-xl p-4 flex items-start justify-between gap-4">
+    <div className="bg-amber-50 border border-l-4 border-amber-200 border-l-amber-400 rounded-xl p-4 flex items-start justify-between gap-4">
       <div className="min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <button type="button" onClick={() => onOpen(o.id)} className="font-medium hover:underline text-left">

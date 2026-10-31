@@ -3,8 +3,9 @@
 import { useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { Calendar, ChevronRight, Undo2 } from 'lucide-react'
 import ItemList from '../../components/ItemList'
+import { TONE_CARD, TONE_PILL } from '../../lib/status'
 import type { Charge } from './types'
-import { depositHeld, paymentState, rentalPeriod, returnState, type PaymentState, type ReturnState } from './derive'
+import { billingTone, depositHeld, paymentState, rentalPeriod, returnState, type PaymentState, type ReturnState } from './derive'
 import { fmtDate, fmtMoney } from '../orders/format'
 
 type Props = {
@@ -17,17 +18,17 @@ type Props = {
   busy: boolean
 }
 
-const PILL = 'text-xs px-2 py-0.5 rounded-full whitespace-nowrap'
+const PILL = 'text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap'
 
 function PaymentPill({ p }: { p: PaymentState }) {
   switch (p.kind) {
-    case 'overdue': return <span className={`${PILL} bg-red-100 text-red-700 font-medium`}>Overdue {p.days > 0 ? `· ${p.days}d` : ''}</span>
-    case 'due_today': return <span className={`${PILL} bg-amber-100 text-amber-800 font-medium`}>Due today</span>
-    case 'due_soon': return <span className={`${PILL} bg-amber-100 text-amber-800`}>Due in {p.days}d</span>
-    case 'scheduled': return <span className={`${PILL} bg-emerald-100 text-emerald-700`}>Current · due {fmtDate(p.due)}</span>
-    case 'no_due_date': return <span className={`${PILL} bg-slate-100 text-slate-600`}>Due date not set</span>
-    case 'awaiting_delivery': return <span className={`${PILL} bg-slate-100 text-slate-500`}>Starts on delivery</span>
-    case 'ended': return <span className={`${PILL} bg-slate-200 text-slate-600`}>Ended</span>
+    case 'overdue': return <span className={`${PILL} ${TONE_PILL.red}`}>Overdue {p.days > 0 ? `· ${p.days}d` : ''}</span>
+    case 'due_today': return <span className={`${PILL} ${TONE_PILL.yellow}`}>Due today</span>
+    case 'due_soon': return <span className={`${PILL} ${TONE_PILL.yellow}`}>Due in {p.days}d</span>
+    case 'scheduled': return <span className={`${PILL} ${TONE_PILL.green}`}>Current · due {fmtDate(p.due)}</span>
+    case 'no_due_date': return <span className={`${PILL} ${TONE_PILL.yellow}`}>Due date not set</span>
+    case 'awaiting_delivery': return <span className={`${PILL} ${TONE_PILL.blue}`}>Starts on delivery</span>
+    case 'ended': return <span className={`${PILL} ${TONE_PILL.gray}`}>Ended</span>
   }
 }
 
@@ -80,7 +81,7 @@ export default function BillingCard({ c, today, selected, onOpen, onRecordPaymen
       aria-expanded={selected}
       onClick={open}
       onKeyDown={onKey}
-      className={`group bg-white border rounded-xl p-4 flex items-start justify-between gap-4 transition-colors ${orderId ? 'cursor-pointer' : ''} ${
+      className={`group border border-l-4 rounded-xl p-4 flex items-start justify-between gap-4 transition-colors ${TONE_CARD[billingTone(p, r)]} ${orderId ? 'cursor-pointer' : ''} ${
         selected ? 'border-blue-400 ring-2 ring-blue-100' : attention ? 'border-red-200 hover:border-red-300' : 'border-slate-200 hover:border-slate-300'
       } hover:bg-slate-50/60`}
     >
@@ -123,7 +124,7 @@ export default function BillingCard({ c, today, selected, onOpen, onRecordPaymen
                 type="button"
                 onClick={() => onRecordPayment(c.id, c.next_due_date)}
                 disabled={busy}
-                className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-2.5 py-1 disabled:opacity-50"
+                className="text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-2.5 py-1 disabled:opacity-50"
                 title="Record a payment received today (advances next due by a month)"
               >
                 Record payment

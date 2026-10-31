@@ -21,18 +21,6 @@ body { background: #f8fafc; color: #0f172a; }
   --staff-slate-900: 17 24 39;
   --staff-slate-950: 10 15 26;
 
-  --staff-emerald-50: 240 249 244;
-  --staff-emerald-100: 223 243 231;
-  --staff-emerald-200: 195 230 209;
-  --staff-red-50: 253 243 242;
-  --staff-red-100: 251 229 227;
-  --staff-red-200: 244 205 201;
-  --staff-amber-50: 253 248 236;
-  --staff-amber-100: 250 239 211;
-  --staff-amber-200: 241 223 176;
-  --staff-violet-100: 239 234 249;
-  --staff-purple-100: 241 233 248;
-
   --staff-radius-md: 0.5rem;
   --staff-radius-lg: 0.625rem;
   --staff-radius-xl: 1rem;

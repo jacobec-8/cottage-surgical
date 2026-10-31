@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { RotateCcw, Store, Truck } from 'lucide-react'
 import ItemList from '../../components/ItemList'
+import { statusTone, TONE_CARD } from '../../lib/status'
 import { supabase } from '../../lib/supabase'
 import { invalidateOrderWorkflow } from '../../lib/workflowKeys'
 import { orderPaymentState, paymentStateLabel } from '../orders/format'
@@ -11,7 +12,7 @@ import { MissedStopForm } from './MissedStop'
 import ScheduleForm from './ScheduleForm'
 import StopMenu, { type StopMenuItem } from './StopMenu'
 import StopProgressView from './StopProgressView'
-import { latestAttempt } from './stopStatus'
+import { businessToday, isLate, latestAttempt } from './stopStatus'
 import { addressLabel, clickableCard, customerLabel, DetailsHint, lifecycleError, stopOpen, type OpenStop } from './cardParts'
 import { hasAddress, type Deliv, type DriverOption } from './types'
 
@@ -70,7 +71,7 @@ export default function StaffStopCard({ d, drivers, onOpen, selected }: { d: Del
   ]
 
   return (
-    <div className={`rounded-xl border border-slate-200 bg-white p-4 ${card.className}`} {...card.props}>
+    <div className={`rounded-xl border border-l-4 border-slate-200 p-4 ${TONE_CARD[isLate(d, businessToday()) ? 'red' : statusTone(d.status)]} ${card.className}`} {...card.props}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
