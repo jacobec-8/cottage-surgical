@@ -10,7 +10,7 @@ import { invalidateOrderWorkflow } from '../lib/workflowKeys'
 import { useLocationScope } from '../contexts/LocationContext'
 import { DRIVER_LOCATION_FIELDS, driversForLocation, type DriverWithLocations } from '../lib/driverLocations'
 import { DRIVER_BUSY_MSG, dispatchErrorMessage, windowProblem } from '../lib/dispatchErrors'
-import { customerMatches, MIN_SEARCH_LENGTH, type OrderCustomer } from './neworder/customerMatches'
+import { customerMatches, fetchAllPages, MIN_SEARCH_LENGTH, type OrderCustomer } from './neworder/customerMatches'
 import { canAddMore, nextQty, outOfStockMessage, stockLabel, storeStock, type Shortage } from './neworder/stock'
 
 type Item = {
@@ -89,13 +89,13 @@ export default function NewOrder() {
   const customers = useQuery({
     queryKey: ['cust_search', selectedLocationId],
     enabled: Boolean(selectedLocationId) && searching,
-    queryFn: async (): Promise<OrderCustomer[]> => {
+    queryFn: () => fetchAllPages<OrderCustomer>(async (from, to) => {
       const { data, error } = await supabase.from('customers')
         .select('id,full_name,phone,email,address_line1,address_city,address_state,address_zip')
-        .eq('location_id', selectedLocationId!).order('full_name')
+        .eq('location_id', selectedLocationId!).order('full_name').order('id').range(from, to)
       if (error) throw error
       return data ?? []
-    },
+    }),
   })
   const matchedCustomers = useMemo(() => customerMatches(customers.data ?? [], custSearch), [customers.data, custSearch])
   // Stock decides what can be ordered, so the list is always re-read: on opening,

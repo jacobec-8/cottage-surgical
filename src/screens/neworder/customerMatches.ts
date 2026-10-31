@@ -10,3 +10,12 @@ export function customerMatches<T extends OrderCustomer>(customers: readonly T[]
   if (term.trim().length < MIN_SEARCH_LENGTH) return []
   return customers.filter((customer) => matchesCustomerSearch(customer, term)).slice(0, MAX_MATCHES)
 }
+
+const PAGE_SIZE = 1000
+
+/** Reads a list page by page, because the database caps one response at PAGE_SIZE rows. */
+export async function fetchAllPages<T>(fetchPage: (from: number, to: number) => Promise<readonly T[]>, from = 0): Promise<T[]> {
+  const page = await fetchPage(from, from + PAGE_SIZE - 1)
+  if (page.length < PAGE_SIZE) return [...page]
+  return [...page, ...await fetchAllPages(fetchPage, from + PAGE_SIZE)]
+}
