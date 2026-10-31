@@ -9,7 +9,10 @@ import { inTab, paymentState, returnState, summarize, todayISO, DUE_SOON_DAYS, t
 import { useRecordPayment, useSetDueDate } from './billing/useBillingActions'
 import BillingSummary from './billing/BillingSummary'
 import BillingCard from './billing/BillingCard'
+import { TONE_TAB, type Tone } from '../lib/status'
 import OrderDetailPanel from './orders/OrderDetailPanel'
+
+const BILLING_TAB_TONE: Partial<Record<string, Tone>> = { attention: 'red', active: 'green', awaiting: 'blue' }
 import { useSelectedOrder } from './orders/useSelectedOrder'
 import { fmtDate } from './orders/format'
 import { useLocationScope } from '../contexts/LocationContext'
@@ -122,17 +125,14 @@ export default function Billing() {
         {TABS.map((t) => {
           const active = tab === t.id
           const n = counts[t.id] ?? 0
-          const hot = t.id === 'attention' && n > 0
+          const tone = n > 0 ? BILLING_TAB_TONE[t.id] ?? 'gray' : 'gray'
           return (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`px-3 py-1.5 text-sm rounded-lg ${
-                active ? (hot ? 'bg-red-700 text-white' : 'bg-slate-900 text-white')
-                  : hot ? 'text-red-800 bg-red-50 hover:bg-red-100' : 'text-slate-600 hover:bg-slate-100'
-              }`}
+              className={`px-3 py-1.5 text-sm rounded-lg ${active ? TONE_TAB[tone].active : `${TONE_TAB[tone].idle} ${tone === 'gray' ? '' : 'font-medium'}`}`}
             >
-              {t.label}{n ? <span className={active ? 'text-white/70' : hot ? 'text-red-500' : 'text-slate-400'}> · {n}</span> : null}
+              {t.label}{n ? <span className="opacity-70"> · {n}</span> : null}
             </button>
           )
         })}

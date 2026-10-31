@@ -4,6 +4,7 @@ import { useCallback, useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Camera, Plus, Truck } from 'lucide-react'
 import ItemList from '../components/ItemList'
+import { TONE_CARD } from '../lib/status'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { statusClass, statusLabel } from '../lib/status'
@@ -18,7 +19,7 @@ import MissedStop from './delivery/MissedStop'
 import NewStopPanel from './delivery/NewStopPanel'
 import StaffStopCard from './delivery/StaffStopCard'
 import { addressLabel, clickableCard, customerLabel, DetailsHint, lifecycleError, stopOpen, type OpenStop } from './delivery/cardParts'
-import { businessToday, fmtStopDate, isLate, latestAttempt, reasonLabel, sortStops } from './delivery/stopStatus'
+import { businessToday, fmtStopDate, isLate, latestAttempt, reasonLabel, sortStops, stopTone } from './delivery/stopStatus'
 import { hasAddress, type Deliv, type DriverOption } from './delivery/types'
 
 const SELECT =
@@ -217,7 +218,7 @@ function DriverStopRow({ d, contact, activeStop, showLocation }: { d: Deliv; con
   }
 
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-4">
+    <div className={`border border-l-4 border-slate-200 rounded-xl p-4 ${TONE_CARD[stopTone(d, businessToday())]}`}>
       <div className="mb-1 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
@@ -281,7 +282,7 @@ function CompletedRow({ d, contact, onOpen, selected }: { d: Deliv; contact?: St
   const isStorePickup = d.leg_type === 'pickup' && !d.requires_driver
   const card = clickableCard(d, onOpen, selected)
   return (
-    <div className={`flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-start sm:justify-between ${card.className}`} {...card.props}>
+    <div className={`flex flex-col gap-4 rounded-xl border border-l-4 border-slate-200 p-4 sm:flex-row sm:items-start sm:justify-between ${TONE_CARD[stopTone(d, businessToday())]} ${card.className}`} {...card.props}>
       <div className="min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="font-medium">{customerLabel(d, contact)}</span>

@@ -2,6 +2,7 @@
 
 import { useId } from 'react'
 import Link from 'next/link'
+import { READABLE_ON_TINT } from '../lib/status'
 import { panelView, type NeedsTodayRow, type NeedsTodayStatus, type NeedsTodayTone } from './needsToday'
 
 type NeedsTodayPanelProps = {
@@ -12,6 +13,7 @@ type NeedsTodayPanelProps = {
 }
 
 const DOT: Record<NeedsTodayTone, string> = { amber: 'bg-amber-500', red: 'bg-red-500', slate: 'bg-slate-400' }
+const ROW: Record<NeedsTodayTone, string> = { amber: `bg-amber-50 text-amber-900 hover:bg-amber-100 ${READABLE_ON_TINT}`, red: `bg-red-50 text-red-900 hover:bg-red-100 ${READABLE_ON_TINT}`, slate: 'text-slate-600 hover:bg-slate-50' }
 const QUIET = 'px-2 py-1.5 text-xs text-slate-400'
 
 function PanelBody(props: NeedsTodayPanelProps) {
@@ -19,19 +21,19 @@ function PanelBody(props: NeedsTodayPanelProps) {
     case 'pick_location': return <p className={QUIET}>Pick a pharmacy to see what needs you.</p>
     case 'error': return <p className={QUIET}>Couldn’t load</p>
     case 'loading': return <p className={QUIET}>Loading…</p>
-    case 'caught_up': return <p className={QUIET}>All caught up ✓</p>
+    case 'caught_up': return <p className="px-2 py-1.5 text-xs font-medium text-emerald-700">All caught up ✓</p>
     default: return (
-      <ul className="space-y-0.5">
+      <ul className="space-y-1">
         {props.rows.map((row) => (
           <li key={row.id}>
             <Link
               href={row.href}
-              className="flex min-h-9 items-center gap-2.5 rounded-lg px-2 py-1.5 text-xs text-slate-600 hover:bg-slate-50"
+              className={`flex min-h-9 items-center gap-2.5 rounded-lg px-2 py-1.5 text-xs ${ROW[row.tone]}`}
             >
               <span aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-full ${DOT[row.tone]}`} />
               <span className="min-w-0 flex-1">
                 <span className="block truncate">
-                  <span className="font-semibold tabular-nums text-slate-800">{row.count}</span> {row.label}
+                  <span className="font-semibold tabular-nums">{row.count}</span> {row.label}
                 </span>
                 {row.detail && <span className="block truncate text-[11px] text-slate-400">{row.detail}</span>}
               </span>

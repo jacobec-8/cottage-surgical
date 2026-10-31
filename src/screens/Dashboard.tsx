@@ -74,10 +74,10 @@ export default function Dashboard() {
     active_monthly_rate: scopedRows.filter((row) => !['closed', 'cancelled'].includes(row.status)).reduce((sum, row) => sum + Number(row.monthly_rate ?? 0), 0),
   }
   const tiles = [
-    { label: 'Out with customers', value: scoped?.active_rentals ?? 0, icon: CheckCircle, color: 'text-emerald-600 bg-emerald-50' },
-    { label: 'Overdue', value: scoped?.overdue_rentals ?? 0, icon: AlertCircle, color: 'text-red-600 bg-red-50' },
-    { label: 'Approved, not handed over', value: scoped?.scheduled_rentals ?? 0, icon: CalendarClock, color: 'text-blue-600 bg-blue-50' },
-    { label: 'Monthly Rev', value: `$${Number(scoped?.active_monthly_rate ?? 0).toLocaleString()}`, icon: DollarSign, color: 'text-violet-600 bg-violet-50' },
+    { label: 'Out with customers', value: scoped?.active_rentals ?? 0, icon: CheckCircle, color: 'text-emerald-700 bg-emerald-100', alert: 'border-emerald-200 bg-emerald-50' },
+    { label: 'Overdue', value: scoped?.overdue_rentals ?? 0, icon: AlertCircle, color: scoped?.overdue_rentals ? 'text-red-700 bg-red-100' : 'text-emerald-700 bg-emerald-100', alert: scoped?.overdue_rentals ? 'border-red-300 bg-red-50' : 'border-emerald-200 bg-emerald-50' },
+    { label: 'Approved, not handed over', value: scoped?.scheduled_rentals ?? 0, icon: CalendarClock, color: 'text-amber-700 bg-amber-100', alert: scoped?.scheduled_rentals ? 'border-amber-300 bg-amber-50' : '' },
+    { label: 'Monthly Rev', value: `$${Number(scoped?.active_monthly_rate ?? 0).toLocaleString()}`, icon: DollarSign, color: 'text-blue-700 bg-blue-100', alert: 'border-blue-200 bg-blue-50' },
   ]
 
   // Drivers don't get the admin dashboard — their home is My Deliveries.
@@ -114,7 +114,7 @@ export default function Dashboard() {
             {tiles.map((t) => {
               const Icon = t.icon
               return (
-                <div key={t.label} className="bg-white rounded-xl border border-slate-200 p-5">
+                <div key={t.label} className={`rounded-xl border p-5 ${t.alert || 'border-slate-200 bg-white'}`}>
                   <div className={`w-9 h-9 rounded-lg grid place-items-center mb-3 ${t.color}`}>
                     <Icon size={18} />
                   </div>
