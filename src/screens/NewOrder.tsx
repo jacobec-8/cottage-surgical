@@ -10,6 +10,7 @@ import { invalidateOrderWorkflow } from '../lib/workflowKeys'
 import { useLocationScope } from '../contexts/LocationContext'
 import { DRIVER_LOCATION_FIELDS, driversForLocation, type DriverWithLocations } from '../lib/driverLocations'
 import { DRIVER_BUSY_MSG, dispatchErrorMessage, windowProblem } from '../lib/dispatchErrors'
+import { customerMatches, fetchAllPages, MIN_SEARCH_LENGTH, type OrderCustomer } from './neworder/customerMatches'
 import { canAddMore, nextQty, outOfStockMessage, stockLabel, storeStock, type Shortage } from './neworder/stock'
 
 type Item = {
@@ -58,7 +59,7 @@ const orderErrorMessage = (reason?: string) => {
 
 export default function NewOrder() {
   const qc = useQueryClient()
-  const { selectedLocationId, selectedLocation, isAllLocations } = useLocationScope()
+  const { selectedLocationId, selectedLocation, isAllLocations, locations, setSelectedLocationId } = useLocationScope()
   const [mode, setMode] = useState<'rental' | 'purchase'>('rental')
   const [method, setMethod] = useState<Method>('delivery')
 
@@ -84,15 +85,19 @@ export default function NewOrder() {
     setDeliv((current) => ({ ...current, driver: '' }))
   }, [selectedLocationId])
 
+  const searching = custMode === 'existing' && custSearch.trim().length >= MIN_SEARCH_LENGTH
   const customers = useQuery({
-    queryKey: ['cust_search', custSearch, selectedLocationId],
-    enabled: Boolean(selectedLocationId) && custMode === 'existing' && custSearch.length >= 2,
-    queryFn: async () => {
-      const { data } = await supabase.from('customers').select('id,full_name,phone')
-        .eq('location_id', selectedLocationId!).ilike('full_name', `%${custSearch}%`).limit(8)
-      return (data ?? []) as any[]
-    },
+    queryKey: ['cust_search', selectedLocationId],
+    enabled: Boolean(selectedLocationId) && searching,
+    queryFn: () => fetchAllPages<OrderCustomer>(async (from, to) => {
+      const { data, error } = await supabase.from('customers')
+        .select('id,full_name,phone,email,address_line1,address_city,address_state,address_zip')
+        .eq('location_id', selectedLocationId!).order('full_name').order('id').range(from, to)
+      if (error) throw error
+      return data ?? []
+    }),
   })
+  const matchedCustomers = useMemo(() => customerMatches(customers.data ?? [], custSearch), [customers.data, custSearch])
   // Stock decides what can be ordered, so the list is always re-read: on opening,
   // every 20s, and on live stock changes (RealtimeSync, migration 116).
   const items = useQuery({
@@ -245,7 +250,16 @@ export default function NewOrder() {
         <p className="text-slate-500 text-sm">Build a rental or purchase from {selectedLocation?.name ?? 'a selected store'}, reserve its equipment, and schedule a delivery or a counter pickup.</p>
       </div>
 
-      {isAllLocations && <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">Select a store from the header before creating an order.</div>}
+      {isAllLocations && (
+        <label className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <span>Choose the store this order is for. Customers and equipment come from that store.</span>
+          <select value="" onChange={(e) => setSelectedLocationId(e.target.value)} aria-label="Store for this order"
+            className="min-h-10 rounded-lg border border-amber-300 bg-white px-3 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="" disabled>Select a store</option>
+            {locations.map((location) => <option key={location.id} value={location.id}>{location.name}{location.is_active ? '' : ' (not open)'}</option>)}
+          </select>
+        </label>
+      )}
 
       <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1">
         {(['rental', 'purchase'] as const).map((m) => (
@@ -281,15 +295,21 @@ export default function NewOrder() {
               <>
                 <div className="relative">
                   <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input value={custSearch} onChange={(e) => setCustSearch(e.target.value)} placeholder="Search customers by name…" className={`w-full pl-9 ${inp}`} />
+                  <input value={custSearch} onChange={(e) => setCustSearch(e.target.value)} disabled={!selectedLocationId} autoComplete="off" aria-label="Search customers"
+                    placeholder={selectedLocationId ? 'Search by name, email or phone…' : 'Choose a store first'} className={`w-full pl-9 disabled:cursor-not-allowed disabled:bg-slate-100 ${inp}`} />
                 </div>
                 <div className="mt-2 space-y-1">
-                  {customers.data?.map((c) => (
+                  {matchedCustomers.map((c) => (
                     <button key={c.id} onClick={() => { setCust({ id: c.id, name: c.full_name }); setCustSearch('') }}
-                      className="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-50 text-sm flex justify-between">
-                      <span>{c.full_name}</span><span className="text-slate-400">{c.phone}</span>
+                      className="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-50 text-sm flex justify-between gap-3">
+                      <span className="min-w-0 truncate">{c.full_name}</span><span className="min-w-0 truncate text-slate-400">{[c.phone, c.email].filter(Boolean).join(' · ')}</span>
                     </button>
                   ))}
+                  {selectedLocationId && searching && customers.isLoading && <div className="px-3 py-2 text-sm text-slate-400">Searching…</div>}
+                  {selectedLocationId && searching && customers.error && <div role="alert" className="px-3 py-2 text-sm text-red-600">Couldn’t load customers. Please try again.</div>}
+                  {selectedLocationId && searching && customers.isSuccess && matchedCustomers.length === 0 && (
+                    <div className="px-3 py-2 text-sm text-slate-500">No customers match “{custSearch.trim()}” at {selectedLocation?.name ?? 'this store'}. Use New customer to add them.</div>
+                  )}
                 </div>
               </>
             )}
@@ -319,9 +339,10 @@ export default function NewOrder() {
         <div className={label}>Equipment</div>
         <div className="relative mb-2">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input value={itemSearch} onChange={(e) => setItemSearch(e.target.value)} placeholder="Search equipment…" className={`w-full pl-9 ${inp}`} />
+          <input value={itemSearch} onChange={(e) => setItemSearch(e.target.value)} disabled={!selectedLocationId} aria-label="Search equipment"
+            placeholder={selectedLocationId ? 'Search equipment…' : 'Choose a store first'} className={`w-full pl-9 disabled:cursor-not-allowed disabled:bg-slate-100 ${inp}`} />
         </div>
-        {itemSearch && (
+        {itemSearch && selectedLocationId && (
           <div className="border border-slate-200 rounded-lg divide-y divide-slate-100 mb-3 max-h-56 overflow-auto">
             {filteredItems.map((it) => {
               const available = availableFor(it.id)

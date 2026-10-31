@@ -8,6 +8,7 @@ import { useLocationScope } from '../contexts/LocationContext'
 import { matchesCustomerSearch } from '../lib/customerSearch'
 import CustomerPanel from './customers/CustomerPanel'
 import CustomerTable, { type CustomerRow } from './customers/CustomerTable'
+import { fetchAllPages } from './neworder/customerMatches'
 import { useSelectedCustomer } from './customers/useSelectedCustomer'
 
 export default function Customers() {
@@ -17,16 +18,18 @@ export default function Customers() {
   const [search, setSearch] = useState('')
   const { data, isLoading, error } = useQuery({
     queryKey: ['customers', selectedLocationId],
-    queryFn: async () => {
+    queryFn: () => fetchAllPages<CustomerRow>(async (from, to) => {
       let query = supabase
         .from('customers')
         .select('id,full_name,phone,email,coverage_type,address_line1,address_city,address_state,address_zip,rental_orders(order_type,status)')
         .order('full_name')
+        .order('id')
+        .range(from, to)
       if (selectedLocationId) query = query.eq('location_id', selectedLocationId)
       const { data, error } = await query
       if (error) throw error
       return data as CustomerRow[]
-    },
+    }),
   })
   const shown = useMemo(() => (data ?? []).filter((c) => matchesCustomerSearch(c, search)), [data, search])
 
