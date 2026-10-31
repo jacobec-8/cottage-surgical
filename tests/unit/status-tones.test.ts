@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { orderTone, statusClass, stockTone, TONE_CARD, TONE_EDGE, TONE_PILL, TONE_TAB } from '../../src/lib/status.ts'
+import { orderTone, statusClass, stockTone, storesStockTone, TONE_CARD, TONE_EDGE, TONE_PILL, TONE_TAB } from '../../src/lib/status.ts'
 import { billingTone } from '../../src/screens/billing/derive.ts'
+import { stopTone } from '../../src/screens/delivery/stopStatus.ts'
 
 const order = (status: string, payment_status: string | null = 'paid') => ({ status, payment_status })
 
@@ -68,4 +69,23 @@ test('every color has a card and a filter tab', () => {
     assert.ok(TONE_CARD[tone])
     assert.ok(TONE_TAB[tone].active && TONE_TAB[tone].idle)
   }
+})
+
+test('across stores: red only when nobody has stock, yellow when any store is out or low', () => {
+  assert.equal(storesStockTone([0, 0]), 'red')
+  assert.equal(storesStockTone([]), 'red')
+  assert.equal(storesStockTone([10, 0]), 'yellow')
+  assert.equal(storesStockTone([10, 2]), 'yellow')
+  assert.equal(storesStockTone([10, 3]), 'green')
+})
+
+test('a stop is red when late or when a missed attempt still needs rebooking', () => {
+  const today = '2026-10-30'
+  const stop = (status: string, scheduled_date: string | null, attempts: { reason: string; note: string | null; created_at: string }[] = []) => ({ status, scheduled_date, attempts })
+  assert.equal(stopTone(stop('scheduled', '2026-10-29'), today), 'red')
+  assert.equal(stopTone(stop('pending', null, [{ reason: 'not_home', note: null, created_at: '2026-10-29T10:00:00Z' }]), today), 'red')
+  assert.equal(stopTone(stop('pending', null), today), 'yellow')
+  assert.equal(stopTone(stop('scheduled', '2026-10-31'), today), 'blue')
+  assert.equal(stopTone(stop('completed', '2026-10-01'), today), 'green')
+  assert.equal(stopTone(stop('cancelled', '2026-10-01'), today), 'gray')
 })

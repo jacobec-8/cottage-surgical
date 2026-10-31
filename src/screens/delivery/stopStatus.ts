@@ -1,3 +1,4 @@
+import { statusTone, type Tone } from '../../lib/status.ts'
 // Late and missed stops on the Delivery & Pickup board (097).
 
 export const MISSED_REASONS = {
@@ -21,6 +22,13 @@ export function businessToday(now: Date = new Date()): string {
 /** An open stop whose date has passed. */
 export function isLate(stop: Pick<SortableStop, 'status' | 'scheduled_date'>, today: string): boolean {
   return Boolean(stop.scheduled_date && stop.scheduled_date < today && !['completed', 'cancelled'].includes(stop.status))
+}
+
+/** Late is red, and so is a missed stop still waiting to be rebooked; otherwise the status's color. */
+export function stopTone(stop: Pick<SortableStop, 'status' | 'scheduled_date'> & { attempts?: readonly StopAttempt[] | null }, today: string): Tone {
+  if (isLate(stop, today)) return 'red'
+  if (stop.status === 'pending' && latestAttempt(stop.attempts)) return 'red'
+  return statusTone(stop.status)
 }
 
 /** Late first, then stops still needing a date, then by date and time. */

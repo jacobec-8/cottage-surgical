@@ -1,5 +1,6 @@
 'use client'
 
+import { HOVER_OUTLINE } from '../../lib/status'
 import type { KeyboardEvent, MouseEvent } from 'react'
 import { ChevronRight } from 'lucide-react'
 import type { StopContact } from '../../lib/useDriverStopContacts'
@@ -36,7 +37,7 @@ export function clickableCard(d: Deliv, onOpen: OpenStop | undefined, selected: 
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(orderId, d.id) }
   }
   return {
-    className: `group cursor-pointer transition-colors ${selected ? 'border-blue-400 ring-2 ring-blue-100' : 'hover:border-slate-300 hover:bg-slate-50/60'}`,
+    className: `group cursor-pointer transition-colors ${selected ? 'border-blue-400 ring-2 ring-blue-100' : HOVER_OUTLINE}`,
     props: {
       role: 'button',
       tabIndex: 0,

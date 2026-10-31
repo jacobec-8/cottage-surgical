@@ -4,7 +4,7 @@ import type { KeyboardEvent } from 'react'
 import Link from 'next/link'
 import { AlertTriangle, Building2, ChevronRight, MapPin, Store, Truck } from 'lucide-react'
 import ItemThumb from '../../components/ItemThumb'
-import { TONE_CARD, TONE_PILL } from '../../lib/status'
+import { HOVER_OUTLINE, TONE_CARD, TONE_PILL } from '../../lib/status'
 import { PaymentBadge } from '../orders/badges'
 import RequestActions from './RequestActions'
 import { lineShortage } from './stock'
@@ -35,7 +35,7 @@ export default function RequestCard({ r, s, selected, onOpen, onConfirm, onDecli
     <div role="button" tabIndex={0} aria-label={`Open request #${r.order_no}`} aria-expanded={selected}
       onClick={() => onOpen(r.id)} onKeyDown={onKey}
       className={`group cursor-pointer rounded-xl border border-l-4 p-4 transition-colors ${TONE_CARD[s.blocked ? 'red' : 'yellow']} ${
-        selected ? 'border-blue-400 ring-2 ring-blue-100' : s.blocked ? 'border-amber-200 hover:border-amber-300' : 'border-slate-200 hover:border-slate-300'
+        selected ? 'border-blue-400 ring-2 ring-blue-100' : s.blocked ? 'border-red-200 hover:border-y-red-300 hover:border-r-red-300' : `border-slate-200 ${HOVER_OUTLINE}`
       }`}>
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">

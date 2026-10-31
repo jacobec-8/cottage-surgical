@@ -2,6 +2,7 @@
 
 import { useId } from 'react'
 import Link from 'next/link'
+import { READABLE_ON_TINT } from '../lib/status'
 import { panelView, type NeedsTodayRow, type NeedsTodayStatus, type NeedsTodayTone } from './needsToday'
 
 type NeedsTodayPanelProps = {
@@ -12,7 +13,7 @@ type NeedsTodayPanelProps = {
 }
 
 const DOT: Record<NeedsTodayTone, string> = { amber: 'bg-amber-500', red: 'bg-red-500', slate: 'bg-slate-400' }
-const ROW: Record<NeedsTodayTone, string> = { amber: 'bg-amber-50 text-amber-900 hover:bg-amber-100', red: 'bg-red-50 text-red-900 hover:bg-red-100', slate: 'text-slate-600 hover:bg-slate-50' }
+const ROW: Record<NeedsTodayTone, string> = { amber: `bg-amber-50 text-amber-900 hover:bg-amber-100 ${READABLE_ON_TINT}`, red: `bg-red-50 text-red-900 hover:bg-red-100 ${READABLE_ON_TINT}`, slate: 'text-slate-600 hover:bg-slate-50' }
 const QUIET = 'px-2 py-1.5 text-xs text-slate-400'
 
 function PanelBody(props: NeedsTodayPanelProps) {

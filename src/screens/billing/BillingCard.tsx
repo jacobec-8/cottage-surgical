@@ -3,7 +3,7 @@
 import { useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { Calendar, ChevronRight, Undo2 } from 'lucide-react'
 import ItemList from '../../components/ItemList'
-import { TONE_CARD, TONE_PILL } from '../../lib/status'
+import { HOVER_OUTLINE, TONE_CARD, TONE_PILL } from '../../lib/status'
 import type { Charge } from './types'
 import { billingTone, depositHeld, paymentState, rentalPeriod, returnState, type PaymentState, type ReturnState } from './derive'
 import { fmtDate, fmtMoney } from '../orders/format'
@@ -82,8 +82,8 @@ export default function BillingCard({ c, today, selected, onOpen, onRecordPaymen
       onClick={open}
       onKeyDown={onKey}
       className={`group border border-l-4 rounded-xl p-4 flex items-start justify-between gap-4 transition-colors ${TONE_CARD[billingTone(p, r)]} ${orderId ? 'cursor-pointer' : ''} ${
-        selected ? 'border-blue-400 ring-2 ring-blue-100' : attention ? 'border-red-200 hover:border-red-300' : 'border-slate-200 hover:border-slate-300'
-      } hover:bg-slate-50/60`}
+        selected ? 'border-blue-400 ring-2 ring-blue-100' : attention ? 'border-red-200 hover:border-y-red-300 hover:border-r-red-300' : `border-slate-200 ${HOVER_OUTLINE}`
+      }`}
     >
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 flex-wrap">

@@ -21,10 +21,13 @@ export const TONE_EDGE: Record<Tone, string> = {
   gray: 'border-l-slate-300',
 }
 
+/** Darkens the app's gray text inside a tint so it stays readable. */
+export const READABLE_ON_TINT = '[--staff-slate-400:95_105_120] [--staff-slate-500:75_84_99]'
+
 /** A whole record: its strip, tinted when it needs someone. Pair with `border-l-4`. */
 export const TONE_CARD: Record<Tone, string> = {
-  red: 'border-l-red-500 bg-red-50',
-  yellow: 'border-l-amber-400 bg-amber-50',
+  red: `border-l-red-500 bg-red-50 ${READABLE_ON_TINT}`,
+  yellow: `border-l-amber-400 bg-amber-50 ${READABLE_ON_TINT}`,
   blue: 'border-l-blue-500 bg-white',
   green: 'border-l-emerald-500 bg-white',
   gray: 'border-l-slate-300 bg-white',
@@ -38,6 +41,9 @@ export const TONE_TAB: Record<Tone, { active: string; idle: string }> = {
   green: { active: 'bg-emerald-700 text-white', idle: 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100' },
   gray: { active: 'bg-slate-900 text-white', idle: 'text-slate-600 hover:bg-slate-100' },
 }
+
+/** A card's hover outline, leaving its colored strip alone. */
+export const HOVER_OUTLINE = 'hover:border-y-slate-300 hover:border-r-slate-300'
 
 export const TONE_TEXT: Record<Tone, string> = {
   red: 'text-red-700',
@@ -80,6 +86,12 @@ export function orderTone(o: { status: string; payment_status: string | null }):
 export function stockTone(quantity: number, lowAt = 2): Tone {
   if (quantity <= 0) return 'red'
   return quantity <= lowAt ? 'yellow' : 'green'
+}
+
+/** Across stores: red only when nobody has any; yellow when any one store is out or low. */
+export function storesStockTone(quantities: readonly number[], lowAt = 2): Tone {
+  if (quantities.every((quantity) => quantity <= 0)) return 'red'
+  return quantities.some((quantity) => quantity <= lowAt) ? 'yellow' : 'green'
 }
 
 export function statusLabel(s: string): string {

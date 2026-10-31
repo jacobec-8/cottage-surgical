@@ -6,7 +6,7 @@ import { ChevronDown, ChevronRight, MapPin, Truck, Zap } from 'lucide-react'
 import ItemThumb from '../../components/ItemThumb'
 import StockStatusBadges, { LOW_STOCK_THRESHOLD } from '../../components/StockStatusBadges'
 import { fulfillmentLabel } from '../../lib/fulfillment'
-import { stockTone, TONE_CARD, TONE_TEXT } from '../../lib/status'
+import { stockTone, storesStockTone, TONE_CARD, TONE_TEXT } from '../../lib/status'
 import type { InventoryItem } from '../Inventory'
 import ProductPanel from './ProductPanel'
 
@@ -90,9 +90,10 @@ export default function InventoryTable({ items, expandedId, onToggle, editTarget
         {items.map((it) => {
           const open = expandedId === it.id
           const stock = stockOf(it, locationId)
+          const tone = locationId ? stockTone(stock, LOW_STOCK_THRESHOLD) : storesStockTone((it.location_inventory ?? []).map((entry) => entry.quantity_on_hand), LOW_STOCK_THRESHOLD)
           return (
             <li key={it.id} className={it.is_active ? '' : 'opacity-50'}>
-              <div className={`grid border-l-4 py-3 ${COLUMNS} ${locationId ? TONE_CARD[stockTone(stock, LOW_STOCK_THRESHOLD)] : 'border-l-transparent'}`}>
+              <div className={`grid border-l-4 py-3 ${COLUMNS} ${locationId ? TONE_CARD[tone] : 'border-l-transparent'}`}>
                 <div className="flex min-w-0 items-start gap-2.5 xl:items-center">
                   <button
                     type="button"
@@ -114,7 +115,7 @@ export default function InventoryTable({ items, expandedId, onToggle, editTarget
                       {it.description && <span>{it.sku ? ' · ' : <span className="2xl:hidden"> · </span>}{it.description}</span>}
                     </div>
                     <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm xl:hidden">
-                      <span className={`font-medium tabular-nums ${TONE_TEXT[stockTone(stock, LOW_STOCK_THRESHOLD)]}`}>{stock} in stock{locationId ? '' : ' across stores'}</span>
+                      <span className={`font-medium tabular-nums ${TONE_TEXT[tone]}`}>{stock} in stock{locationId ? '' : ' across stores'}</span>
                       <StockFlags it={it} stock={stock} locationId={locationId} />
                       <Offered it={it} />
                       <span className="font-medium text-slate-700">{rentLabels(it).join(' · ')}</span>
@@ -125,7 +126,7 @@ export default function InventoryTable({ items, expandedId, onToggle, editTarget
                 <span className="hidden truncate text-sm capitalize text-slate-600 2xl:block">{it.category}</span>
                 <div className="hidden flex-col gap-0.5 text-sm xl:flex"><Offered it={it} /></div>
                 <div className="hidden flex-col items-start gap-1 xl:flex">
-                  <span className={`text-base font-semibold tabular-nums ${TONE_TEXT[stockTone(stock, LOW_STOCK_THRESHOLD)]}`}>{stock}</span>
+                  <span className={`text-base font-semibold tabular-nums ${TONE_TEXT[tone]}`}>{stock}</span>
                   <div className="flex flex-wrap gap-1"><StockFlags it={it} stock={stock} locationId={locationId} /></div>
                 </div>
                 <div className="hidden text-right xl:block">

@@ -15,8 +15,8 @@ const ROW = 'flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2.5 text-sm hov
 const LIST = 'divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200 bg-white'
 const None = ({ text }: { text: string }) => <div className="rounded-lg border border-dashed border-slate-200 px-3 py-2.5 text-sm text-slate-400">{text}</div>
 
-const TILE_BOX = { plain: 'border-slate-200 bg-white', alert: 'border-red-200 bg-red-50', good: 'border-emerald-200 bg-emerald-50', wait: 'border-amber-200 bg-amber-50', info: 'border-blue-200 bg-blue-50' }
-const TILE_VALUE = { plain: 'text-slate-800', alert: 'text-red-700', good: 'text-emerald-700', wait: 'text-amber-800', info: 'text-blue-700' }
+const TILE_BOX = { plain: 'border-slate-200 bg-white', alert: 'border-red-200 bg-red-50', good: 'border-emerald-200 bg-emerald-50', info: 'border-blue-200 bg-blue-50' }
+const TILE_VALUE = { plain: 'text-slate-800', alert: 'text-red-700', good: 'text-emerald-700', info: 'text-blue-700' }
 
 function Tile({ label, value, tone = 'plain' }: { label: string; value: string; tone?: keyof typeof TILE_BOX }) {
   return (
@@ -34,7 +34,7 @@ export function SummaryTiles({ out, money }: { out: number; money: MoneySummary 
       <Tile label="Out now" value={`${out} rental${out === 1 ? '' : 's'}`} tone={out ? 'good' : 'plain'} />
       <Tile label="Overdue" value={money.overdue ? fmtMoney(money.overdue) : 'Nothing'} tone={money.overdue ? 'alert' : 'good'} />
       <Tile label="Monthly billing" value={money.monthly ? `${fmtMoney(money.monthly)}/mo` : 'None'} tone={money.monthly ? 'info' : 'plain'} />
-      <Tile label="Deposits held" value={money.depositsHeld ? fmtMoney(money.depositsHeld) : 'None'} tone={money.depositsHeld ? 'wait' : 'plain'} />
+      <Tile label="Deposits held" value={money.depositsHeld ? fmtMoney(money.depositsHeld) : 'None'} />
     </div>
   )
 }
