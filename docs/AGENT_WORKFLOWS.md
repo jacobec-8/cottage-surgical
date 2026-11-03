@@ -500,7 +500,8 @@ numbers compare with the same number of days just before.
   reversals, plus deposits the pharmacy kept; deposits held are not revenue),
   overdue now by age, monthly billing, deposits, and the **Money records** tab
   (search, CSV download). Store staff see only their own pharmacy's rentals,
-  stops, customers and equipment; no money anywhere (`can_see_money`, 114).
+  stops, customers and equipment; no money in Reports (`can_see_money`, 114).
+  The one exception is an order's receipt (below).
 - **Money records** (`money_records`, 114) start on Oct 30, 2026 (no backfill):
   every order marked paid / not paid / refunded, every **Billing → Record
   payment**, and every deposit taken, returned or kept, with who, when and how.
@@ -514,6 +515,24 @@ has no Revenue, Overdue now or Money records. Implementation:
 [Reports.tsx](../src/screens/Reports.tsx), `src/screens/reports/`,
 [114](../supabase/migrations/114_money_records_and_reports.sql),
 [115](../supabase/migrations/115_mark_paid_records_amount.sql).
+
+### Order receipts
+
+Every order has a receipt at `/orders/<id>/receipt` (order panel → **Receipt**;
+**Print** hides the app's menus). It is the whole story in one place: the
+pharmacy, the customer, items with units, payment (state, deposits, monthly
+charges and every money record with who recorded it), each stop (delivery,
+return pickup, or store pickup) with driver, schedule, start, missed attempts,
+completion and proof photos, and a timeline from placement to close. Staff of
+the order's pharmacy see all of it, money included (Jacob, 2026-11-02); owners
+see their pharmacies, admins all. Another pharmacy's order reads as not found.
+A store pickup needs no photo for now; it shows who handed it over. Stops
+record who finished them (`deliveries.completed_by`) from 119 on; earlier stops
+show the photo's taker or nothing. Implementation: `order_receipt` in
+[119](../supabase/migrations/119_order_receipts.sql), `src/screens/receipt/`.
+
+Verify: open a delivered order's receipt as store staff (money and the photo
+show), then an order from another pharmacy by its URL (not found).
 
 ## Known limitations to recognize, not silently work around
 

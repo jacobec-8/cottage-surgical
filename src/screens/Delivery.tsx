@@ -17,6 +17,7 @@ import { PaymentBadge } from './orders/badges'
 import { DRIVER_LOCATION_FIELDS } from '../lib/driverLocations'
 import MissedStop from './delivery/MissedStop'
 import NewStopPanel from './delivery/NewStopPanel'
+import ProofPhoto from './delivery/ProofPhoto'
 import StaffStopCard from './delivery/StaffStopCard'
 import { addressLabel, clickableCard, customerLabel, DetailsHint, lifecycleError, stopOpen, type OpenStop } from './delivery/cardParts'
 import { businessToday, fmtStopDate, isLate, latestAttempt, reasonLabel, sortStops, stopTone } from './delivery/stopStatus'
@@ -301,22 +302,5 @@ function CompletedRow({ d, contact, onOpen, selected }: { d: Deliv; contact?: St
         <DetailsHint show={Boolean(onOpen)} />
       </div>
     </div>
-  )
-}
-
-function ProofPhoto({ path }: { path: string }) {
-  const { data: url } = useQuery({
-    queryKey: ['photo', path],
-    queryFn: async () => {
-      const { data } = await supabase.storage.from('delivery-photos').createSignedUrl(path, 3600)
-      return data?.signedUrl ?? null
-    },
-    staleTime: 50 * 60 * 1000,
-  })
-  if (!url) return <div className="w-24 h-24 bg-slate-100 rounded-lg grid place-items-center text-slate-300 text-[11px] shrink-0">photo</div>
-  return (
-    <a href={url} target="_blank" rel="noreferrer" className="shrink-0" title="Open proof photo">
-      <img src={url} alt="Proof of delivery" className="w-24 h-24 object-cover rounded-lg border border-slate-200" />
-    </a>
   )
 }
