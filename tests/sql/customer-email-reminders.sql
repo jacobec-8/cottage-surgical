@@ -14,10 +14,10 @@ SELECT ('71000000-0000-0000-0000-'||lpad(n::text,12,'0'))::uuid,
 FROM generate_series(1,12) n;
 -- A driver's actual return appointment suppresses generic expected-return mail.
 -- An initial in-store collection does not suppress a future expected return.
-INSERT INTO deliveries(order_id,leg_type,requires_driver,status,scheduled_date) VALUES
- ('31000000-0000-0000-0000-000000000009','pickup',true,'scheduled','2030-03-13'),
- ('31000000-0000-0000-0000-000000000010','pickup',false,'completed','2030-02-01'),
- ('31000000-0000-0000-0000-000000000011','pickup',true,'cancelled','2030-03-13');
+INSERT INTO deliveries(order_id,leg_type,requires_driver,status,scheduled_date,location_id) VALUES
+ ('31000000-0000-0000-0000-000000000009','pickup',true,'scheduled','2030-03-13','10000000-0000-0000-0000-000000000001'),
+ ('31000000-0000-0000-0000-000000000010','pickup',false,'completed','2030-02-01','10000000-0000-0000-0000-000000000001'),
+ ('31000000-0000-0000-0000-000000000011','pickup',true,'cancelled','2030-03-13','10000000-0000-0000-0000-000000000001');
 SELECT test_assert((queue_customer_billing_reminders('2030-03-10 11:59:00+00')->>'queued')::int=0,'07:59 spring DST sends nothing');
 SELECT test_assert((queue_customer_billing_reminders('2030-03-11 00:00:00+00')->>'queued')::int=0,'20:00 New York quiet window');
 SELECT queue_customer_billing_reminders('2030-03-10 12:00:00+00');

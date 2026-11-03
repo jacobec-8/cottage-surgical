@@ -1,27 +1,22 @@
 \set ON_ERROR_STOP on
 -- Exercise the real Resend sender with a local HTTP transport and fake Vault.
 -- There is no HTTP extension installed in this cluster, so network is impossible.
-CREATE SCHEMA vault;
-CREATE TABLE vault.decrypted_secrets(name text,decrypted_secret text);
+-- The vault schema and the http types are the stand-ins from tests/sql/standins.sql.
 INSERT INTO vault.decrypted_secrets VALUES('resend_api_key','fake-local-key'),('resend_from_email','test@example.invalid');
-CREATE TYPE public.http_header AS (field text,value text);
-CREATE TYPE public.http_request AS (method text,uri text,headers http_header[],content_type text,content text);
 CREATE FUNCTION public.http_header(text,text) RETURNS http_header LANGUAGE sql AS $$ SELECT ROW($1,$2)::http_header $$;
 CREATE TABLE public.test_http_response(status int,body text);
 INSERT INTO test_http_response VALUES(429,'{"name":"daily_quota_exceeded","message":"Daily quota exhausted"}');
 CREATE TABLE public.test_http_calls(headers http_header[],body jsonb);
-CREATE FUNCTION public.http(p_request http_request) RETURNS http_response LANGUAGE plpgsql AS $$
+CREATE OR REPLACE FUNCTION public.http(p_request http_request) RETURNS http_response LANGUAGE plpgsql AS $$
 DECLARE v_status int;v_body text;
 BEGIN
  INSERT INTO test_http_calls VALUES(p_request.headers,p_request.content::jsonb);
  SELECT status,body INTO v_status,v_body FROM test_http_response;
- RETURN ROW(v_status,'application/json',NULL::jsonb,v_body)::http_response;
+ RETURN ROW(v_status,'application/json',NULL::public.http_header[],v_body)::http_response;
 END $$;
-\ir ../../supabase/migrations/073_customer_email_quota_backoff.sql
--- Reapplication preserves the circuit state and does not send anything.
-\ir ../../supabase/migrations/073_customer_email_quota_backoff.sql
-\ir ../../supabase/migrations/084_customer_email_sender_brand.sql
-\ir ../../supabase/migrations/084_customer_email_sender_brand.sql
+-- Put the real sender back in place of the inert one the bootstrap installed.
+DROP FUNCTION public.send_customer_status_email(uuid);
+ALTER FUNCTION public.send_customer_status_email_real(uuid) RENAME TO send_customer_status_email;
 UPDATE customer_email_outbox SET status='sent';
 INSERT INTO customer_email_outbox(id,order_id,event_key,dedupe_key,recipient,subject,html_body,text_body) VALUES
  ('80000000-0000-0000-0000-000000000001','30000000-0000-0000-0000-000000000003','quota1','quota1','a@example.invalid','Quota1','HTML','Text'),

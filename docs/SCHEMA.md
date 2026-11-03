@@ -1,5 +1,9 @@
 # Cottage Surgical (cottagedme) — Database Schema
 
+> The schema itself is `supabase/migrations/000_baseline.sql`, generated from the
+> live project on 2026-11-03 after migration 117. This page is the prose
+> description and may lag behind it.
+
 Internal DME (durable medical equipment) **rental + delivery** management system
 and guest rental storefront for Cottage Pharmacy. Account roles are **Admin**,
 **Staff**, **Driver**, and **Customer**; the current storefront also supports

@@ -45,12 +45,18 @@ npm run test:sql     # needs PostgreSQL 17 binaries and psycopg2; CI runs this f
 
 ## Changing the database
 
-1. Add `supabase/migrations/NNN_short_name.sql` with the next number. Every file
-   must be safe to re-run (`CREATE OR REPLACE`, `IF NOT EXISTS`).
+`supabase/migrations/000_baseline.sql` is the whole schema as of migration 117:
+tables, functions, triggers, policies, grants, plus the realtime, auth, storage
+and cron pieces. Read it to learn the database. Migrations 001 to 117 live in
+git history only.
+
+1. Add `supabase/migrations/NNN_short_name.sql` with the next number (118 is
+   next). Every file must be safe to re-run (`CREATE OR REPLACE`, `IF NOT EXISTS`).
 2. Apply it to the live project before merging the code that needs it:
    `python3 scripts/run_migrations.py --only NNN_short_name.sql`
    (reads `DB_CONNECTION` from `.env.local`).
-3. `--all` replays every file in order. Avoid it on the live database.
+3. A brand-new database starts with `--only 000_baseline.sql`, then `--all`.
+   `--all` never touches the baseline. Avoid it on the live database.
 
 ## Shipping
 

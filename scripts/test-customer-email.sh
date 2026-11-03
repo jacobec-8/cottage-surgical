@@ -22,10 +22,6 @@ trap cleanup EXIT
 python3 tests/sql/email-bootstrap.py > "$qa_cluster/schema.sql"
 psql_test() { "$qa_pg/psql" -X -h "$qa_cluster/socket" -p 55451 -d email_tests -v ON_ERROR_STOP=1 "$@"; }
 if ! psql_test -f "$qa_cluster/schema.sql" > "$qa_cluster/bootstrap.log" 2>&1; then cat "$qa_cluster/bootstrap.log"; exit 1; fi
-# Each deployed migration must be safe to apply again without replaying mail.
-for qa_file in 070_customer_email_store_isolation.sql 071_customer_email_lifecycle.sql 072_customer_billing_reminders.sql 083_customer_email_business_branding.sql; do
-  if ! psql_test -f "supabase/migrations/$qa_file" > "$qa_cluster/reapply.log" 2>&1; then cat "$qa_cluster/reapply.log"; exit 1; fi
-done
 for qa_test in customer-email-access customer-email-lifecycle customer-email-reminders; do
   if ! psql_test -f "tests/sql/$qa_test.sql" > "$qa_cluster/result.log" 2>&1; then cat "$qa_cluster/result.log"; exit 1; fi
   echo "PASS $qa_test"
@@ -34,3 +30,4 @@ python3 tests/sql/customer-email-concurrency.py "$qa_cluster/socket"
 
 if ! psql_test -f tests/sql/customer-email-provider.sql > "$qa_cluster/provider.log" 2>&1; then cat "$qa_cluster/provider.log"; exit 1; fi
 echo "PASS customer-email-provider (real sender, fake HTTP)"
+

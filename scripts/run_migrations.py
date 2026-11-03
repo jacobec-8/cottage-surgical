@@ -1,30 +1,29 @@
 #!/usr/bin/env python3
-"""Run Cottage Surgical (cottagedme) Supabase SQL migrations.
+"""Run Cottage Surgical Supabase SQL migrations.
 
-Mirrors the rank1seo convention: a single-file psycopg2 runner with NO
-schema_migrations ledger — every *.sql in supabase/migrations is re-run in
-sorted order on each invocation, so every migration MUST be individually
-idempotent (CREATE ... IF NOT EXISTS / CREATE OR REPLACE / DROP ... IF EXISTS).
+A single-file psycopg2 runner with no ledger: every numbered *.sql in
+supabase/migrations is re-run in sorted order on each --all, so every
+migration MUST be individually idempotent (CREATE ... IF NOT EXISTS /
+CREATE OR REPLACE / DROP ... IF EXISTS).
+
+000_baseline.sql is the whole schema as of migration 117, for a NEW database
+only. It is not idempotent and the sweep skips it. Later migrations apply on
+top of it.
 
 Usage:
-    python3 scripts/run_migrations.py --all      # re-run every migration in order
+    python3 scripts/run_migrations.py --only 118_short_name.sql   # apply one file (the normal case)
+    python3 scripts/run_migrations.py --all      # re-run every migration after the baseline, in order
+    python3 scripts/run_migrations.py --only 000_baseline.sql     # new database: load the schema first
     python3 scripts/run_migrations.py --test     # connect only; print version + tables
     python3 scripts/run_migrations.py --list     # list discovered migration files
-    python3 scripts/run_migrations.py --only 007_rental_orders.sql   # run one file
 
 Running with no flag, or an unknown one, prints this help and touches nothing.
-A full re-run replays old backfills and function bodies in order, so prefer
---only for the new file.
 
 DB_CONNECTION resolution order:
     1. $DB_CONNECTION
     2. ../.env.local (a line beginning with `DB_CONNECTION=`)
 
 Dependency: pip install psycopg2-binary
-
-NOTE: seed_demo_data.sql, catalog_import.sql, seed_accounts.sql, and
-seed_ui_scenarios.sql are EXCLUDED from the default sweep. Run a seed
-explicitly with --only seed_ui_scenarios.sql.
 """
 import os
 import sys
@@ -38,12 +37,7 @@ except ImportError:
 HERE = os.path.dirname(os.path.abspath(__file__))
 MIGRATION_DIR = os.path.join(HERE, "..", "supabase", "migrations")
 ENV_LOCAL = os.path.join(HERE, "..", ".env.local")
-SKIP_FROM_SWEEP = {
-    "seed_demo_data.sql",
-    "catalog_import.sql",
-    "seed_accounts.sql",
-    "seed_ui_scenarios.sql",
-}
+BASELINE = "000_baseline.sql"  # new databases only; never part of the sweep
 
 
 def resolve_db_connection():
@@ -63,10 +57,10 @@ def resolve_db_connection():
     )
 
 
-def discovered(include_seed=False):
+def discovered(include_baseline=False):
     files = sorted(os.path.basename(p) for p in glob.glob(os.path.join(MIGRATION_DIR, "*.sql")))
-    if not include_seed:
-        files = [f for f in files if f not in SKIP_FROM_SWEEP]
+    if not include_baseline:
+        files = [f for f in files if f != BASELINE]
     return files
 
 
@@ -80,8 +74,8 @@ def main():
         sys.exit(__doc__)
 
     if "--list" in args:
-        for f in discovered(include_seed=True):
-            tag = "  (seed, excluded from sweep)" if f in SKIP_FROM_SWEEP else ""
+        for f in discovered(include_baseline=True):
+            tag = "  (new databases only, excluded from --all)" if f == BASELINE else ""
             print(f, tag)
         return
 
