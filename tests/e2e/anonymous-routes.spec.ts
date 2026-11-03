@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { rentNow } from './publicFixture'
 
 const runtimeFailures = new WeakMap<Page, string[]>()
 const clientExceptionPattern =
@@ -235,7 +236,7 @@ test('cart quantity persists across reload and items can be removed', async ({ p
     .locator('..')
   await productDetails.getByRole('button', { name: 'Rent Now' }).click()
 
-  const drawer = page.locator('aside')
+  const drawer = page.getByRole('complementary')
   const cartItem = drawer
     .locator('div.border.border-slate-200.rounded-xl')
     .filter({ hasText: 'Playwright Wheelchair' })
@@ -282,9 +283,8 @@ test('checkout offers assigned pickup locations and keeps hospital beds delivery
   await mockCatalogReads(page)
   await openPublicRoute(page, '/')
 
-  const wheelchair = page.getByRole('link', { name: 'Playwright Wheelchair', exact: true }).locator('..')
-  await wheelchair.getByRole('button', { name: 'Rent Now' }).click()
-  const drawer = page.locator('aside')
+  await rentNow(page, 'Playwright Wheelchair')
+  const drawer = page.getByRole('complementary')
   await drawer.getByRole('link', { name: 'Continue to checkout (1)' }).click()
   await expect(page).toHaveURL(/\/checkout$/)
 
@@ -299,8 +299,7 @@ test('checkout offers assigned pickup locations and keeps hospital beds delivery
 
   await page.evaluate(() => localStorage.removeItem('cs_cart_v1'))
   await page.goto('/', { waitUntil: 'domcontentloaded' })
-  const bed = page.getByRole('link', { name: 'Playwright Hospital Bed', exact: true }).locator('..')
-  await bed.getByRole('button', { name: 'Rent Now' }).click()
+  await rentNow(page, 'Playwright Hospital Bed')
   await drawer.getByRole('link', { name: 'Continue to checkout (1)' }).click()
   await expect(page).toHaveURL(/\/checkout$/)
   await expect(page.getByRole('radio', { name: /In-store pickup/i })).toBeDisabled()
@@ -334,7 +333,7 @@ test('checkout refreshes pickup settings in a saved cart', async ({ page }) => {
 
   await openPublicRoute(page, '/')
   await openCart(page)
-  const drawer = page.locator('aside')
+  const drawer = page.getByRole('complementary')
   await drawer.getByRole('link', { name: 'Continue to checkout (1)' }).click()
   await expect(page).toHaveURL(/\/checkout$/)
 
@@ -363,7 +362,7 @@ test('double-clicking rental submit sends one request', async ({ page }) => {
     .locator('..')
   await productDetails.getByRole('button', { name: 'Rent Now' }).click()
 
-  const drawer = page.locator('aside')
+  const drawer = page.getByRole('complementary')
   await drawer.getByRole('link', { name: 'Continue to checkout (1)' }).click()
   await expect(page).toHaveURL(/\/checkout$/)
   await page.getByText('In-store pickup', { exact: true }).click()
@@ -399,7 +398,7 @@ function savedCartItem(mode: 'rent' | 'purchase') {
 async function openCart(page: Page) {
   await expect(async () => {
     await page.getByRole('button', { name: 'Cart', exact: true }).click()
-    await expect(page.locator('aside')).toBeInViewport({ ratio: 1, timeout: 1000 })
+    await expect(page.getByRole('complementary')).toBeInViewport({ ratio: 1, timeout: 1000 })
   }).toPass()
 }
 
@@ -408,9 +407,9 @@ test('the cart is narrow on a desktop and full width on a phone', async ({ page 
   await page.setViewportSize({ width: 1440, height: 900 })
   await openPublicRoute(page, '/')
   await openCart(page)
-  await expect.poll(async () => (await page.locator('aside').boundingBox())?.width).toBe(380)
+  await expect.poll(async () => (await page.getByRole('complementary').boundingBox())?.width).toBe(380)
   await page.setViewportSize({ width: 390, height: 800 })
-  await expect.poll(async () => (await page.locator('aside').boundingBox())?.width).toBe(390)
+  await expect.poll(async () => (await page.getByRole('complementary').boundingBox())?.width).toBe(390)
 })
 
 test('checkout shows the items beside the form', async ({ page }) => {

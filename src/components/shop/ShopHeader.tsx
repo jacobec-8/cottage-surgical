@@ -16,9 +16,16 @@ const NAV = [
   { to: '/faq', label: 'FAQ' },
 ]
 
+/** The words a category link searches for, or null for an informational page. */
+function searchWords(to: string): string | null {
+  const q = new URLSearchParams(to.split('?')[1] ?? '').get('q')
+  return q === '' ? null : q
+}
+
 // Public storefront header. The discreet "Staff" link is the only way in to the
-// admin app — no other public pointer to it.
-export default function ShopHeader() {
+// admin app — no other public pointer to it. On the landing page `onSearch` applies a
+// category link at once, so it works even when the URL is already that search.
+export default function ShopHeader({ onSearch }: { onSearch?: (q: string) => void } = {}) {
   const { count, setOpen } = useCart()
   const pathname = usePathname()
   return (
@@ -46,6 +53,7 @@ export default function ShopHeader() {
           <nav className="hidden lg:flex items-center gap-0.5 text-sm font-heading font-medium">
             {NAV.map((n) => (
               <Link key={n.to} href={n.to}
+                onClick={() => { const q = searchWords(n.to); if (q && onSearch) onSearch(q) }}
                 className={`px-3.5 py-2 rounded-md transition ${pathname === n.to.split('?')[0] ? 'text-brand-700' : 'text-slate-600 hover:text-brand-600 hover:bg-slate-50'}`}>
                 {n.label}
               </Link>
