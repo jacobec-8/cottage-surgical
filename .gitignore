@@ -29,3 +29,6 @@ scratchpad/
 *.pages
 .gstack/
 .vercel
+
+# QA screenshot and session output folders
+artifacts/

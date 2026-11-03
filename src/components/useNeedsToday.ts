@@ -4,7 +4,7 @@ import { NEEDS_TODAY_MODULES, type CanOpen } from './needsToday'
 import { fetchNeedsToday, type NeedsTodayClient, type NeedsTodayFilter } from './needsTodayQuery'
 
 /** React Query key prefix; invalidated wherever 'nav_counts' is. */
-export const NEEDS_TODAY_KEY = 'needs_today'
+const NEEDS_TODAY_KEY = 'needs_today'
 
 // The real client's builder types are far richer than the panel needs; this
 // thin adapter keeps the query module testable against a stub.

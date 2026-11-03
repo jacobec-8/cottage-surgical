@@ -1,6 +1,6 @@
 /** Report rows from report_summary, combined across pharmacies (no React, unit-tested). */
 
-export type StoreMoney = {
+type StoreMoney = {
   collected: number; refunded: number; deposits_kept: number; revenue: number
   deposits_taken: number; deposits_returned: number; records: number
 }

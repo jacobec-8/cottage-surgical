@@ -9,7 +9,7 @@ export type BillingLeg = {
   completed_at: string | null
 }
 
-export type BillingOrder = {
+type BillingOrder = {
   id: string
   order_no: number
   status: string

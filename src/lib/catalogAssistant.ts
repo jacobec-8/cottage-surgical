@@ -14,7 +14,7 @@ const validPrice = (n: unknown): n is number => typeof n === 'number' && Number.
 export function customerAssistantAllowed(userId: string | null, role: string | null, active = false): boolean {
   return !userId || (role === 'customer' && active)
 }
-export function canRentProduct(p: Product): boolean {
+function canRentProduct(p: Product): boolean {
   return p.is_rentable && ((p.pickup_enabled && validPrice(p.pickup_rental_price)) || (p.delivery_enabled && validPrice(p.delivery_rental_price)))
 }
 function rentalPrice(range: { min: number; max: number } | null | undefined, fallback: number | null): string | null {

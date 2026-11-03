@@ -7,7 +7,7 @@ export type StoreStockRow = { location_id: string; quantity_on_hand: number | nu
 export type Shortage = { name: string; requested: number; available: number }
 
 /** The server caps one line at 20 (create_staff_order). */
-export const MAX_LINE_QTY = 20
+const MAX_LINE_QTY = 20
 
 /** The selected pharmacy's available count. The query joins only that pharmacy's row. */
 export function storeStock(item: { location_inventory: readonly StoreStockRow[] }): number {

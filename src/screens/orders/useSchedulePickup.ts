@@ -7,7 +7,7 @@ type Result = { ok: boolean; delivery_id?: string; already_scheduled?: boolean; 
 export type ReturnAddress = { line1: string; city: string; state: string; zip: string }
 type ScheduleArgs = { orderId: string; address?: ReturnAddress }
 
-export const ADDRESS_REQUIRED_MSG = 'This rental has no home address. Enter where the driver should collect it.'
+const ADDRESS_REQUIRED_MSG = 'This rental has no home address. Enter where the driver should collect it.'
 
 /** schedule_pickup RAISEs rather than returning {ok:false}; translate the known messages. */
 export function friendlyError(e: unknown): string {
