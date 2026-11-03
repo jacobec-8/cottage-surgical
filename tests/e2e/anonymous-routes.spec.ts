@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { rentNow } from './publicFixture'
 
 const runtimeFailures = new WeakMap<Page, string[]>()
 const clientExceptionPattern =
@@ -282,8 +283,7 @@ test('checkout offers assigned pickup locations and keeps hospital beds delivery
   await mockCatalogReads(page)
   await openPublicRoute(page, '/')
 
-  const wheelchair = page.getByRole('link', { name: 'Playwright Wheelchair', exact: true }).locator('..')
-  await wheelchair.getByRole('button', { name: 'Rent Now' }).click()
+  await rentNow(page, 'Playwright Wheelchair')
   const drawer = page.locator('aside')
   await drawer.getByRole('link', { name: 'Continue to checkout (1)' }).click()
   await expect(page).toHaveURL(/\/checkout$/)
@@ -299,8 +299,7 @@ test('checkout offers assigned pickup locations and keeps hospital beds delivery
 
   await page.evaluate(() => localStorage.removeItem('cs_cart_v1'))
   await page.goto('/', { waitUntil: 'domcontentloaded' })
-  const bed = page.getByRole('link', { name: 'Playwright Hospital Bed', exact: true }).locator('..')
-  await bed.getByRole('button', { name: 'Rent Now' }).click()
+  await rentNow(page, 'Playwright Hospital Bed')
   await drawer.getByRole('link', { name: 'Continue to checkout (1)' }).click()
   await expect(page).toHaveURL(/\/checkout$/)
   await expect(page.getByRole('radio', { name: /In-store pickup/i })).toBeDisabled()
@@ -408,9 +407,9 @@ test('the cart is narrow on a desktop and full width on a phone', async ({ page 
   await page.setViewportSize({ width: 1440, height: 900 })
   await openPublicRoute(page, '/')
   await openCart(page)
-  await expect.poll(async () => (await page.locator('aside').boundingBox())?.width).toBe(380)
+  await expect.poll(async () => (await page.getByRole('complementary').boundingBox())?.width).toBe(380)
   await page.setViewportSize({ width: 390, height: 800 })
-  await expect.poll(async () => (await page.locator('aside').boundingBox())?.width).toBe(390)
+  await expect.poll(async () => (await page.getByRole('complementary').boundingBox())?.width).toBe(390)
 })
 
 test('checkout shows the items beside the form', async ({ page }) => {

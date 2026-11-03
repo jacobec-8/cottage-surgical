@@ -11,6 +11,8 @@ import ShopHeader from '../../components/shop/ShopHeader'
 import ShopFooter from '../../components/shop/ShopFooter'
 import ProductCard from '../../components/shop/ProductCard'
 import { SHOP_CATEGORIES } from './shopCategories'
+import { EMPTY_FILTER, applyLinkedSearch, clearSearch, matchesFilter, pickCategory, pickMode, typeSearch, type ShopFilter } from './shopFilter'
+import { CategoryChips, NoMatches } from './ShopFilterBar'
 
 const BENEFITS = [
   { icon: Truck, title: 'Same-Day Delivery', sub: 'Order by 2 PM across Nassau & Suffolk' },
@@ -25,15 +27,25 @@ export default function Shop({ initialProducts }: { initialProducts?: Product[] 
   // The homepage is statically rendered, so its first server/client render
   // must not depend on request-only search params. The effect below applies
   // `?q=` immediately after hydration without changing the visible behavior.
-  const [query, setQuery] = useState('')
-  const [mode, setMode] = useState<'all' | 'rent' | 'purchase'>('all')
-  const [cat, setCat] = useState('all')
+  const [filter, setFilter] = useState<ShopFilter>(EMPTY_FILTER)
   const searchRef = useRef<HTMLInputElement>(null)
+  // The last ?q= already applied, so a link's late-arriving navigation never re-applies
+  // words the visitor has since cleared or replaced.
+  const appliedQ = useRef<string | null>(null)
+  const goShop = () => document.getElementById('favorites')?.scrollIntoView({ behavior: 'smooth' })
+  // A category tile or header link: search its words across every category right away,
+  // even when the URL does not change.
+  const searchFromLink = (q: string) => { appliedQ.current = q; setFilter((f) => applyLinkedSearch(f, q)); goShop() }
+  const pick = (cat: string) => setFilter((f) => pickCategory(f, cat))
+  const clear = () => setFilter(clearSearch)
 
   // React to header/category links: ?q= filters, ?focus=search jumps to the grid.
   useEffect(() => {
     const q = sp.get('q')
-    if (q !== null) setQuery(q)
+    if (q !== null && q !== appliedQ.current) {
+      appliedQ.current = q
+      setFilter((f) => applyLinkedSearch(f, q))
+    }
     if (q !== null || sp.get('focus') === 'search') {
       document.getElementById('favorites')?.scrollIntoView({ behavior: 'smooth' })
       if (sp.get('focus') === 'search') setTimeout(() => searchRef.current?.focus(), 400)
@@ -59,18 +71,11 @@ export default function Shop({ initialProducts }: { initialProducts?: Product[] 
   const anyPurchasable =
     products.some((p) => p.can_buy)
   const categories = useMemo(() => Array.from(new Set(products.map((p) => p.category).filter(Boolean))), [products])
-  const filtered = products.filter((p) => {
-    if (mode === 'rent' && !(p.is_rentable && ((p.pickup_enabled && p.pickup_rental_price != null) || (p.delivery_enabled && p.delivery_rental_price != null)))) return false
-    if (mode === 'purchase' && !p.can_buy) return false
-    if (cat !== 'all' && p.category !== cat) return false
-    if (query && !`${p.name} ${p.category} ${p.description ?? ''}`.toLowerCase().includes(query.toLowerCase())) return false
-    return true
-  })
-  const goShop = () => document.getElementById('favorites')?.scrollIntoView({ behavior: 'smooth' })
+  const filtered = products.filter((p) => matchesFilter(p, filter))
 
   return (
     <div className="font-sans bg-white min-h-screen text-slate-800">
-      <ShopHeader />
+      <ShopHeader onSearch={searchFromLink} />
 
       {/* Hero */}
       <section className="bg-gradient-to-b from-brand-50 to-white border-b border-slate-100">
@@ -88,7 +93,7 @@ export default function Shop({ initialProducts }: { initialProducts?: Product[] 
           <form onSubmit={(e) => { e.preventDefault(); goShop() }}
             className="mt-7 flex items-center gap-2 bg-white rounded-xl p-1.5 max-w-xl mx-auto shadow-sm ring-1 ring-slate-200 focus-within:ring-2 focus-within:ring-brand-500">
             <Search size={20} className="text-slate-400 ml-3 shrink-0" />
-            <input value={query} onChange={(e) => setQuery(e.target.value)}
+            <input value={filter.query} onChange={(e) => setFilter((f) => typeSearch(f, e.target.value))}
               placeholder="Search — wheelchair, hospital bed, walker…"
               className="flex-1 min-w-0 text-slate-800 placeholder:text-slate-400 outline-none px-1 py-2" />
             <button className="bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-lg px-5 sm:px-6 py-2.5 shrink-0">Search</button>
@@ -114,7 +119,7 @@ export default function Shop({ initialProducts }: { initialProducts?: Product[] 
         </div>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
           {SHOP_CATEGORIES.map((c) => (
-            <Link key={c.label} href={`/?q=${encodeURIComponent(c.q)}`}
+            <Link key={c.label} href={`/?q=${encodeURIComponent(c.q)}`} onClick={() => searchFromLink(c.q)}
               className="group bg-white border border-slate-200 rounded-xl overflow-hidden hover:shadow-lg hover:border-brand-200 transition flex flex-col">
               <div className="aspect-[4/3] bg-slate-50 grid place-items-center overflow-hidden">
                 <img src={c.img} alt={c.label} className="w-full h-full object-contain p-4 group-hover:scale-105 transition-transform duration-300" />
@@ -160,33 +165,26 @@ export default function Shop({ initialProducts }: { initialProducts?: Product[] 
           <div className="flex flex-col md:flex-row gap-3 md:items-center mb-5">
             <div className="relative flex-1">
               <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input ref={searchRef} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter equipment…"
+              <input ref={searchRef} value={filter.query} onChange={(e) => setFilter((f) => typeSearch(f, e.target.value))} placeholder="Filter equipment…"
                 className="w-full bg-white border border-slate-200 rounded-lg pl-11 pr-4 py-3 outline-none focus:ring-2 focus:ring-brand-500" />
             </div>
             {anyPurchasable && (
               <div className="flex bg-white border border-slate-200 rounded-lg p-1 self-start">
                 {(['all', 'rent', 'purchase'] as const).map((m) => (
-                  <button key={m} onClick={() => setMode(m)}
-                    className={`px-5 py-2 text-sm font-medium rounded-md capitalize ${mode === m ? 'bg-brand-600 text-white' : 'text-slate-600'}`}>{m}</button>
+                  <button key={m} type="button" onClick={() => setFilter((f) => pickMode(f, m))}
+                    className={`px-5 py-2 text-sm font-medium rounded-md capitalize ${filter.mode === m ? 'bg-brand-600 text-white' : 'text-slate-600'}`}>{m}</button>
                 ))}
               </div>
             )}
           </div>
 
-          {categories.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-8">
-              <button onClick={() => setCat('all')}
-                className={`text-sm rounded-full px-4 py-1.5 border ${cat === 'all' ? 'bg-brand-600 border-brand-600 text-white' : 'bg-white border-slate-200 text-slate-600 hover:border-brand-300'}`}>All</button>
-              {categories.map((c) => (
-                <button key={c} onClick={() => setCat(c)}
-                  className={`text-sm rounded-full px-4 py-1.5 border capitalize ${cat === c ? 'bg-brand-600 border-brand-600 text-white' : 'bg-white border-slate-200 text-slate-600 hover:border-brand-300'}`}>{c}</button>
-              ))}
-            </div>
-          )}
+          <CategoryChips categories={categories} filter={filter} onPick={pick} onClearSearch={clear} />
 
           {isLoading && <div className="text-slate-500">Loading equipment…</div>}
           {error && <div className="text-red-600 text-sm">Couldn’t load equipment. Please try again.</div>}
-          {!isLoading && !error && filtered.length === 0 && <div className="text-slate-500">No equipment matches your filters.</div>}
+          {!isLoading && !error && filtered.length === 0 && (
+            <NoMatches filter={filter} onPick={pick} onClearSearch={clear} onShowAll={() => setFilter(EMPTY_FILTER)} />
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
             {filtered.map((p) => <ProductCard key={p.id} p={p} />)}
           </div>
