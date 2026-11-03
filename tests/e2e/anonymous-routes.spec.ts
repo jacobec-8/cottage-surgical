@@ -236,7 +236,7 @@ test('cart quantity persists across reload and items can be removed', async ({ p
     .locator('..')
   await productDetails.getByRole('button', { name: 'Rent Now' }).click()
 
-  const drawer = page.locator('aside')
+  const drawer = page.getByRole('complementary')
   const cartItem = drawer
     .locator('div.border.border-slate-200.rounded-xl')
     .filter({ hasText: 'Playwright Wheelchair' })
@@ -284,7 +284,7 @@ test('checkout offers assigned pickup locations and keeps hospital beds delivery
   await openPublicRoute(page, '/')
 
   await rentNow(page, 'Playwright Wheelchair')
-  const drawer = page.locator('aside')
+  const drawer = page.getByRole('complementary')
   await drawer.getByRole('link', { name: 'Continue to checkout (1)' }).click()
   await expect(page).toHaveURL(/\/checkout$/)
 
@@ -333,7 +333,7 @@ test('checkout refreshes pickup settings in a saved cart', async ({ page }) => {
 
   await openPublicRoute(page, '/')
   await openCart(page)
-  const drawer = page.locator('aside')
+  const drawer = page.getByRole('complementary')
   await drawer.getByRole('link', { name: 'Continue to checkout (1)' }).click()
   await expect(page).toHaveURL(/\/checkout$/)
 
@@ -362,7 +362,7 @@ test('double-clicking rental submit sends one request', async ({ page }) => {
     .locator('..')
   await productDetails.getByRole('button', { name: 'Rent Now' }).click()
 
-  const drawer = page.locator('aside')
+  const drawer = page.getByRole('complementary')
   await drawer.getByRole('link', { name: 'Continue to checkout (1)' }).click()
   await expect(page).toHaveURL(/\/checkout$/)
   await page.getByText('In-store pickup', { exact: true }).click()
@@ -398,7 +398,7 @@ function savedCartItem(mode: 'rent' | 'purchase') {
 async function openCart(page: Page) {
   await expect(async () => {
     await page.getByRole('button', { name: 'Cart', exact: true }).click()
-    await expect(page.locator('aside')).toBeInViewport({ ratio: 1, timeout: 1000 })
+    await expect(page.getByRole('complementary')).toBeInViewport({ ratio: 1, timeout: 1000 })
   }).toPass()
 }
 
