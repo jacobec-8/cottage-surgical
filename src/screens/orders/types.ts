@@ -8,7 +8,7 @@ export type OrderCustomer = {
   coverage_type?: string | null
 }
 
-export type OrderUnit = { asset_tag: string | null; serial_number: string | null } | null
+type OrderUnit = { asset_tag: string | null; serial_number: string | null } | null
 
 export type OrderLine = {
   id?: string

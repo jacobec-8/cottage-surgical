@@ -5,7 +5,7 @@ import { PRODUCT_FIELDS, type PickupLocation, type Product } from '../../lib/sho
 import { publicSupabase } from '../../lib/publicSupabase'
 import { withLatestProduct } from '../../lib/cartRefresh'
 
-export type CartMode = 'rent' | 'purchase'
+type CartMode = 'rent' | 'purchase'
 export type CartItem = {
   id: string
   name: string

@@ -12,7 +12,7 @@ export const PERIOD_OPTIONS: readonly { key: PeriodKey; label: string }[] = [
 ]
 
 /** The longest range the database reports on (report_range_ok). */
-export const MAX_RANGE_DAYS = 1100
+const MAX_RANGE_DAYS = 1100
 const DAY_MS = 86_400_000
 const DATE = /^\d{4}-\d{2}-\d{2}$/
 

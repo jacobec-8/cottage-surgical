@@ -34,10 +34,10 @@ export type NeedsTodayCounts = StopCounts & {
 export type NeedsTodayModule = Extract<StaffModule, 'delivery' | 'orders' | 'billing'>
 export const NEEDS_TODAY_MODULES: readonly NeedsTodayModule[] = ['delivery', 'orders', 'billing']
 export type CanOpen = (module: NeedsTodayModule) => boolean
-export const OPEN_ALL: CanOpen = () => true
+const OPEN_ALL: CanOpen = () => true
 
 export type NeedsTodayTone = 'amber' | 'red' | 'slate'
-export type NeedsTodayRowId = 'stops' | 'pending' | 'overdue_rentals' | 'payments' | 'in_store' | 'deposits'
+type NeedsTodayRowId = 'stops' | 'pending' | 'overdue_rentals' | 'payments' | 'in_store' | 'deposits'
 
 export type NeedsTodayRow = {
   id: NeedsTodayRowId
@@ -52,7 +52,7 @@ export type NeedsTodayRow = {
 const CLOSED_STOP_STATUSES: readonly string[] = ['completed', 'cancelled']
 
 /** A stop still to be done. */
-export function isOpenStop(stop: Pick<NeedsStop, 'status'>): boolean {
+function isOpenStop(stop: Pick<NeedsStop, 'status'>): boolean {
   return !CLOSED_STOP_STATUSES.includes(stop.status)
 }
 

@@ -6,7 +6,7 @@ import { dispatchCustomerEmails } from './customerEmails'
  * start/complete, staff order create). Prefix-matched: 'deliveries' also
  * covers ['deliveries', view]; 'cust_search' covers every search term.
  */
-export const ORDER_WORKFLOW_KEYS = [
+const ORDER_WORKFLOW_KEYS = [
   'requests',
   'orders',
   'pending_payments', // unpaid Stripe/Square checkouts (Orders unpaid tab)
@@ -23,7 +23,7 @@ export const ORDER_WORKFLOW_KEYS = [
 ] as const
 
 /** Keys touched by dispatch-board assign/save (driver/date/window only). */
-export const DISPATCH_KEYS = [
+const DISPATCH_KEYS = [
   'deliveries',
   'orders',
   'nav_counts',

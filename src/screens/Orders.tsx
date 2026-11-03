@@ -24,7 +24,7 @@ const TAB_TONE: Partial<Record<string, Tone>> = { requests: 'yellow', unpaid: 'y
 const WORK_TABS = ['all', 'open', 'scheduled', 'pickup_scheduled', 'closed', 'cancelled'] as const
 type Tab = (typeof WORK_TABS)[number] | 'unpaid' | 'requests'
 /** `/orders?filter=requests` (and the old /requests page) opens on new requests. */
-export const REQUESTS_FILTER = 'requests'
+const REQUESTS_FILTER = 'requests'
 const OPEN_RENTAL_STATUSES = new Set(['open', 'active', 'overdue'])
 
 export default function Orders() {

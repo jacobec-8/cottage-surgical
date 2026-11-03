@@ -2,7 +2,7 @@
 
 import { isLate } from './stopStatus.ts'
 
-export type StepState = 'done' | 'current' | 'todo'
+type StepState = 'done' | 'current' | 'todo'
 export type ProgressStep = { label: string; state: StepState }
 export type StopPhase = 'needs_scheduling' | 'missed' | 'waiting' | 'late' | 'on_the_way' | 'done'
 

@@ -7,7 +7,7 @@ import { refreshWebsite } from './websiteRefresh'
 import { productEditProblem } from './storeProducts'
 import type { ProductDetailsItem } from '../components/ProductDetailsList'
 
-export type StoreSettings = { pickup_enabled: boolean; pickup_rental_price: number | null; delivery_rental_price: number | null; sale_price: number | null; quantity_on_hand: number; scan_code: string | null }
+type StoreSettings = { pickup_enabled: boolean; pickup_rental_price: number | null; delivery_rental_price: number | null; sale_price: number | null; quantity_on_hand: number; scan_code: string | null }
 type StorePatch = Partial<StoreSettings>
 type ProductPatch = Partial<Pick<ProductDetailsItem, 'name' | 'description' | 'category' | 'sku' | 'pickup_enabled' | 'delivery_enabled' | 'pickup_rental_price' | 'delivery_rental_price' | 'sale_price' | 'is_rentable' | 'is_purchasable' | 'same_day_pickup' | 'installation_required'>>
 

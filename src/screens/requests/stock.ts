@@ -1,6 +1,6 @@
 /** Stock checks for the Requests inbox — mirrors the gate in confirm_rental_request (036). */
 
-export type RequestItem = {
+type RequestItem = {
   id: string
   name: string
   image_url?: string | null

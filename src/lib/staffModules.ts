@@ -19,18 +19,6 @@ export type StaffModuleAccessRow = {
   updated_by: string | null
 }
 
-export const STAFF_MODULE_ROUTES: Record<StaffModule, string> = {
-  dashboard: '/admin',
-  requests: '/orders?filter=requests',
-  orders: '/orders',
-  new_order: '/new-order',
-  customers: '/customers',
-  inventory: '/inventory',
-  billing: '/billing',
-  delivery: '/delivery',
-  drivers: '/drivers',
-}
-
 export function accessMap(rows: Pick<StaffModuleAccessRow, 'module_key' | 'enabled'>[] | undefined) {
   return Object.fromEntries(STAFF_MODULES.map(({ key }) => [
     key,

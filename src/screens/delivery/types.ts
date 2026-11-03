@@ -1,7 +1,7 @@
 import type { DriverWithLocations } from '../../lib/driverLocations'
 import type { StopAttempt } from './stopStatus'
 
-export type Photo = { storage_path: string; captured_at: string; notes: string | null }
+type Photo = { storage_path: string; captured_at: string; notes: string | null }
 
 export type Deliv = {
   id: string
