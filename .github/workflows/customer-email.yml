@@ -16,10 +16,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      # PostgreSQL 17, the same major version as the live project; Ubuntu's own
+      # package is older and rejects 17-only privileges in the schema baseline.
       - name: Install isolated test dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y postgresql libpq-dev
+          sudo apt-get install -y postgresql-common libpq-dev
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y postgresql-17
           python3 -m pip install psycopg2-binary==2.9.11
       - name: Test email transactions and access boundaries
+        env:
+          PG_BINDIR: /usr/lib/postgresql/17/bin
         run: bash scripts/test-customer-email.sh
