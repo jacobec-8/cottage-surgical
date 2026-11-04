@@ -42,3 +42,20 @@ test('the keyboard arrows move the ring', async ({ page }) => {
   await page.keyboard.press('ArrowLeft')
   await expect(middleLink(page)).toContainText('Hospital Beds')
 })
+
+test('each photo stays inside its box, above the tile’s name', async ({ page }) => {
+  // A tall stand-in photo: an uncapped image would spill over the name.
+  await page.route('https://cdn.shopify.com/**', (route) => route.fulfill({
+    contentType: 'image/svg+xml',
+    body: '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="600"><rect width="300" height="600" fill="#888"/></svg>',
+  }))
+  await openHydratedCarousel(page)
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 900 })
+    const tile = middleLink(page)
+    const photo = await tile.locator('img').boundingBox()
+    const name = await tile.getByText('Hospital Beds', { exact: true }).boundingBox()
+    expect(photo && name).toBeTruthy()
+    expect(photo!.y + photo!.height).toBeLessThanOrEqual(name!.y)
+  }
+})

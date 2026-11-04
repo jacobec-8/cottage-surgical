@@ -73,8 +73,8 @@ export default function CategoryCarousel({ onPick }: { onPick: (q: string) => vo
               className={`group absolute left-1/2 top-2 flex w-[270px] h-[384px] lg:w-[360px] lg:h-[440px] flex-col overflow-hidden rounded-[22px] lg:rounded-3xl p-[22px] lg:p-7 text-left
                 transition-[transform,opacity,box-shadow] duration-500 ease-[cubic-bezier(.22,.61,.36,1)] motion-reduce:transition-none
                 ${middle ? 'shadow-[0_28px_56px_-20px_rgba(22,41,77,.35)]' : 'cursor-pointer'} ${isShown(slot) ? '' : 'pointer-events-none'}`}>
-              <div className="h-[170px] lg:h-[210px] grid place-items-center">
-                <img src={c.img} alt="" className="max-h-full max-w-full object-contain mix-blend-multiply transition-transform duration-300 group-hover:scale-[1.04]" />
+              <div className="h-[170px] lg:h-[210px] shrink-0 overflow-hidden">
+                <img src={c.img} alt="" className="h-full w-full object-contain mix-blend-multiply transition-transform duration-300 group-hover:scale-[1.04]" />
               </div>
               <span className="mt-[18px] lg:mt-[22px] font-heading font-extrabold tracking-tight text-navy text-[21px] lg:text-2xl">{c.label}</span>
               <span className="mt-1 lg:mt-1.5 text-[15px] lg:text-base leading-snug text-slate-600 line-clamp-2">{c.tagline}</span>
