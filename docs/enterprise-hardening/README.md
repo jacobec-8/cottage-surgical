@@ -61,15 +61,12 @@ catches a mistake before anything is sent, and points at the field.
 **Found and fixed on the way.** The store stock count used to save −3 or
 "ten" as 0 without a word. It is now refused on the field.
 
-## Next, waiting for a go
+## Decision 3: failures carry their source, and retries can't duplicate (2026-11-04)
 
-1. **Record every failure with its source.** Each save attempt gets a request
-   ID, sent with the save. Every blocked or refused save is stored with the
-   ID, form, field, layer that refused it and error code, never what was
-   typed. Staff see a short reference on the error. Needs migration 118.
-2. **Retries can't duplicate records.** Each submission carries one key; a
-   repeat returns the first result instead of a second record. Orders first.
-   Needs a migration.
+- Every save attempt gets a request ID, sent as `x-request-id`. Postgres reads it (`current_request_id()`) and stamps it on order history and money records.
+- Every blocked or refused save is logged to `save_failures` with the ID, user, page, form, field, layer and code, never typed values. Staff see "Ref 3F9A2C" on the error. Only admins read the table.
+- Staff orders, storefront requests and both Stripe checkouts go through "once" functions with a save key. A repeat returns the first result. The key claim, the write and the stored result commit in one transaction. A refusal releases the key.
+- Migration 118, applied 2026-11-04. Checked by `tests/sql/save-keys-check.py`, which runs in a transaction that always rolls back.
 
 ## Done means, for each save
 

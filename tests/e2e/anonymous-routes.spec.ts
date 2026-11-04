@@ -342,11 +342,13 @@ test('checkout refreshes pickup settings in a saved cart', async ({ page }) => {
   await expect(page.getByLabel('Pickup location')).toHaveValue('playwright-woodbury')
 })
 
-test('double-clicking rental submit sends one request', async ({ page }) => {
+test('double-clicking rental submit sends one request, with its save key and request ID', async ({ page }) => {
   await mockCatalogReads(page)
   let submissions = 0
-  await page.route('**/rest/v1/rpc/submit_rental_request_with_fulfillment', async (route) => {
+  let sent: { key?: string; requestId?: string | null } = {}
+  await page.route('**/rest/v1/rpc/submit_rental_request_once', async (route) => {
     submissions += 1
+    sent = { key: route.request().postDataJSON()?.p_request_key, requestId: route.request().headers()['x-request-id'] }
     await new Promise((resolve) => setTimeout(resolve, 100))
     await route.fulfill({
       status: 200,
@@ -374,6 +376,9 @@ test('double-clicking rental submit sends one request', async ({ page }) => {
   await expect(page.getByText('Request received: #4321', { exact: true })).toBeVisible()
   await expect(page.locator('main')).not.toContainText('please wait a moment before sending the rest')
   expect(submissions).toBe(1)
+  // Migration 118: a key so a retry can't create a second order, and an ID that traces any failure.
+  expect(sent.key).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+  expect(sent.requestId).toMatch(/^[0-9a-f]{32}$/)
 })
 
 function savedCartItem(mode: 'rent' | 'purchase') {

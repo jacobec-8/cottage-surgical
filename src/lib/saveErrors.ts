@@ -84,9 +84,37 @@ export function saveErrorMessage(error: unknown, translate?: ErrorTranslator): s
   return UNKNOWN
 }
 
-/** The full failure line SaveForm shows: "Not saved." for a refusal, "Not confirmed." for a lost reply. */
+/**
+ * The server answered, but whether this save went through is unknown: the
+ * same key is still being saved, or it was used for different details. Staff
+ * must check before trying again. `keepKey` says a retry may reuse the key.
+ */
+export class UnconfirmedSave extends Error {
+  readonly reason: string
+  readonly keepKey: boolean
+  constructor(reason: string, message: string, keepKey: boolean) {
+    super(message)
+    this.name = 'UnconfirmedSave'
+    this.reason = reason
+    this.keepKey = keepKey
+  }
+}
+
+/** The repeat-protection replies (migration 118) in words, or null for any other reason. */
+export function unconfirmedReply(reason: string | undefined): UnconfirmedSave | null {
+  if (reason === 'in_progress') return new UnconfirmedSave(reason, 'This save is still being processed. Wait a moment, then reload the page to check before trying again.', true)
+  if (reason === 'key_reused') return new UnconfirmedSave(reason, 'This save was already sent with different details. Reload the page to check what was saved before trying again.', false)
+  return null
+}
+
+/** True when the save may have gone through: a dropped connection or an uncertain reply. */
+export function mayHaveSaved(error: unknown): boolean {
+  return isOffline(error) || error instanceof UnconfirmedSave
+}
+
+/** The full failure line SaveForm shows: "Not saved." for a refusal, "Not confirmed." when it may have gone through. */
 export function notSavedText(error: unknown, translate?: ErrorTranslator): string {
-  const heading = isOffline(error) ? 'Not confirmed.' : 'Not saved.'
+  const heading = mayHaveSaved(error) ? 'Not confirmed.' : 'Not saved.'
   return `${heading} ${saveErrorMessage(error, translate)}`
 }
 

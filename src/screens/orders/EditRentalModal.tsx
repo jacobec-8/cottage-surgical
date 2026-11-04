@@ -8,6 +8,9 @@ import { invalidateOrderWorkflow } from '../../lib/workflowKeys'
 import { FieldRefusal, failedField, notSavedText } from '../../lib/saveErrors'
 import { Checked, FieldMarks, fieldErrorsOf, focusFirstProblem } from '../../components/SaveForm'
 import { rentalProblems } from '../../lib/formChecks/peopleChecks'
+import { newRequestId, shortRef, withRequestId } from '../../lib/requestId'
+import { failureCode, failureLayer } from '../../lib/saveFailure'
+import { logSaveFailure } from '../../lib/saveFailureLog'
 import type { OrderDetail } from './types'
 
 const REASONS: Record<string, string> = {
@@ -121,21 +124,23 @@ export default function EditRentalModal({
   const formRef = useRef<HTMLFormElement>(null)
   const [marks, setMarks] = useState<Record<string, string>>({})
   const [blocked, setBlocked] = useState<string[]>([])
+  const [ref, setRef] = useState<string | null>(null)
   const submit = (event: FormEvent) => {
     event.preventDefault()
+    const requestId = newRequestId()
+    setRef(shortRef(requestId))
     const found = rentalProblems({ fullName: form.fullName, email: form.email, phone: form.phone, zip: form.zip, monthlyRate: form.monthlyRate, deposit: form.deposit, startDate: form.startDate, endDate: form.endDate })
     setMarks(fieldErrorsOf(found))
     setBlocked(found.map((p) => p.message))
     if (found.length) {
-      console.warn('Save blocked', { form: 'Edit rental', fields: found.map((p) => p.field ?? 'form') })
+      logSaveFailure(supabase, { requestId, form: 'Edit rental', field: found.find((p) => p.field)?.field ?? null, layer: 'check', code: `fields:${found.map((p) => p.field ?? 'form').join(',')}`, message: found.map((p) => p.message).join(' ') })
       focusFirstProblem(formRef.current, found)
       return
     }
-    save.mutate(undefined, {
-      onError: (error) => {
-        const field = failedField(error)
-        if (field) { setMarks({ [field]: (error as Error).message }); focusFirstProblem(formRef.current, [{ field, message: '' }]) }
-      },
+    void withRequestId(requestId, () => save.mutateAsync()).catch((error: unknown) => {
+      const field = failedField(error)
+      logSaveFailure(supabase, { requestId, form: 'Edit rental', field, layer: failureLayer(error), code: failureCode(error), message: (error as Error).message })
+      if (field) { setMarks({ [field]: (error as Error).message }); focusFirstProblem(formRef.current, [{ field, message: '' }]) }
     })
   }
   const unmark = (event: FormEvent<HTMLFormElement>) => {
@@ -240,8 +245,8 @@ export default function EditRentalModal({
 
         </FieldMarks>
         {/* In the footer so a refusal is always on screen, not below the fold (ODD-006). */}
-        {blocked.length > 0 && <div role="alert" className="border-t border-red-200 bg-red-50 px-5 py-2 text-sm text-red-700">{blocked.length === 1 ? `Not saved. ${blocked[0]}` : <>Not saved. Fix these first:<ul className="mt-1 list-disc pl-5">{blocked.map((m) => <li key={m}>{m}</li>)}</ul></>}</div>}
-        {!blocked.length && save.error && <div role="alert" className="border-t border-red-200 bg-red-50 px-5 py-2 text-sm text-red-700">{notSavedText(save.error)}</div>}
+        {blocked.length > 0 && <div role="alert" className="border-t border-red-200 bg-red-50 px-5 py-2 text-sm text-red-700">{blocked.length === 1 ? `Not saved. ${blocked[0]} Ref ${ref}` : <>Not saved. Fix these first: Ref {ref}<ul className="mt-1 list-disc pl-5">{blocked.map((m) => <li key={m}>{m}</li>)}</ul></>}</div>}
+        {!blocked.length && save.error && <div role="alert" className="border-t border-red-200 bg-red-50 px-5 py-2 text-sm text-red-700">{notSavedText(save.error)} Ref {ref}</div>}
         <footer className="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">
           <button type="button" onClick={onClose} className="min-h-11 rounded-lg border border-slate-300 px-4 text-sm text-slate-700 hover:bg-white">Cancel</button>
           <button type="submit" disabled={save.isPending} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">

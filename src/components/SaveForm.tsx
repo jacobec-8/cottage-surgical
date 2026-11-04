@@ -2,7 +2,11 @@
 
 import { cloneElement, createContext, useContext, useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent, type ReactElement, type ReactNode } from 'react'
 import type { FieldProblem } from '../lib/fieldRules'
-import { failedField, notSavedText, type ErrorTranslator } from '../lib/saveErrors'
+import { UnconfirmedSave, failedField, mayHaveSaved, notSavedText, saveErrorMessage, type ErrorTranslator } from '../lib/saveErrors'
+import { newRequestId, newSaveKey, shortRef, withRequestId } from '../lib/requestId'
+import { failureCode, failureLayer } from '../lib/saveFailure'
+import { logSaveFailure } from '../lib/saveFailureLog'
+import { supabase } from '../lib/supabase'
 import { useSaveNotice } from './SaveNotice'
 
 // One way to save in the staff app (enterprise hardening): a real form with
@@ -17,8 +21,12 @@ type SavedMessage<T> = string | ((result: T) => string) | null
 type SaveFormProps<T> = {
   /** The form's own checks; every problem it returns blocks the save. */
   validate?: () => FieldProblem[]
-  /** Runs the save. It must reject on every failure, including a refusal the server reports as data. */
-  onSave: (submitter: HTMLElement | null) => Promise<T>
+  /**
+   * Runs the save. It must reject on every failure, including a refusal the
+   * server reports as data. Creates pass `saveKey` to their "once" function,
+   * so a retry after a lost reply can't create a second record.
+   */
+  onSave: (submitter: HTMLElement | null, context: { saveKey: string }) => Promise<T>
   /** After a successful save, e.g. to close the editor. */
   onSaved?: (result: T) => void
   /** "Saved." by default; null when the screen shows its own confirmation. */
@@ -54,6 +62,10 @@ export function SaveForm<T>({
   const [summary, setSummary] = useState<string[]>([])
   const [failure, setFailure] = useState<string | null>(null)
   const [savedInline, setSavedInline] = useState<string | null>(null)
+  const [ref, setRef] = useState<string | null>(null)
+  // One key per submission; it changes only once the outcome is certain.
+  const saveKey = useRef<string | null>(null)
+  if (saveKey.current == null) saveKey.current = newSaveKey()
   const running = useRef(false)
   const mounted = useRef(true)
   useEffect(() => () => { mounted.current = false }, [])
@@ -64,12 +76,15 @@ export function SaveForm<T>({
     target?.focus()
   }
 
-  const block = (found: FieldProblem[]) => {
+  const block = (found: FieldProblem[], requestId: string) => {
     setErrors(Object.fromEntries(found.filter((p) => p.field).map((p) => [p.field as string, p.message])))
     setSummary(found.map((p) => p.message))
     setFailure(null)
-    // Logged with its source until the failure table exists (decision 2).
-    console.warn('Save blocked', { form: rest['aria-label'], fields: found.map((p) => p.field ?? 'form') })
+    setRef(shortRef(requestId))
+    logSaveFailure(supabase, {
+      requestId, form: rest['aria-label'], field: found.find((p) => p.field)?.field ?? null, layer: 'check',
+      code: `fields:${found.map((p) => p.field ?? 'form').join(',')}`, message: found.map((p) => p.message).join(' '),
+    })
     focusField(found.find((p) => p.field)?.field ?? null)
   }
 
@@ -79,24 +94,35 @@ export function SaveForm<T>({
     // A double click, or a scanner that sends Enter twice, saves once.
     if (running.current) return
     setSavedInline(null)
+    const requestId = newRequestId()
     const found = validate?.() ?? []
-    if (found.length) { block(found); return }
+    if (found.length) { block(found, requestId); return }
     setErrors({})
     setSummary([])
     setFailure(null)
+    setRef(null)
     running.current = true
     setPending(true)
     const submitter = (event.nativeEvent as SubmitEvent).submitter ?? null
     let result: T
     try {
-      result = await onSave(submitter)
+      const key = saveKey.current ?? newSaveKey()
+      result = await withRequestId(requestId, () => onSave(submitter, { saveKey: key }))
     } catch (error) {
-      console.error('Save failed', { form: rest['aria-label'], error })
+      console.error('Save failed', { form: rest['aria-label'], requestId, error })
+      const field = failedField(error)
+      logSaveFailure(supabase, {
+        requestId, form: rest['aria-label'], field, layer: failureLayer(error), code: failureCode(error),
+        message: saveErrorMessage(error, translateError),
+      })
+      // A retry may reuse the key only when this save may have gone through.
+      const keep = mayHaveSaved(error) && !(error instanceof UnconfirmedSave && !error.keepKey)
+      if (!keep) saveKey.current = newSaveKey()
       if (mounted.current) {
-        const field = failedField(error)
         setFailure(notSavedText(error, translateError))
+        setRef(shortRef(requestId))
         if (field) {
-          setErrors({ [field]: notSavedText(error, translateError).replace(/^Not saved\. /, '') })
+          setErrors({ [field]: saveErrorMessage(error, translateError) })
           focusField(field)
         }
       }
@@ -105,6 +131,7 @@ export function SaveForm<T>({
       running.current = false
       if (mounted.current) setPending(false)
     }
+    saveKey.current = newSaveKey()
     // The save is confirmed. Nothing after this point may report it as failed.
     try {
       const message = typeof savedMessage === 'function' ? savedMessage(result) : savedMessage
@@ -139,14 +166,19 @@ export function SaveForm<T>({
       {summary.length > 0 && (
         <div role="alert" className={alertClass}>
           {summary.length === 1
-            ? `Not saved. ${summary[0]}`
-            : <>Not saved. Fix these first:<ul className="mt-1 list-disc pl-5">{summary.map((message) => <li key={message}>{message}</li>)}</ul></>}
+            ? <>Not saved. {summary[0]} <RefNote value={ref} /></>
+            : <>Not saved. Fix these first: <RefNote value={ref} /><ul className="mt-1 list-disc pl-5">{summary.map((message) => <li key={message}>{message}</li>)}</ul></>}
         </div>
       )}
-      {failure && <p role="alert" className={alertClass}>{failure}</p>}
+      {failure && <p role="alert" className={alertClass}>{failure} <RefNote value={ref} /></p>}
       {savedInline && <p role="status" className={`text-emerald-700 ${compact ? 'w-full text-xs' : 'text-sm'} ${errorClassName}`}>{savedInline}</p>}
     </form>
   )
+}
+
+/** The short reference staff can quote; it finds the logged failure. */
+function RefNote({ value }: { value: string | null }) {
+  return value ? <span className="whitespace-nowrap opacity-75">Ref {value}</span> : null
 }
 
 type SubmitButtonProps = {

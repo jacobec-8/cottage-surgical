@@ -6,6 +6,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Search, Plus, Minus, Trash2, CheckCircle } from 'lucide-react'
 import ItemThumb from '../components/ItemThumb'
 import { Checked, SaveForm, SubmitButton } from '../components/SaveForm'
+import { unconfirmedReply } from '../lib/saveErrors'
 import { newOrderProblems } from '../lib/formChecks/operationsChecks'
 import { supabase } from '../lib/supabase'
 import { invalidateOrderWorkflow } from '../lib/workflowKeys'
@@ -169,7 +170,7 @@ export default function NewOrder() {
   const removeItem = (id: string) => setCart((c) => c.filter((l) => l.item_id !== id))
 
   // Throws the reason on any failure; SaveForm shows it as "Not saved." and nothing is created.
-  const create = async () => {
+  const create = async (_submitter: HTMLElement | null, { saveKey }: { saveKey: string }) => {
     setResult(null)
     // Existing vs new customer — the new customer is created INSIDE the RPC
     // (one transaction), so a failed order can never leave an orphan customer
@@ -185,7 +186,10 @@ export default function NewOrder() {
         line1: nc.line1 || null, city: nc.city || null, state: nc.state || 'NY', zip: nc.zip || null,
       }
     }
-    const { data, error } = await supabase.rpc('create_staff_order', {
+    // Sent with this submission's key: a retry after a lost reply returns the
+    // first order instead of creating a second one (migration 118).
+    const { data, error } = await supabase.rpc('create_staff_order_once', {
+      p_request_key: saveKey,
       p_customer_id: customerId,
       p_order_type: mode,
       p_items: cart.map((l) => ({ item_id: l.item_id, quantity: l.qty })),
@@ -199,6 +203,8 @@ export default function NewOrder() {
       const refreshed = await items.refetch()
       throw new Error(outOfStockMessage((data.shortages ?? []) as Shortage[], selectedLocation?.name ?? 'this store', !refreshed.error))
     }
+    const uncertain = unconfirmedReply(data?.reason)
+    if (uncertain) throw uncertain
     if (!data?.ok) throw new Error(orderErrorMessage(data?.reason))
     setResult({ order_no: data.order_no, unallocated: data.unallocated, method })
     setCart([]); setCust(null); setNc({ full_name: '', phone: '', email: '', dob: '', coverage: '', line1: '', city: '', state: 'NY', zip: '' })

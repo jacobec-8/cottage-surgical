@@ -3,6 +3,9 @@
 import { useRef, useState, type FormEvent } from 'react'
 import { Checked, FieldMarks, fieldErrorsOf, focusFirstProblem } from '../../components/SaveForm'
 import { returnAddressProblems } from '../../lib/formChecks/peopleChecks'
+import { newRequestId, shortRef } from '../../lib/requestId'
+import { logSaveFailure } from '../../lib/saveFailureLog'
+import { supabase } from '../../lib/supabase'
 import type { ReturnAddress } from './useSchedulePickup'
 
 type Props = {
@@ -23,8 +26,9 @@ export default function ReturnAddressForm({ busy, onSubmit, onCancel }: Props) {
     const found = returnAddressProblems(a)
     setMarks(fieldErrorsOf(found))
     if (found.length) {
-      setErr(found.map((p) => p.message).join(' '))
-      console.warn('Save blocked', { form: 'Return address', fields: found.map((p) => p.field ?? 'form') })
+      const requestId = newRequestId()
+      setErr(`${found.map((p) => p.message).join(' ')} Ref ${shortRef(requestId)}`)
+      logSaveFailure(supabase, { requestId, form: 'Return address', field: found.find((p) => p.field)?.field ?? null, layer: 'check', code: `fields:${found.map((p) => p.field ?? 'form').join(',')}`, message: found.map((p) => p.message).join(' ') })
       focusFirstProblem(formRef.current, found)
       return
     }

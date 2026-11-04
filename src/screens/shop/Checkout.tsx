@@ -3,6 +3,26 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { Checked, FieldMarks, fieldErrorsOf, focusFirstProblem } from '../../components/SaveForm'
 import { checkoutProblems } from '../../lib/formChecks/peopleChecks'
+import { newRequestId, newSaveKey, shortRef, withRequestId } from '../../lib/requestId'
+import { UnconfirmedSave, unconfirmedReply } from '../../lib/saveErrors'
+import { failureCode, failureLayer } from '../../lib/saveFailure'
+import { logSaveFailure } from '../../lib/saveFailureLog'
+
+// One key per create in this checkout, kept in the tab so a reload after a lost
+// reply reuses it: the repeat returns the first order, never a second one (migration 118).
+type CheckoutKeys = { rent: string; buy: string }
+const KEYS = 'cottage-checkout-keys'
+function loadKeys(): CheckoutKeys {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(KEYS) ?? 'null') as CheckoutKeys | null
+    if (saved?.rent && saved?.buy) return saved
+  } catch { /* storage blocked: fresh keys */ }
+  return { rent: newSaveKey(), buy: newSaveKey() }
+}
+function storeKeys(keys: CheckoutKeys): void {
+  try { sessionStorage.setItem(KEYS, JSON.stringify(keys)) } catch { /* storage blocked */ }
+}
+const LOST_REPLY = 'The connection dropped before we could confirm your order. Press the button again: it won’t create a second order.'
 import Link from 'next/link'
 import { CheckCircle, CreditCard, Loader2, MapPin, ShoppingCart, Store, Truck, Zap } from 'lucide-react'
 import { useCart } from '../../components/shop/CartContext'
@@ -65,9 +85,10 @@ export default function Checkout() {
     // The form's own checks first: a flagged field turns red, gets the cursor, and nothing is sent.
     const found = checkoutProblems(form, fulfillment, Boolean(selectedPickupLocation))
     setMarks(fieldErrorsOf(found))
+    const requestId = newRequestId()
     if (found.length) {
-      setError(found.map((p) => p.message).join(' '))
-      console.warn('Checkout blocked', { fields: found.map((p) => p.field ?? 'form') })
+      setError(`${found.map((p) => p.message).join(' ')} Ref ${shortRef(requestId)}`)
+      logSaveFailure(publicSupabase, { requestId, form: 'Checkout', field: found.find((p) => p.field)?.field ?? null, layer: 'check', code: `fields:${found.map((p) => p.field ?? 'form').join(',')}`, message: found.map((p) => p.message).join(' ') })
       focusFirstProblem(formRef.current, found)
       return
     }
@@ -75,7 +96,11 @@ export default function Checkout() {
     setBusy(true)
     setError('')
     clearRefusal()
-    try {
+    const keys = loadKeys()
+    storeKeys(keys)
+    // A definite refusal frees that create's key; a lost reply keeps it for a safe retry.
+    const refused = (which: keyof CheckoutKeys, error: Error) => { storeKeys({ ...keys, [which]: newSaveKey() }); return error }
+    try { await withRequestId(requestId, async () => {
       if (fulfillment === 'delivery' && !deliveryAvailable) {
         throw new Error('Delivery is not available for every item in your cart.')
       }
@@ -96,7 +121,8 @@ export default function Checkout() {
       let rentNo: number | null = null
       if (rentItems.length) {
         if (paymentChoice === 'online') {
-          const { data, error: rpcError } = await publicSupabase.rpc('create_stripe_rental_checkout_with_fulfillment', {
+          const { data, error: rpcError } = await publicSupabase.rpc('create_stripe_rental_checkout_once', {
+            p_request_key: keys.rent,
             p_items: rentItems.map((i) => ({ item_id: i.id, quantity: i.qty })),
             p_customer: customer,
             p_address: address,
@@ -104,35 +130,42 @@ export default function Checkout() {
             p_redirect_base: window.location.origin,
             p_fulfillment: details,
           })
-          if (rpcError) throw new Error('Couldn’t start checkout. Please try again or call us.')
+          if (rpcError) throw new UnconfirmedSave('network', LOST_REPLY, true)
+          const uncertain = unconfirmedReply(data?.reason)
+          if (uncertain) throw uncertain
           if (!data?.ok) {
             if (data?.reason === 'invalid_redirect') {
-              throw new Error('Checkout is misconfigured for this site. Please call us.')
+              throw refused('rent', new Error('Checkout is misconfigured for this site. Please call us.'))
             }
             if (data?.reason === 'missing_email') {
-              throw new Error('Please enter a valid email for payment and order updates.')
+              throw refused('rent', new Error('Please enter a valid email for payment and order updates.'))
             }
             if (data?.reason === 'out_of_stock') {
+              refused('rent', new Error('out_of_stock'))
               refuseForStock(outOfStockMessage(data.shortages, fulfillment))
               return
             }
-            throw new Error(CHECKOUT_REASONS[data?.reason] || 'We couldn’t start your payment. Please call us.')
+            throw refused('rent', new Error(CHECKOUT_REASONS[data?.reason] || 'We couldn’t start your payment. Please call us.'))
           }
           clear()
           window.location.assign(data.checkout_url)
           return
         } else {
-          const { data, error: rpcError } = await publicSupabase.rpc('submit_rental_request_with_fulfillment', {
+          const { data, error: rpcError } = await publicSupabase.rpc('submit_rental_request_once', {
+            p_request_key: keys.rent,
             p_order_type: 'rental', p_items: rentItems.map((i) => ({ item_id: i.id, quantity: i.qty })),
             p_customer: customer, p_address: address, p_notes: form.notes || null,
             p_fulfillment: details,
           })
-          if (rpcError) throw new Error('Something went wrong. Please try again or call us.')
+          if (rpcError) throw new UnconfirmedSave('network', LOST_REPLY, true)
+          const uncertain = unconfirmedReply(data?.reason)
+          if (uncertain) throw uncertain
           if (data?.reason === 'out_of_stock') {
+            refused('rent', new Error('out_of_stock'))
             refuseForStock(outOfStockMessage(data.shortages, fulfillment))
             return
           }
-          if (!data?.ok) throw new Error(CHECKOUT_REASONS[data?.reason] || 'We couldn’t submit your rental request. Please call us.')
+          if (!data?.ok) throw refused('rent', new Error(CHECKOUT_REASONS[data?.reason] || 'We couldn’t submit your rental request. Please call us.'))
           rentNo = data.order_no
           // Guests may send only their own order's mail (100); the scheduler is the backstop.
           void dispatchOrderEmails(data.order_id)
@@ -141,20 +174,23 @@ export default function Checkout() {
 
       // Purchases → Stripe Checkout; the server refuses them while retail sales are off (094).
       if (buyItems.length) {
-        const { data, error: rpcError } = await publicSupabase.rpc('create_stripe_checkout_with_fulfillment', {
+        const { data, error: rpcError } = await publicSupabase.rpc('create_stripe_checkout_once', {
+          p_request_key: keys.buy,
           p_items: buyItems.map((i) => ({ item_id: i.id, quantity: i.qty })),
           p_customer: customer,
           p_address: address,
           p_redirect_base: window.location.origin,
           p_fulfillment: details,
         })
-        if (rpcError) throw new Error('Couldn’t start checkout. Please try again or call us.')
+        if (rpcError) throw new UnconfirmedSave('network', LOST_REPLY, true)
+        const uncertain = unconfirmedReply(data?.reason)
+        if (uncertain) throw uncertain
         if (!data?.ok) {
           if (data?.reason === 'invalid_redirect') {
-            throw new Error('Checkout is misconfigured for this site. Please call us.')
+            throw refused('buy', new Error('Checkout is misconfigured for this site. Please call us.'))
           }
-          if (data?.reason === 'out_of_stock') throw new Error(outOfStockMessage(data.shortages, fulfillment))
-          throw new Error(CHECKOUT_REASONS[data?.reason] || 'We couldn’t start your payment. Please call us.')
+          if (data?.reason === 'out_of_stock') throw refused('buy', new Error(outOfStockMessage(data.shortages, fulfillment)))
+          throw refused('buy', new Error(CHECKOUT_REASONS[data?.reason] || 'We couldn’t start your payment. Please call us.'))
         }
         clear()
         window.location.assign(data.checkout_url) // → Stripe, then back to /checkout/success
@@ -162,9 +198,11 @@ export default function Checkout() {
       }
 
       clear()
+      storeKeys({ rent: newSaveKey(), buy: newSaveKey() })
       setDone({ numbers: rentNo ? [rentNo] : [], fulfillment })
-    } catch (e) {
-      setError((e as Error).message)
+    }) } catch (e) {
+      logSaveFailure(publicSupabase, { requestId, form: 'Checkout', field: null, layer: failureLayer(e), code: failureCode(e), message: (e as Error).message })
+      setError(`${(e as Error).message} Ref ${shortRef(requestId)}`)
     } finally {
       submittingRef.current = false
       setBusy(false)
