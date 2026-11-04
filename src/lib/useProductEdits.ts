@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { supabase } from './supabase'
 import { refreshWebsite } from './websiteRefresh'
 import { productEditProblem } from './storeProducts'
+import { ensureChanged } from './saveErrors'
 import type { ProductDetailsItem } from '../components/ProductDetailsList'
 
 type StoreSettings = { pickup_enabled: boolean; pickup_rental_price: number | null; delivery_rental_price: number | null; sale_price: number | null; quantity_on_hand: number; scan_code: string | null }
@@ -63,10 +64,13 @@ export function useProductEdits(item: ProductDetailsItem & { id: string; locatio
     // Staff edit every field of a product their store carries (108); admins any product.
     canEditProduct: isAdmin || (staffHere && Boolean(store.data)) || (profile?.role === 'owner' && Boolean(store.data)),
     saveStore: async (patch) => {
-      const { error } = await supabase.from('equipment_location_inventory')
+      const { data: changed, error } = await supabase.from('equipment_location_inventory')
         .update({ ...patch, updated_at: new Date().toISOString() })
-        .eq('equipment_item_id', item.id).eq('location_id', locationId!)
-      if (error) throw new Error(error.code === '23505' ? 'That scan code is already used for another product at this store.' : 'Couldn’t save. Please try again.')
+        .eq('equipment_item_id', item.id).eq('location_id', locationId!).select('equipment_item_id')
+      if (error?.code === '23505') throw new Error('That scan code is already used for another product at this store.')
+      // Other refusals go to SaveForm, which says why in plain words.
+      if (error) throw error
+      ensureChanged(changed)
       refresh()
     },
     saveProduct: async (patch) => {
@@ -80,8 +84,9 @@ export function useProductEdits(item: ProductDetailsItem & { id: string; locatio
         const { data, error } = await supabase.rpc('update_store_product', { p_item_id: item.id, p_location_id: locationId, p_patch: patch })
         if (error || !data?.ok) throw new Error(data?.reason === 'invalid_name' ? 'Enter a name.' : data?.reason === 'forbidden' ? 'You can only edit products your store carries.' : data?.reason === 'invalid_value' ? 'A price is missing for what this product offers.' : 'Couldn’t save. Please try again.')
       } else {
-        const { error } = await supabase.from('equipment_items').update(patch).eq('id', item.id)
-        if (error) throw new Error('Couldn’t save. Please try again.')
+        const { data: changed, error } = await supabase.from('equipment_items').update(patch).eq('id', item.id).select('id')
+        if (error) throw error
+        ensureChanged(changed)
       }
       refresh()
     },

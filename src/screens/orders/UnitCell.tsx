@@ -1,9 +1,10 @@
 'use client'
 
-import { useRef, useState, type KeyboardEvent } from 'react'
+import { useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Pencil } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { SaveForm, SubmitButton, useSavePending } from '../../components/SaveForm'
 import { invalidateOrderWorkflow } from '../../lib/workflowKeys'
 import { scanRefusal, scanSuccess, type ScanResult } from './unitScan'
 
@@ -28,7 +29,6 @@ function UnitEditor({ lineId, itemName, onMessage, done }: { lineId: string; ite
   const qc = useQueryClient()
   const input = useRef<HTMLInputElement>(null)
   const [code, setCode] = useState('')
-  const [error, setError] = useState('')
   const [recordOn, setRecordOn] = useState<{ code: string; unit: string } | null>(null)
   const scan = useMutation({
     mutationFn: async ({ code: value, recordSerial }: Args) => {
@@ -36,46 +36,44 @@ function UnitEditor({ lineId, itemName, onMessage, done }: { lineId: string; ite
       if (rpcError) throw rpcError
       return data as ScanResult | null
     },
-    onSuccess: (res, { code: value }) => {
-      if (res?.ok) {
-        invalidateOrderWorkflow(qc)
-        onMessage(scanSuccess(res))
-        done()
-        return
-      }
-      setError(scanRefusal(res))
+  })
+  // One form, two submit buttons: Save tries the code as typed; the second
+  // button (shown after a refusal) records the code as that unit's serial.
+  const save = async (submitter: HTMLElement | null) => {
+    const recordSerial = submitter?.getAttribute('name') === 'record-serial' && recordOn !== null
+    const value = recordSerial ? recordOn!.code : code
+    setRecordOn(null)
+    const res = await scan.mutateAsync({ code: value, recordSerial })
+    if (!res?.ok) {
       setRecordOn(res?.can_record_serial && res.unit_label ? { code: value, unit: res.unit_label } : null)
       // A scanner types over whatever is selected, so the next scan starts clean.
       input.current?.select()
-    },
-    onError: () => setError('Couldn’t change the unit. Please try again.'),
-  })
-  const submit = () => {
-    // Some scanners send Enter twice; the second must not replace the first result.
-    if (scan.isPending) return
-    setError('')
-    setRecordOn(null)
-    scan.mutate({ code, recordSerial: false })
-  }
-  // A scanner ends with Enter. Esc cancels the edit only; it must not reach the panel's Esc-to-close.
-  const onKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Enter') { e.preventDefault(); submit() }
-    if (e.key === 'Escape') { e.stopPropagation(); done() }
+      // A refusal is a failed save: SaveForm shows it as "Not saved." with the reason.
+      throw new Error(scanRefusal(res))
+    }
+    invalidateOrderWorkflow(qc)
+    onMessage(scanSuccess(res))
   }
   return (
-    <span className="flex flex-wrap items-center gap-1.5 font-sans">
+    // A scanner ends with Enter, which submits. SaveForm ignores a second Enter while the first is saving.
+    <SaveForm aria-label={`Unit for ${itemName}`} size="compact" onSave={save} onSaved={done} savedMessage={null}
+      onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); done() } }}
+      className="flex flex-wrap items-center gap-1.5 font-sans">
       <input ref={input} autoFocus aria-label={`Asset tag or serial for ${itemName}`} placeholder="Scan or type tag or serial" value={code}
-        onChange={(e) => { setCode(e.target.value); setRecordOn(null) }} onKeyDown={onKeyDown}
+        onChange={(e) => { setCode(e.target.value); setRecordOn(null) }}
         className="w-48 max-w-full rounded-lg border border-slate-300 px-2 py-1 text-sm font-normal focus:outline-none focus:ring-2 focus:ring-blue-500" />
-      <button type="button" onClick={submit} disabled={scan.isPending} className="rounded-lg bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50">{scan.isPending ? 'Saving…' : 'Save'}</button>
-      <button type="button" onClick={done} disabled={scan.isPending} className="rounded-lg px-2 py-1 text-xs text-slate-500 hover:bg-slate-100">Cancel</button>
-      {error && <span role="alert" className="block w-full text-xs font-normal text-red-600">{error}</span>}
+      <SubmitButton className="rounded-lg bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50">{(pending) => pending ? 'Saving…' : 'Save'}</SubmitButton>
+      <CancelButton done={done} />
       {recordOn && (
-        <button type="button" onClick={() => scan.mutate({ code: recordOn.code, recordSerial: true })} disabled={scan.isPending}
-          className="text-left text-xs text-blue-600 hover:underline disabled:opacity-50">
+        <SubmitButton name="record-serial" className="text-left text-xs text-blue-600 hover:underline disabled:opacity-50">
           Save {recordOn.code.trim()} as the serial for {recordOn.unit}
-        </button>
+        </SubmitButton>
       )}
-    </span>
+    </SaveForm>
   )
+}
+
+function CancelButton({ done }: { done: () => void }) {
+  const pending = useSavePending()
+  return <button type="button" onClick={done} disabled={pending} className="rounded-lg px-2 py-1 text-xs text-slate-500 hover:bg-slate-100">Cancel</button>
 }

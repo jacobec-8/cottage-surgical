@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { SaveForm, SubmitButton } from '../../components/SaveForm'
 import { MISSED_REASONS, type MissedReason } from './stopStatus'
 
 const ERRORS: Record<string, string> = {
@@ -48,7 +49,10 @@ export function MissedStopForm({ deliveryId, isPickup, onClose }: { deliveryId: 
   const label = missedLabel(isPickup)
 
   return (
-    <div className="w-full rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm sm:w-80" onClick={(e) => e.stopPropagation()}>
+    // Clicks inside must not open the stop card underneath.
+    <div onClick={(e) => e.stopPropagation()}>
+    <SaveForm aria-label={label} onSave={() => report.mutateAsync()} savedMessage="Recorded. The stop needs scheduling again." errorClassName="mb-2"
+      className="w-full rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm sm:w-80">
       <div className="mb-2 font-medium text-amber-900">{label}: what happened?</div>
       <select aria-label="Reason" value={reason} onChange={(e) => setReason(e.target.value as MissedReason)}
         className="mb-2 w-full rounded-lg border border-slate-300 bg-white px-2 py-2">
@@ -57,14 +61,13 @@ export function MissedStopForm({ deliveryId, isPickup, onClose }: { deliveryId: 
       <input aria-label="Note" value={note} onChange={(e) => setNote(e.target.value)} maxLength={500}
         placeholder={reason === 'other' ? 'What happened? (required)' : 'Note (optional)'} className="mb-2 w-full rounded-lg border border-slate-300 bg-white px-2 py-2" />
       <p className="mb-2 text-xs text-amber-900">The stop goes back to “needs scheduling”, the driver is freed, and the customer is emailed to choose a new time.</p>
-      {report.error && <p role="alert" className="mb-2 text-xs text-red-600">{(report.error as Error).message}</p>}
       <div className="flex justify-end gap-2">
         <button type="button" onClick={onClose} className="rounded-lg px-3 py-1.5 text-slate-600 hover:bg-white">Cancel</button>
-        <button type="button" onClick={() => report.mutate()} disabled={report.isPending}
-          className="rounded-lg bg-amber-600 px-3 py-1.5 font-medium text-white hover:bg-amber-700 disabled:opacity-50">
-          {report.isPending ? 'Saving…' : 'Confirm'}
-        </button>
+        <SubmitButton className="rounded-lg bg-amber-600 px-3 py-1.5 font-medium text-white hover:bg-amber-700 disabled:opacity-50">
+          {(pending) => pending ? 'Saving…' : 'Confirm'}
+        </SubmitButton>
       </div>
+    </SaveForm>
     </div>
   )
 }

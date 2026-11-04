@@ -7,7 +7,7 @@ import { useCart } from '../../components/shop/CartContext'
 import { useCartQuote } from '../../components/shop/useCartQuote'
 import ShopFooter from '../../components/shop/ShopFooter'
 import ShopHeader from '../../components/shop/ShopHeader'
-import { CHECKOUT_REASONS, dueToday, payLaterChoice, type Fulfillment, type PaymentChoice } from '../../lib/checkoutPlan'
+import { CHECKOUT_REASONS, checkoutFormProblem, dueToday, payLaterChoice, type Fulfillment, type PaymentChoice } from '../../lib/checkoutPlan'
 import { dispatchOrderEmails } from '../../lib/customerEmails'
 import { commonPickupLocations, pickupLocationSelection } from '../../lib/fulfillment'
 import { publicSupabase } from '../../lib/publicSupabase'
@@ -63,6 +63,8 @@ export default function Checkout() {
     setError('')
     clearRefusal()
     try {
+      const missing = checkoutFormProblem(form, fulfillment)
+      if (missing) throw new Error(missing)
       if (fulfillment === 'pickup' && !selectedPickupLocation) {
         throw new Error('Choose an available pickup location.')
       }
@@ -188,7 +190,7 @@ export default function Checkout() {
                 <CheckoutSummary items={items} priceOf={priceOf} rentTotal={rentTotal} buyTotal={buyTotal}
                   due={dueToday(rentTotal, buyTotal, paymentChoice)} payLater={rentItems.length > 0 && paymentChoice !== 'online'} onEdit={() => setOpen(true)} />
               </div>
-              <form onSubmit={submit} className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4">
+              <form noValidate onSubmit={submit} className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                   <input required placeholder="Full name" value={form.full_name} onChange={set('full_name')} className={`col-span-2 ${INPUT}`} />
                   <input placeholder="Phone" value={form.phone} onChange={set('phone')} className={INPUT} />
@@ -256,7 +258,7 @@ export default function Checkout() {
                 {priceNotice && <div role="status" className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">Price updated — {priceNotice}</div>}
                 {problem && !error && <div role="alert" className="text-sm text-red-600">{problem}</div>}
                 {error && <div role="alert" className="text-sm text-red-600">{error}</div>}
-                <button disabled={busy || Boolean(problem)} className="w-full bg-terracotta hover:opacity-90 text-white rounded-lg py-3 font-semibold disabled:opacity-50">
+                <button type="submit" disabled={busy || Boolean(problem)} className="w-full bg-terracotta hover:opacity-90 text-white rounded-lg py-3 font-semibold disabled:opacity-50">
                   {busy
                     ? (buyItems.length || paymentChoice === 'online' ? 'Redirecting…' : 'Submitting…')
                     : buyItems.length || paymentChoice === 'online' ? 'Continue to Secure Payment' : 'Submit Request'}

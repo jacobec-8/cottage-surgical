@@ -12,7 +12,8 @@ export function useSaveCustomer(customerId: string): (patch: ContactPatch) => Pr
     const { data, error } = await supabase.from('customers').update(patch).eq('id', customerId).select('id')
     if (error) {
       console.error('Customer update failed', { customerId, fields: Object.keys(patch), error })
-      throw new Error('Couldn’t save. Please try again.')
+      // SaveForm turns the database's reason into plain words.
+      throw error
     }
     if (!data?.length) throw new Error('You can’t edit this customer from this store.')
     // The directory, order panels and searches all show these fields.

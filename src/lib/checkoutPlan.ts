@@ -53,3 +53,23 @@ export function quoteProblem(quote: RentalQuote | undefined, fulfillment: Fulfil
   if (quote?.reason === 'outside_delivery_area') return `We don’t deliver to ${quote.zip ?? 'that ZIP code'} yet. Please call us, or choose in-store pickup.`
   return null
 }
+
+type CheckoutFields = { full_name: string; email: string; line1: string; city: string; zip: string }
+
+/**
+ * What the shopper still has to fill in, or null. Checkout's form has the
+ * browser's tooltip checks turned off, so these rules replace its `required`
+ * and `type="email"` attributes and show in the page's own error line.
+ */
+export function checkoutFormProblem(form: CheckoutFields, fulfillment: Fulfillment): string | null {
+  if (!form.full_name.trim()) return 'Enter your full name.'
+  const email = form.email.trim()
+  if (!email) return 'Enter your email so we can send order updates.'
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'Enter a valid email, like name@example.com.'
+  if (fulfillment === 'delivery') {
+    if (!form.line1.trim()) return 'Enter the delivery street address.'
+    if (!form.city.trim()) return 'Enter the delivery city.'
+    if (!/^\d{5}(-\d{4})?$/.test(form.zip.trim())) return 'Enter a five-digit ZIP code.'
+  }
+  return null
+}

@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../lib/supabase'
+import { SaveForm, SubmitButton } from '../../components/SaveForm'
+import { ensureChanged } from '../../lib/saveErrors'
 import { invalidateDispatch } from '../../lib/workflowKeys'
 import { servesLocation } from '../../lib/driverLocations'
 import { dispatchErrorMessage, windowProblem } from '../../lib/dispatchErrors'
@@ -29,7 +31,6 @@ export default function ScheduleForm({ d, drivers: allDrivers, onSaved, onCancel
   const [appointmentTime, setAppointmentTime] = useState((d.window_start ?? '').slice(0, 5))
   // Keep the saved end time; a stop with no end occupies one hour (3LOC-003).
   const [appointmentEnd, setAppointmentEnd] = useState((d.window_end ?? '').slice(0, 5))
-  const [error, setError] = useState('')
   // Keep the saved driver listed even if their locations changed since.
   const drivers = allDrivers.filter((dr) => dr.id === d.driver_id || servesLocation(dr, d.location_id))
   const busy = useQuery({
@@ -61,21 +62,25 @@ export default function ScheduleForm({ d, drivers: allDrivers, onSaved, onCancel
         window_start: appointmentTime || null,
         window_end: appointmentTime ? appointmentEnd || null : null,
       }
-      const { error } = await supabase.from('deliveries').update(patch).eq('id', d.id)
-      if (error) throw new Error(dispatchErrorMessage(error))
+      const { data: changed, error } = await supabase.from('deliveries').update(patch).eq('id', d.id).select('id')
+      // Dispatch rules have their own wording; SaveForm words everything else.
+      const dispatchRule = error ? dispatchErrorMessage(error, '') : ''
+      if (dispatchRule) throw new Error(dispatchRule)
+      if (error) throw error
+      ensureChanged(changed)
       return handedOff
     },
-    onMutate: () => setError(''),
     onSuccess: (handedOff) => {
       invalidateDispatch(qc)
       onSaved(handedOff ? 'Reassigned. The stop is back to scheduled; the new driver must start it.' : 'Saved')
     },
-    onError: (e) => setError((e as Error).message),
   })
 
   const label = (text: string) => <div className="mb-0.5 text-[11px] text-slate-400">{text}</div>
   return (
-    <div className="mt-3 flex flex-wrap items-end gap-2 rounded-lg border border-slate-200 bg-slate-50/70 p-3">
+    // The stop card shows the confirmation (onSaved), so SaveForm doesn't add one.
+    <SaveForm aria-label="Schedule stop" onSave={() => save.mutateAsync()} savedMessage={null} errorClassName="w-full"
+      className="mt-3 flex flex-wrap items-end gap-2 rounded-lg border border-slate-200 bg-slate-50/70 p-3">
       {!isStorePickup && (
         <div>
           {label('Driver')}
@@ -102,14 +107,12 @@ export default function ScheduleForm({ d, drivers: allDrivers, onSaved, onCancel
       {!isStorePickup && (
         <div>{label(`Until${appointmentTime && !appointmentEnd ? ' (1 hour if blank)' : ''}`)}<input type="time" aria-label="End time" value={appointmentEnd} onChange={(e) => setAppointmentEnd(e.target.value)} className={inp} /></div>
       )}
-      <button onClick={() => save.mutate()} disabled={save.isPending}
-        className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50">
-        {save.isPending ? 'Saving…' : 'Save'}
-      </button>
+      <SubmitButton className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50">
+        {(pending) => pending ? 'Saving…' : 'Save'}
+      </SubmitButton>
       {onCancel && (
         <button type="button" onClick={onCancel} className="rounded-lg px-3 py-1.5 text-sm text-slate-600 hover:bg-white">Cancel</button>
       )}
-      {error && <span role="alert" className="text-xs text-red-600">{error}</span>}
-    </div>
+    </SaveForm>
   )
 }

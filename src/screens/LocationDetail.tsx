@@ -11,6 +11,8 @@ import {
 import { authEmailToUsername } from '../lib/staffLogin'
 import { roleLabel } from '../lib/roles'
 import { supabase } from '../lib/supabase'
+import { SaveForm, SubmitButton } from '../components/SaveForm'
+import { ensureChanged } from '../lib/saveErrors'
 import StockStatusBadges from '../components/StockStatusBadges'
 import BusinessContact from '../components/BusinessContact'
 
@@ -123,7 +125,7 @@ export default function LocationDetail({ locationId }: { locationId: string }) {
       if (zips === null) throw new Error('Delivery ZIP codes must be five digits, separated by commas.')
       if (form.fulfillmentMode === 'pickup_and_delivery' && !zips.length && !form.deliversAnywhere) throw new Error('Enter the ZIP codes this store delivers to.')
       if (form.replyTo.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.replyTo.trim())) throw new Error('Enter a valid reply-to email.')
-      const { error } = await supabase.from('pickup_locations').update({
+      const { data: changed, error } = await supabase.from('pickup_locations').update({
         name: form.name.trim(), address_line1: form.line1.trim(),
         address_line2: form.line2.trim() || null, address_city: form.city.trim(),
         address_state: form.state.trim().toUpperCase(), address_zip: form.zip.trim(),
@@ -133,8 +135,9 @@ export default function LocationDetail({ locationId }: { locationId: string }) {
         delivery_zips: form.fulfillmentMode === 'pickup_and_delivery' ? zips : [],
         delivers_anywhere: form.fulfillmentMode === 'pickup_and_delivery' && form.deliversAnywhere,
         email_display_name: form.emailName.trim() || null, reply_to_email: form.replyTo.trim() || null,
-      }).eq('id', locationId)
+      }).eq('id', locationId).select('id')
       if (error) throw error
+      ensureChanged(changed)
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['location_detail', locationId] })
@@ -202,7 +205,7 @@ export default function LocationDetail({ locationId }: { locationId: string }) {
       {location.data.business && <BusinessContact businessId={location.data.business.id} businessName={location.data.business.name} />}
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(340px,0.85fr)]">
-        <section className="rounded-2xl border border-slate-200 bg-white p-5">
+        <SaveForm aria-label="Pharmacy details" onSave={() => save.mutateAsync()} savedMessage="Pharmacy details saved." errorClassName="mt-3" className="rounded-2xl border border-slate-200 bg-white p-5">
           <div className="mb-5 flex items-center gap-2"><MapPin size={18} className="text-blue-600" /><h2 className="text-lg font-semibold">Pharmacy details</h2></div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2"><Field label="Shop name"><input className={INPUT} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></Field></div>
@@ -219,10 +222,8 @@ export default function LocationDetail({ locationId }: { locationId: string }) {
             <Field label="Reply-to email"><input type="email" className={INPUT} value={form.replyTo} placeholder="store@example.com" onChange={(event) => setForm({ ...form, replyTo: event.target.value })} /></Field>
             <div className="sm:col-span-2"><Field label="Notes"><textarea rows={3} className={INPUT} value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></Field></div>
           </div>
-          {save.error && <div className="mt-3 text-sm text-red-600">{(save.error as Error).message}</div>}
-          {save.isSuccess && <div className="mt-3 text-sm text-emerald-700">Pharmacy details saved.</div>}
-          <div className="mt-5 flex justify-end"><button onClick={() => save.mutate()} disabled={save.isPending} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"><Save size={15} /> {save.isPending ? 'Saving…' : 'Save details'}</button></div>
-        </section>
+          <div className="mt-5 flex justify-end"><SubmitButton className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">{(pending) => <><Save size={15} /> {pending ? 'Saving…' : 'Save details'}</>}</SubmitButton></div>
+        </SaveForm>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-5">
           <div className="flex items-start justify-between gap-3"><div><div className="flex items-center gap-2"><Users size={18} className="text-blue-600" /><h2 className="text-lg font-semibold">Users</h2></div><p className="mt-1 text-xs text-slate-500">Accounts assigned to this pharmacy</p></div><button onClick={addUser} className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-50"><UserPlus size={14} /> Add user</button></div>
@@ -231,7 +232,7 @@ export default function LocationDetail({ locationId }: { locationId: string }) {
             {users.length === 0 && <div className="rounded-xl bg-slate-50 p-4 text-center text-sm text-slate-500">No users assigned yet.</div>}
           </div>
 
-          {userDrafts.length > 0 && <div className="mt-5 border-t border-slate-200 pt-4"><div className="space-y-3">{userDrafts.map((user, index) => <div key={user.id} className="rounded-xl bg-slate-50 p-3"><div className="grid gap-3 sm:grid-cols-2"><Field label="Type"><select className={INPUT} value={user.role} onChange={(event) => updateUser(user.id, 'role', event.target.value as UserRole)}><option value="owner">Owner (all locations)</option><option value="staff">Store staff</option><option value="driver">Driver</option></select></Field><button onClick={() => setUserDrafts((current) => current.filter((entry) => entry.id !== user.id))} aria-label={`Remove user ${index + 1}`} className="ml-auto grid h-9 w-9 place-items-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={15} /></button><Field label="Username"><input className={INPUT} value={user.username} onChange={(event) => updateUser(user.id, 'username', event.target.value.toLowerCase())} /></Field><Field label="Password"><input type="password" className={INPUT} value={user.password} onChange={(event) => updateUser(user.id, 'password', event.target.value)} /></Field></div></div>)}</div><div className="mt-3 flex items-center justify-between gap-3"><button onClick={addUser} className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-700"><Plus size={13} /> Add another</button><button onClick={() => createUsers.mutate()} disabled={createUsers.isPending} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50">{createUsers.isPending ? 'Creating…' : `Create ${userDrafts.length} ${userDrafts.length === 1 ? 'user' : 'users'}`}</button></div>{createUsers.error && <div className="mt-3 text-xs text-red-600">{(createUsers.error as Error).message}</div>}</div>}
+          {userDrafts.length > 0 && <SaveForm aria-label="New users" onSave={() => createUsers.mutateAsync()} savedMessage="Users created." errorClassName="mt-3" className="mt-5 border-t border-slate-200 pt-4"><div className="space-y-3">{userDrafts.map((user, index) => <div key={user.id} className="rounded-xl bg-slate-50 p-3"><div className="grid gap-3 sm:grid-cols-2"><Field label="Type"><select className={INPUT} value={user.role} onChange={(event) => updateUser(user.id, 'role', event.target.value as UserRole)}><option value="owner">Owner (all locations)</option><option value="staff">Store staff</option><option value="driver">Driver</option></select></Field><button type="button" onClick={() => setUserDrafts((current) => current.filter((entry) => entry.id !== user.id))} aria-label={`Remove user ${index + 1}`} className="ml-auto grid h-9 w-9 place-items-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={15} /></button><Field label="Username"><input className={INPUT} value={user.username} onChange={(event) => updateUser(user.id, 'username', event.target.value.toLowerCase())} /></Field><Field label="Password"><input type="password" className={INPUT} value={user.password} onChange={(event) => updateUser(user.id, 'password', event.target.value)} /></Field></div></div>)}</div><div className="mt-3 flex items-center justify-between gap-3"><button type="button" onClick={addUser} className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-700"><Plus size={13} /> Add another</button><SubmitButton className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50">{(pending) => pending ? 'Creating…' : `Create ${userDrafts.length} ${userDrafts.length === 1 ? 'user' : 'users'}`}</SubmitButton></div></SaveForm>}
         </section>
       </div>
 

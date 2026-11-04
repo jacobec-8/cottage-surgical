@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { KeyRound, Save, ShieldCheck } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { SaveForm, SubmitButton } from '../../components/SaveForm'
 import { storeLoginMessage, MIN_PASSWORD_LENGTH } from '../../lib/storeLogins'
 import type { StaffLocation } from '../../contexts/LocationContext'
 
@@ -32,7 +33,7 @@ export function LoginAccessSettings({ person, locations, onSaved }: { person: Pe
     onSuccess: onSaved,
   })
   return (
-    <section className="bg-white border border-slate-200 rounded-2xl p-5">
+    <SaveForm aria-label="Profile and access" onSave={() => save.mutateAsync()} savedMessage="Profile saved." errorClassName="mt-3" className="bg-white border border-slate-200 rounded-2xl p-5">
       <div className="flex items-center gap-2 mb-5"><ShieldCheck size={18} className="text-blue-600" /><h2 className="font-semibold text-lg">Profile &amp; access</h2></div>
       <div className="grid sm:grid-cols-2 gap-4">
         <Field label="Full name"><input className={INPUT} value={form.fullName} onChange={(e) => set('fullName', e.target.value)} /></Field>
@@ -50,10 +51,8 @@ export function LoginAccessSettings({ person, locations, onSaved }: { person: Pe
           </select>
         </Field>
       </div>
-      {save.error && <div className="text-sm text-red-600 mt-3">{(save.error as Error).message}</div>}
-      {save.isSuccess && !save.isPending && <div className="text-sm text-emerald-700 mt-3">Saved.</div>}
-      <div className="flex justify-end mt-5"><button onClick={() => save.mutate()} disabled={save.isPending} className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 text-sm disabled:opacity-50"><Save size={15} /> {save.isPending ? 'Saving…' : 'Save profile'}</button></div>
-    </section>
+      <div className="flex justify-end mt-5"><SubmitButton className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 text-sm disabled:opacity-50">{(pending) => <><Save size={15} /> {pending ? 'Saving…' : 'Save profile'}</>}</SubmitButton></div>
+    </SaveForm>
   )
 }
 
@@ -68,16 +67,14 @@ export function ResetPassword({ profileId }: { profileId: string }) {
     onSuccess: () => setPassword(''),
   })
   return (
-    <section className="bg-white border border-slate-200 rounded-2xl p-5">
+    <SaveForm aria-label="Reset password" onSave={() => reset.mutateAsync()} savedMessage="Password changed. They’ve been signed out and must use the new password." errorClassName="mt-3" className="bg-white border border-slate-200 rounded-2xl p-5">
       <div className="flex items-center gap-2 mb-4"><KeyRound size={18} className="text-blue-600" /><h2 className="font-semibold text-lg">Reset password</h2></div>
       <div className="flex gap-2">
         <input type="password" autoComplete="new-password" aria-label="New password" placeholder={`New password (at least ${MIN_PASSWORD_LENGTH} characters)`} className={INPUT} value={password} onChange={(e) => setPassword(e.target.value)} />
-        <button onClick={() => reset.mutate()} disabled={reset.isPending || !password} className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 text-sm disabled:opacity-50">{reset.isPending ? 'Saving…' : 'Set password'}</button>
+        <SubmitButton disabled={!password} className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 text-sm disabled:opacity-50">{(pending) => pending ? 'Saving…' : 'Set password'}</SubmitButton>
       </div>
-      {reset.error ? <div className="text-sm text-red-600 mt-3">{(reset.error as Error).message}</div>
-        : reset.isSuccess ? <div className="text-sm text-emerald-700 mt-3">Password changed. They’ve been signed out and must use the new password.</div>
-        : <div className="text-xs text-slate-400 mt-2">Share the new password with the person directly.</div>}
-    </section>
+      <div className="text-xs text-slate-400 mt-2">Share the new password with the person directly.</div>
+    </SaveForm>
   )
 }
 

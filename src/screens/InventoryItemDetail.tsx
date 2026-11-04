@@ -9,6 +9,8 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
+import { SaveForm, SubmitButton } from '../components/SaveForm'
+import { ensureChanged } from '../lib/saveErrors'
 import { statusLabel } from '../lib/status'
 import { fulfillmentLabel } from '../lib/fulfillment'
 import { useLocationScope } from '../contexts/LocationContext'
@@ -293,7 +295,7 @@ export default function InventoryItemDetail({ itemId }: { itemId: string }) {
             <DetailsCard item={product} locationId={selectedLocationId} storeName={selectedLocation?.name ?? null} />
           </div>
           <div className="space-y-5">
-            <NoteComposer note={note} setNote={setNote} submit={() => addNote.mutate()} pending={addNote.isPending} error={addNote.error as Error | null} />
+            <NoteComposer note={note} setNote={setNote} submit={() => addNote.mutateAsync()} />
             <RentalCard assignments={rentals.data ?? []} loading={rentals.isLoading} />
             <NotesCard notes={notes.data ?? []} loading={notes.isLoading} limit={4} onViewAll={() => setTab('notes')} />
           </div>
@@ -311,7 +313,7 @@ export default function InventoryItemDetail({ itemId }: { itemId: string }) {
         />
       ) : (
         <div className="space-y-5">
-          <NoteComposer note={note} setNote={setNote} submit={() => addNote.mutate()} pending={addNote.isPending} error={addNote.error as Error | null} />
+          <NoteComposer note={note} setNote={setNote} submit={() => addNote.mutateAsync()} />
           <NotesCard notes={notes.data ?? []} loading={notes.isLoading} />
         </div>
       )}
@@ -462,20 +464,21 @@ function LocationInventoryEditor({ item, inventory, onSaved }: { item: Item; inv
   const save = useMutation({
     mutationFn: async () => {
       // A unit-tracked count follows its available units (089); only bulk counts are typed.
-      const { error } = await supabase.from('equipment_location_inventory').update({
+      const { data: changed, error } = await supabase.from('equipment_location_inventory').update({
         ...(item.is_serialized ? {} : { quantity_on_hand: Math.max(0, Number(form.quantity) || 0) }), pickup_enabled: form.pickup,
         pickup_rental_price: form.pickupPrice === '' ? null : Number(form.pickupPrice),
         delivery_rental_price: form.deliveryPrice === '' ? null : Number(form.deliveryPrice),
         updated_at: new Date().toISOString(),
-      }).eq('equipment_item_id', item.id).eq('location_id', inventory.location_id)
+      }).eq('equipment_item_id', item.id).eq('location_id', inventory.location_id).select('equipment_item_id')
       if (error) throw error
+      ensureChanged(changed)
     },
     onSuccess: onSaved,
   })
   const input = 'w-full rounded-lg border border-slate-300 px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
-  return <div className="grid gap-3 border-t border-slate-200 pt-3 sm:grid-cols-4">{item.is_serialized
+  return <SaveForm aria-label="Stock and price override" onSave={() => save.mutateAsync()} savedMessage="Stock and prices saved for this store." className="grid gap-3 border-t border-slate-200 pt-3 sm:grid-cols-4" errorClassName="sm:col-span-4">{item.is_serialized
     ? <div><span className="mb-1 block text-xs text-slate-500">Available units</span><div className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-sm font-medium text-slate-800">{inventory.quantity_on_hand}</div><span className="mt-1 block text-xs text-slate-500">Counted from units. To change it, add a unit or set one to Retired under Serialized units.</span></div>
-    : <label><span className="mb-1 block text-xs text-slate-500">Quantity on hand</span><input type="number" min="0" value={form.quantity} onChange={(event) => setForm({ ...form, quantity: event.target.value })} className={input} /></label>}{item.is_rentable && <><label><span className="mb-1 block text-xs text-slate-500">Pickup price override</span><input type="number" min="0" step="0.01" placeholder={item.pickup_rental_price?.toString()} value={form.pickupPrice} onChange={(event) => setForm({ ...form, pickupPrice: event.target.value })} className={input} /></label><label><span className="mb-1 block text-xs text-slate-500">Delivery price override</span><input type="number" min="0" step="0.01" placeholder={item.delivery_rental_price?.toString()} value={form.deliveryPrice} onChange={(event) => setForm({ ...form, deliveryPrice: event.target.value })} className={input} /></label></>}<div className="flex items-end gap-2"><label className="mb-2 flex items-center gap-1.5 text-xs"><input type="checkbox" checked={form.pickup} onChange={(event) => setForm({ ...form, pickup: event.target.checked })} /> Pickup</label><button onClick={() => save.mutate()} disabled={save.isPending} className="ml-auto rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white disabled:opacity-50">{save.isPending ? 'Saving…' : 'Save stock'}</button></div>{save.error && <div className="text-xs text-red-600 sm:col-span-4">{(save.error as Error).message}</div>}</div>
+    : <label><span className="mb-1 block text-xs text-slate-500">Quantity on hand</span><input type="number" min="0" value={form.quantity} onChange={(event) => setForm({ ...form, quantity: event.target.value })} className={input} /></label>}{item.is_rentable && <><label><span className="mb-1 block text-xs text-slate-500">Pickup price override</span><input type="number" min="0" step="0.01" placeholder={item.pickup_rental_price?.toString()} value={form.pickupPrice} onChange={(event) => setForm({ ...form, pickupPrice: event.target.value })} className={input} /></label><label><span className="mb-1 block text-xs text-slate-500">Delivery price override</span><input type="number" min="0" step="0.01" placeholder={item.delivery_rental_price?.toString()} value={form.deliveryPrice} onChange={(event) => setForm({ ...form, deliveryPrice: event.target.value })} className={input} /></label></>}<div className="flex items-end gap-2"><label className="mb-2 flex items-center gap-1.5 text-xs"><input type="checkbox" checked={form.pickup} onChange={(event) => setForm({ ...form, pickup: event.target.checked })} /> Pickup</label><SubmitButton className="ml-auto rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white disabled:opacity-50">{(pending) => pending ? 'Saving…' : 'Save stock'}</SubmitButton></div></SaveForm>
 }
 
 type UnitForm = {
@@ -540,12 +543,13 @@ function UnitsTable({ itemId, locationId, locationName, units, loading }: { item
         status: workflowStatus,
       }
       const result = editingId
-        ? await supabase.from('equipment_units').update(payload).eq('id', editingId)
-        : await supabase.from('equipment_units').insert({ ...payload, item_id: itemId, location_id: locationId })
+        ? await supabase.from('equipment_units').update(payload).eq('id', editingId).select('id')
+        : await supabase.from('equipment_units').insert({ ...payload, item_id: itemId, location_id: locationId }).select('id')
       if (result.error) {
         if (result.error.code === '23505') throw new Error('That asset tag is already assigned to another unit.')
         throw result.error
       }
+      ensureChanged(result.data)
     },
     onSuccess: () => {
       closeForm()
@@ -568,7 +572,7 @@ function UnitsTable({ itemId, locationId, locationName, units, loading }: { item
         </button>
       </div>
 
-      {adding && <UnitEditor form={form} setForm={setForm} save={() => save.mutate()} cancel={closeForm} pending={save.isPending} error={save.error as Error | null} />}
+      {adding && <UnitEditor form={form} setForm={setForm} save={() => save.mutateAsync()} cancel={closeForm} />}
 
       {loading ? (
         <div className="text-sm text-slate-500">Loading units…</div>
@@ -577,7 +581,7 @@ function UnitsTable({ itemId, locationId, locationName, units, loading }: { item
       ) : (
         <div className="space-y-2">
           {units.map((unit) => editingId === unit.id ? (
-            <UnitEditor key={unit.id} form={form} setForm={setForm} save={() => save.mutate()} cancel={closeForm} pending={save.isPending} error={save.error as Error | null} statusLocked={unit.status === 'reserved' || unit.status === 'rented'} />
+            <UnitEditor key={unit.id} form={form} setForm={setForm} save={() => save.mutateAsync()} cancel={closeForm} statusLocked={unit.status === 'reserved' || unit.status === 'rented'} />
           ) : (
             <div key={unit.id} className="grid gap-3 rounded-xl border border-slate-200 p-3 text-sm sm:grid-cols-[minmax(140px,1fr)_110px_120px_minmax(180px,1.5fr)_44px] sm:items-center">
               <div>
@@ -596,19 +600,17 @@ function UnitsTable({ itemId, locationId, locationName, units, loading }: { item
   )
 }
 
-function UnitEditor({ form, setForm, save, cancel, pending, error, statusLocked = false }: {
+function UnitEditor({ form, setForm, save, cancel, statusLocked = false }: {
   form: UnitForm
   setForm: (form: UnitForm) => void
-  save: () => void
+  save: () => Promise<unknown>
   cancel: () => void
-  pending: boolean
-  error: Error | null
   statusLocked?: boolean
 }) {
   const input = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
   const set = (key: keyof UnitForm, value: string) => setForm({ ...form, [key]: value })
   return (
-    <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50/40 p-4">
+    <SaveForm aria-label="Unit" onSave={save} savedMessage="Unit saved." className="mb-4 rounded-xl border border-blue-200 bg-blue-50/40 p-4" errorClassName="mt-3">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Field label="Asset tag"><input autoFocus className={input} value={form.assetTag} onChange={(e) => set('assetTag', e.target.value)} placeholder="Example: HB-12" /></Field>
         <Field label="Serial number"><input className={input} value={form.serialNumber} onChange={(e) => set('serialNumber', e.target.value)} placeholder="Optional" /></Field>
@@ -622,17 +624,16 @@ function UnitEditor({ form, setForm, save, cancel, pending, error, statusLocked 
         </Field>
         <div className="sm:col-span-2 lg:col-span-4"><Field label="Condition notes"><textarea className={input} rows={2} value={form.conditionNotes} onChange={(e) => set('conditionNotes', e.target.value)} placeholder="Optional condition or identifying details" /></Field></div>
       </div>
-      {error && <div className="mt-3 text-sm text-red-600">{error.message}</div>}
       <div className="mt-3 flex justify-end gap-2">
-        <button onClick={cancel} className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm text-slate-600 hover:bg-white"><X size={15} /> Cancel</button>
-        <button onClick={save} disabled={pending} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"><Save size={15} /> {pending ? 'Saving…' : 'Save unit'}</button>
+        <button type="button" onClick={cancel} className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm text-slate-600 hover:bg-white"><X size={15} /> Cancel</button>
+        <SubmitButton className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50">{(pending) => <><Save size={15} /> {pending ? 'Saving…' : 'Save unit'}</>}</SubmitButton>
       </div>
-    </div>
+    </SaveForm>
   )
 }
 
-function NoteComposer({ note, setNote, submit, pending, error }: { note: string; setNote: (value: string) => void; submit: () => void; pending: boolean; error: Error | null }) {
-  return <section className="bg-white border border-slate-200 rounded-2xl p-5"><div className="flex items-center gap-2 mb-3"><MessageSquarePlus size={18} className="text-blue-600" /><h2 className="font-semibold">Add inventory note</h2></div><div className="flex gap-2"><textarea value={note} onChange={(event) => setNote(event.target.value)} maxLength={2000} rows={2} placeholder="Condition, service history, ordering detail, or what should happen next…" className="flex-1 border border-slate-300 rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500" /><button onClick={submit} disabled={pending || !note.trim()} className="self-end bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 text-sm disabled:opacity-50">{pending ? 'Adding…' : 'Add note'}</button></div>{error && <div className="text-xs text-red-600 mt-2">{error.message}</div>}</section>
+function NoteComposer({ note, setNote, submit }: { note: string; setNote: (value: string) => void; submit: () => Promise<unknown> }) {
+  return <SaveForm aria-label="Add inventory note" onSave={submit} savedMessage="Note added." className="bg-white border border-slate-200 rounded-2xl p-5" errorClassName="mt-2"><div className="flex items-center gap-2 mb-3"><MessageSquarePlus size={18} className="text-blue-600" /><h2 className="font-semibold">Add inventory note</h2></div><div className="flex gap-2"><textarea value={note} onChange={(event) => setNote(event.target.value)} maxLength={2000} rows={2} placeholder="Condition, service history, ordering detail, or what should happen next…" className="flex-1 border border-slate-300 rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500" /><SubmitButton disabled={!note.trim()} className="self-end bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 text-sm disabled:opacity-50">{(pending) => pending ? 'Adding…' : 'Add note'}</SubmitButton></div></SaveForm>
 }
 
 function NotesCard({ notes, loading, limit, onViewAll }: { notes: ItemNote[]; loading: boolean; limit?: number; onViewAll?: () => void }) {
@@ -717,17 +718,18 @@ function EditItemForm({ item, onCancel, onSaved }: { item: Item; onCancel: () =>
         if (upload.error) throw upload.error
         payload.image_url = supabase.storage.from('equipment-images').getPublicUrl(uploadedPath).data.publicUrl
       }
-      const { error } = await supabase.from('equipment_items').update(payload).eq('id', item.id)
-      if (error) {
+      const { data: changed, error } = await supabase.from('equipment_items').update(payload).eq('id', item.id).select('id')
+      if (error || !changed?.length) {
         if (uploadedPath) await supabase.storage.from('equipment-images').remove([uploadedPath])
-        throw error
+        if (error) throw error
+        ensureChanged(changed)
       }
     },
     onSuccess: onSaved,
   })
   const input = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-6">
+    <SaveForm aria-label="Edit product" onSave={() => save.mutateAsync()} savedMessage="Product saved." className="rounded-2xl border border-slate-200 bg-white p-6" errorClassName="mt-4">
       <h2 className="mb-5 text-lg font-semibold">Edit product</h2>
       <div className="grid gap-4 md:grid-cols-2">
         <div className="md:col-span-2">
@@ -758,9 +760,8 @@ function EditItemForm({ item, onCancel, onSaved }: { item: Item; onCancel: () =>
           </div>
         </fieldset>
       </div>
-      {save.error && <div className="mt-4 text-sm text-red-600">{(save.error as Error).message}</div>}
-      <div className="mt-6 flex justify-end gap-2"><button onClick={onCancel} className="rounded-lg px-4 py-2 text-sm text-slate-600 hover:bg-slate-100">Cancel</button><button onClick={() => save.mutate()} disabled={save.isPending || Boolean(imageError)} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"><Save size={15} /> {save.isPending ? 'Saving…' : 'Save changes'}</button></div>
-    </section>
+      <div className="mt-6 flex justify-end gap-2"><button type="button" onClick={onCancel} className="rounded-lg px-4 py-2 text-sm text-slate-600 hover:bg-slate-100">Cancel</button><SubmitButton disabled={Boolean(imageError)} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50">{(pending) => <><Save size={15} /> {pending ? 'Saving…' : 'Save changes'}</>}</SubmitButton></div>
+    </SaveForm>
   )
 }
 

@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Save, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { invalidateOrderWorkflow } from '../../lib/workflowKeys'
+import { notSavedText } from '../../lib/saveErrors'
 import type { OrderDetail } from './types'
 
 const REASONS: Record<string, string> = {
@@ -74,6 +75,9 @@ export default function EditRentalModal({
 
   const save = useMutation({
     mutationFn: async () => {
+      // Checked before anything is written, so a bad field never leaves a half-saved rental.
+      if (!form.fullName.trim()) throw new Error('Enter the customer’s name.')
+      if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) throw new Error('Enter a valid email, like name@example.com.')
       if (method !== originalMethod) {
         const switched = await supabase.rpc('set_order_fulfillment', { p_order_id: order.id, p_method: method })
         if (switched.error) throw new Error('Couldn’t change how the customer gets it. Please try again.')
@@ -117,6 +121,7 @@ export default function EditRentalModal({
     <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-slate-950/45 p-4" onClick={onClose}
       onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onClose() } }}>
       <form
+        noValidate
         onSubmit={submit}
         onClick={(event) => event.stopPropagation()}
         className="my-auto w-full max-w-xl overflow-hidden rounded-2xl bg-white shadow-2xl"
@@ -204,10 +209,10 @@ export default function EditRentalModal({
         </div>
 
         {/* In the footer so a refusal is always on screen, not below the fold (ODD-006). */}
-        {save.error && <div role="alert" className="border-t border-red-200 bg-red-50 px-5 py-2 text-sm text-red-700">{(save.error as Error).message}</div>}
+        {save.error && <div role="alert" className="border-t border-red-200 bg-red-50 px-5 py-2 text-sm text-red-700">{notSavedText(save.error)}</div>}
         <footer className="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">
           <button type="button" onClick={onClose} className="min-h-11 rounded-lg border border-slate-300 px-4 text-sm text-slate-700 hover:bg-white">Cancel</button>
-          <button disabled={save.isPending} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+          <button type="submit" disabled={save.isPending} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
             <Save size={16} /> {save.isPending ? 'Saving…' : 'Save changes'}
           </button>
         </footer>

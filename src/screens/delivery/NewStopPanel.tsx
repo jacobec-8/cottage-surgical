@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../lib/supabase'
+import { SaveForm, SubmitButton } from '../../components/SaveForm'
 import { invalidateOrderWorkflow } from '../../lib/workflowKeys'
 import { servesLocation } from '../../lib/driverLocations'
 import { dispatchErrorMessage, windowProblem } from '../../lib/dispatchErrors'
@@ -37,7 +38,6 @@ export default function NewStopPanel({ locationId, drivers: allDrivers, onDone, 
   const [date, setDate] = useState('')
   const [start, setStart] = useState('')
   const [end, setEnd] = useState('')
-  const [error, setError] = useState('')
 
   const candidates = useQuery({
     queryKey: ['return_candidates', locationId],
@@ -83,19 +83,19 @@ export default function NewStopPanel({ locationId, drivers: allDrivers, onDone, 
       if (!res?.ok) throw new Error(res?.reason === 'address_required' ? 'Enter where the driver should collect it.' : 'Couldn’t add the pickup. Please try again.')
       return { orderNo: order.order_no, already: Boolean(res.already_scheduled) }
     },
-    onMutate: () => setError(''),
     onSuccess: ({ orderNo, already }) => {
       invalidateOrderWorkflow(qc)
       qc.invalidateQueries({ queryKey: ['return_candidates'] })
       onDone(already ? `#${orderNo} already has a return pickup on the board.` : `Return pickup added for #${orderNo}.`)
     },
-    onError: (e) => setError((e as Error).message),
   })
 
   const label = (text: string) => <div className="mb-0.5 text-[11px] text-slate-400">{text}</div>
   const list = candidates.data ?? []
   return (
-    <div className="mb-5 rounded-xl border border-slate-200 bg-white p-4">
+    // The board shows the confirmation (onDone), so SaveForm doesn't add one.
+    <SaveForm aria-label="New return pickup" onSave={() => create.mutateAsync()} savedMessage={null} errorClassName="mt-3"
+      className="mb-5 rounded-xl border border-slate-200 bg-white p-4">
       <div className="mb-3">
         <h3 className="font-medium text-slate-900">New return pickup</h3>
         <p className="text-sm text-slate-500">Bring a rental back from the customer. Deliveries are added automatically when an order is approved.</p>
@@ -103,7 +103,7 @@ export default function NewStopPanel({ locationId, drivers: allDrivers, onDone, 
       <div className="flex flex-wrap items-end gap-2">
         <div className="min-w-64 flex-1">
           {label('Order')}
-          <select aria-label="Order" value={orderId} onChange={(e) => { setOrderId(e.target.value); setDriver(''); setError('') }}
+          <select aria-label="Order" value={orderId} onChange={(e) => { setOrderId(e.target.value); setDriver('') }}
             disabled={candidates.isLoading} className={`w-full ${inp} bg-white`}>
             <option value="">{candidates.isLoading ? 'Loading orders…' : list.length ? 'Choose an order…' : 'No rentals out without a return pickup'}</option>
             {list.map((o) => <option key={o.id} value={o.id}>{candidateLabel(o)}</option>)}
@@ -147,13 +147,12 @@ export default function NewStopPanel({ locationId, drivers: allDrivers, onDone, 
       )}
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <button type="button" onClick={() => create.mutate()} disabled={!order || create.isPending}
+        <SubmitButton disabled={!order}
           className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50">
-          {create.isPending ? 'Adding…' : 'Add pickup'}
-        </button>
+          {(pending) => pending ? 'Adding…' : 'Add pickup'}
+        </SubmitButton>
         <button type="button" onClick={onCancel} className="rounded-lg px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
-        {error && <span role="alert" className="text-xs text-red-600">{error}</span>}
       </div>
-    </div>
+    </SaveForm>
   )
 }

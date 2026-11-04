@@ -35,6 +35,8 @@ export default function Login() {
   }
   const submit = (e: FormEvent) => {
     e.preventDefault()
+    // The form has the browser's tooltips off; say what's missing on the page instead.
+    if (!username.trim() || !password) { setError('Enter your username and password.'); return }
     doSignIn(username, password)
   }
 
@@ -83,7 +85,7 @@ export default function Login() {
             <h2 className="text-xl font-bold">Sign In</h2>
             <p className="text-sm text-slate-500 mb-6">Enter your credentials to continue</p>
             {/* POST: a submit before hydration must never put credentials in the URL. */}
-            <form method="post" onSubmit={submit}>
+            <form method="post" noValidate onSubmit={submit}>
               <label htmlFor="username" className="block text-xs font-medium tracking-wide text-slate-500 mb-1">USERNAME OR EMAIL</label>
               <input
                 id="username"
@@ -120,8 +122,9 @@ export default function Login() {
                   {show ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
-              {error && <div className="text-sm text-red-600 mb-3">{error}</div>}
+              {error && <div role="alert" className="text-sm text-red-600 mb-3">{error}</div>}
               <button
+                type="submit"
                 disabled={busy}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2.5 text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50"
               >

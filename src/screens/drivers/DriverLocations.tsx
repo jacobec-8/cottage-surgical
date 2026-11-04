@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { MapPin } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { SaveForm, SubmitButton } from '../../components/SaveForm'
 import { driverLocationIds, type DriverWithLocations } from '../../lib/driverLocations'
 import { invalidateDispatch } from '../../lib/workflowKeys'
 import type { StaffLocation } from '../../contexts/LocationContext'
@@ -30,7 +31,6 @@ export default function DriverLocations({ driver, locations, canEdit }: Props) {
   const options = locations.filter((location) => location.id !== driver.location_id && location.business?.id === ownerId)
   const [editing, setEditing] = useState(false)
   const [picked, setPicked] = useState<string[]>(extra)
-  const [msg, setMsg] = useState('')
 
   const save = useMutation({
     mutationFn: async () => {
@@ -39,15 +39,13 @@ export default function DriverLocations({ driver, locations, canEdit }: Props) {
       if (!data?.ok) throw new Error(REASONS[data?.reason] ?? 'Couldn’t save where this driver works.')
       return data.stops_released as number
     },
-    onMutate: () => setMsg(''),
-    onSuccess: (released) => {
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['drivers'] })
       invalidateDispatch(qc)
       setEditing(false)
-      setMsg(released > 0 ? `Saved. ${released} open stop${released === 1 ? '' : 's'} at removed locations now need a driver.` : 'Saved.')
     },
-    onError: (e) => setMsg((e as Error).message),
   })
+  const savedText = (released: number) => released > 0 ? `Saved. ${released} open stop${released === 1 ? '' : 's'} at removed locations now need a driver.` : 'Saved.'
 
   if (!own) return null
   return (
@@ -57,12 +55,13 @@ export default function DriverLocations({ driver, locations, canEdit }: Props) {
         <span className="rounded-full bg-slate-100 px-2 py-0.5 font-medium">Works at: {name(own)}</span>
         {extra.map((id) => <span key={id} className="rounded-full bg-blue-50 px-2 py-0.5 text-blue-700">Also: {name(id)}</span>)}
         {canEdit && options.length > 0 && !editing && (
-          <button type="button" onClick={() => { setPicked(extra); setEditing(true); setMsg('') }} className="ml-1 font-medium text-blue-600 hover:underline">
+          <button type="button" onClick={() => { setPicked(extra); setEditing(true) }} className="ml-1 font-medium text-blue-600 hover:underline">
             Also works at…
           </button>
         )}
       </div>
       {editing && (
+        <SaveForm aria-label="Where this driver works" onSave={() => save.mutateAsync()} savedMessage={savedText} errorClassName="mt-2 text-xs">
         <fieldset className="mt-3 rounded-lg bg-slate-50 p-3">
           <legend className="sr-only">Other locations this driver works at</legend>
           <p className="mb-2 text-slate-500">This driver takes stops at {name(own)}. Tick any other location they also work at.</p>
@@ -78,13 +77,13 @@ export default function DriverLocations({ driver, locations, canEdit }: Props) {
           <p className="mt-2 text-slate-500">Unticking a location takes this driver off their open stops there.</p>
           <div className="mt-3 flex justify-end gap-2">
             <button type="button" onClick={() => setEditing(false)} className="rounded-lg px-3 py-1.5 text-sm text-slate-600 hover:bg-white">Cancel</button>
-            <button type="button" onClick={() => save.mutate()} disabled={save.isPending} className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
-              {save.isPending ? 'Saving…' : 'Save'}
-            </button>
+            <SubmitButton className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+              {(pending) => pending ? 'Saving…' : 'Save'}
+            </SubmitButton>
           </div>
         </fieldset>
+        </SaveForm>
       )}
-      {msg && <div role="status" className={`mt-2 ${msg.startsWith('Saved') ? 'text-emerald-700' : 'text-red-600'}`}>{msg}</div>}
     </div>
   )
 }

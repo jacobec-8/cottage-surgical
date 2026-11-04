@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { UserPlus, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { SaveForm, SubmitButton } from '../../components/SaveForm'
 import { storeLoginMessage, MIN_PASSWORD_LENGTH, newLoginProblem, type StoreLoginRole, type NewLoginDraft } from '../../lib/storeLogins'
 import type { StaffLocation } from '../../contexts/LocationContext'
 
@@ -40,11 +41,11 @@ export default function AddLoginForm({ locations, defaultLocationId, onClose, on
   })
 
   return (
-    <section className="bg-white border border-blue-200 rounded-2xl p-5 mb-5" aria-label="Add a login">
+    <SaveForm aria-label="Add a login" onSave={() => create.mutateAsync()} savedMessage="Login added." errorClassName="mt-3" className="bg-white border border-blue-200 rounded-2xl p-5 mb-5">
       <div className="flex items-center gap-2 mb-4">
         <UserPlus size={18} className="text-blue-600" />
         <h2 className="font-semibold text-lg flex-1">Add a login</h2>
-        <button onClick={onClose} aria-label="Close" className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100"><X size={16} /></button>
+        <button type="button" onClick={onClose} aria-label="Close" className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100"><X size={16} /></button>
       </div>
       <div className="grid sm:grid-cols-2 gap-4">
         <Field label="Store">
@@ -65,12 +66,11 @@ export default function AddLoginForm({ locations, defaultLocationId, onClose, on
         <Field label={`Password (at least ${MIN_PASSWORD_LENGTH} characters)`}><input type="password" autoComplete="new-password" className={INPUT} value={draft.password} onChange={(e) => set('password', e.target.value)} /></Field>
       </div>
       <p className="text-xs text-slate-500 mt-3">Share the username and password with the person directly. They sign in at the staff login page.</p>
-      {create.error && <div className="text-sm text-red-600 mt-3">{(create.error as Error).message}</div>}
       <div className="flex justify-end gap-2 mt-4">
-        <button onClick={onClose} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">Cancel</button>
-        <button onClick={() => create.mutate()} disabled={create.isPending} className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 text-sm disabled:opacity-50">{create.isPending ? 'Adding…' : 'Add login'}</button>
+        <button type="button" onClick={onClose} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">Cancel</button>
+        <SubmitButton className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 text-sm disabled:opacity-50">{(pending) => pending ? 'Adding…' : 'Add login'}</SubmitButton>
       </div>
-    </section>
+    </SaveForm>
   )
 }
 

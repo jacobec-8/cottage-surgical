@@ -22,7 +22,7 @@ export default function ReturnAddressForm({ busy, onSubmit, onCancel }: Props) {
   }
   const inp = 'border border-slate-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
   return (
-    <form onSubmit={submit} className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm">
+    <form noValidate onSubmit={submit} className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm">
       <p className="font-medium text-amber-900">Where should the driver collect the equipment?</p>
       <p className="mt-0.5 text-xs text-amber-800">
         This rental has no home address on file. If the customer is bringing it back to the store, use Close out instead.
@@ -33,7 +33,7 @@ export default function ReturnAddressForm({ busy, onSubmit, onCancel }: Props) {
         <input aria-label="State" placeholder="State" value={a.state} onChange={set('state')} maxLength={2} className={inp} />
         <input aria-label="ZIP" placeholder="ZIP" value={a.zip} onChange={set('zip')} inputMode="numeric" className={inp} />
       </div>
-      {err && <p className="mt-1 text-xs text-red-600">{err}</p>}
+      {err && <p role="alert" className="mt-1 text-xs text-red-600">{err}</p>}
       <div className="mt-2 flex gap-2">
         <button type="submit" disabled={busy} className="rounded-lg bg-amber-700 px-3 py-1.5 text-white hover:bg-amber-800 disabled:opacity-50">
           {busy ? 'Scheduling…' : 'Schedule return pickup'}
