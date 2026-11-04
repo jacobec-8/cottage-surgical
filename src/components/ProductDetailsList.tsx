@@ -8,7 +8,8 @@ import {
 } from '../lib/storeProducts'
 import { CATEGORIES } from '../lib/categories'
 import { notSavedText } from '../lib/saveErrors'
-import { SaveForm, SubmitButton, useSavePending } from './SaveForm'
+import { Checked, SaveForm, SubmitButton, useSavePending } from './SaveForm'
+import { problems, rules, type FieldProblem } from '../lib/fieldRules'
 import type { ProductEdits } from '../lib/useProductEdits'
 
 export type ProductDetailsItem = {
@@ -68,7 +69,7 @@ export default function ProductDetailsList({ item, edits, openField }: { item: P
   return (
     <dl className="grid sm:grid-cols-2 gap-x-8 gap-y-4 text-sm">
       <Row open={openField === 'name'} label="Name" value={item.name ?? '—'}
-        editor={productEdit && item.name != null ? (done) => <TextEditor label="Name" action="Save" initial={item.name} done={done}
+        editor={productEdit && item.name != null ? (done) => <TextEditor label="Name" action="Save" required="Enter a name." initial={item.name} done={done}
           save={(v) => { if (!v.trim()) throw new Error('Enter a name.'); return edits!.saveProduct({ name: v.trim() }) }} /> : undefined} />
       <Row label="Category" value={item.category ? item.category.charAt(0).toUpperCase() + item.category.slice(1) : '—'}
         editor={productEdit && item.category != null ? (done) => <CategoryEditor initial={item.category!} done={done} save={(v) => edits!.saveProduct({ category: v })} /> : undefined} />
@@ -82,7 +83,7 @@ export default function ProductDetailsList({ item, edits, openField }: { item: P
       <Row open={openField === 'stock'} label={`Stock${where}`}
         value={!store ? noStore : item.is_serialized ? `${store.quantity_on_hand} available unit${store.quantity_on_hand === 1 ? '' : 's'}` : `${store.quantity_on_hand} in stock`}
         editor={storeEdit ? (done) => (item.is_serialized
-          ? <TextEditor label="Asset tag of the new unit" action="Add unit" done={done} save={(tag) => edits!.addUnit(tag)} />
+          ? <TextEditor label="Asset tag of the new unit" action="Add unit" required="Enter an asset tag." done={done} save={(tag) => edits!.addUnit(tag)} />
           : <QuantityEditor initial={store!.quantity_on_hand} done={done} save={(qty) => edits!.saveStore({ quantity_on_hand: qty })} />) : undefined} />
       <Row label={`Online sales${where}`} value={!store ? noStore : edits?.retailOn == null ? '…' : edits.retailOn ? 'On' : 'Off: customers can’t buy online'}
         editor={storeEdit && edits?.retailOn != null ? (done) => <YesNoEditor question="Sell online?" initial={edits.retailOn!} done={done} save={(v) => edits!.setRetail(v)} /> : undefined} />
@@ -169,9 +170,9 @@ const INPUT = 'w-28 rounded-lg border border-slate-300 px-2 py-1 text-sm font-no
  * saves, Esc cancels, a failure reads "Not saved." and a success "Saved.".
  * `save` throws to refuse, with the reason staff should see.
  */
-function EditorForm({ label, save, done, children }: { label: string; save: () => Promise<void>; done: () => void; children: ReactNode }) {
+function EditorForm({ label, save, done, validate, children }: { label: string; save: () => Promise<void>; done: () => void; validate?: () => FieldProblem[]; children: ReactNode }) {
   return (
-    <SaveForm aria-label={label} size="compact" onSave={save} onSaved={done}
+    <SaveForm aria-label={label} size="compact" validate={validate} onSave={save} onSaved={done}
       onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); done() } }}
       className="flex flex-wrap items-center gap-2">
       {children}
@@ -191,29 +192,26 @@ function Actions({ done, saveLabel = 'Save' }: { done: () => void; saveLabel?: s
 }
 const ErrorText = ({ text }: { text: string | null }) => (text ? <span role="alert" className="block w-full text-xs font-normal text-red-700">{text}</span> : null)
 
-/** Throws the staff-facing reason when a typed value can't be saved. */
-function refuse(problem: string | null | undefined): void {
-  if (problem) throw new Error(problem)
-}
+/** One editor's problem on the box it concerns, or none. */
+const onBox = (field: string, message: string | null | undefined): FieldProblem[] => (message ? [{ field, message }] : [])
+/** A price problem lands on the box whose value is wrong: pickup or delivery. */
+const priceBox = (message: string | null, pickup: string): FieldProblem[] =>
+  onBox(message && (/pickup/i.test(message) || (message === 'Enter a valid price, like 45 or 45.50.' && parsePrice(pickup) === undefined)) ? 'pickup' : 'delivery', message)
 
-function PriceBox({ label, value, onChange, autoFocus = false }: { label: string; value: string; onChange: (v: string) => void; autoFocus?: boolean }) {
+function PriceBox({ name, label, value, onChange, autoFocus = false }: { name: string; label: string; value: string; onChange: (v: string) => void; autoFocus?: boolean }) {
   return (
     <label className="inline-flex items-center gap-1.5 font-normal text-slate-600">{label}
-      <input autoFocus={autoFocus} aria-label={label} inputMode="decimal" value={value} placeholder="$ /mo" onChange={(e) => onChange(e.target.value)} className={INPUT} />
+      <Checked name={name} message={false}><input autoFocus={autoFocus} aria-label={label} inputMode="decimal" value={value} placeholder="$ /mo" onChange={(e) => onChange(e.target.value)} className={INPUT} /></Checked>
     </label>
   )
 }
 
 function PriceEditor({ initial, placeholder, save, done }: { initial: number | null; placeholder: string; save: (price: number | null) => Promise<void>; done: () => void }) {
   const [value, setValue] = useState(initial?.toString() ?? '')
-  const submit = async () => {
-    const price = parsePrice(value)
-    refuse(price === undefined ? 'Enter a valid price, like 45 or 45.50.' : null)
-    await save(price ?? null)
-  }
   return (
-    <EditorForm label="Price" save={submit} done={done}>
-      <input autoFocus aria-label="Price" inputMode="decimal" value={value} placeholder={placeholder} onChange={(e) => setValue(e.target.value)} className={INPUT} />
+    <EditorForm label="Price" save={() => save(parsePrice(value) ?? null)} done={done}
+      validate={() => onBox('price', parsePrice(value) === undefined ? 'Enter a valid price, like 45 or 45.50.' : null)}>
+      <Checked name="price" message={false}><input autoFocus aria-label="Price" inputMode="decimal" value={value} placeholder={placeholder} onChange={(e) => setValue(e.target.value)} className={INPUT} /></Checked>
       <Actions done={done} />
     </EditorForm>
   )
@@ -223,17 +221,14 @@ function PickupEditor({ where, initialOn, initialPrice, catalogPrice, save, done
   where: string; initialOn: boolean; initialPrice: number | null; catalogPrice: number | null
   save: (on: boolean, price: number | null) => Promise<void>; done: () => void
 }) {
-  const [on, setOn] = useState(initialOn)
+  const [offered, setOffered] = useState(initialOn)
   const [value, setValue] = useState(initialPrice?.toString() ?? '')
-  const submit = async () => {
-    refuse(pickupEditProblem(on, value, catalogPrice))
-    await save(on, parsePrice(value) ?? null)
-  }
   return (
-    <EditorForm label="Pickup" save={submit} done={done}>
-      <label className="inline-flex items-center gap-1.5 font-normal"><input type="checkbox" checked={on} onChange={(e) => setOn(e.target.checked)} /> Offer pickup{where}</label>
-      {on && <input autoFocus aria-label="Pickup price" inputMode="decimal" value={value} placeholder={money(catalogPrice, ' catalog') ?? 'Price /mo'}
-        onChange={(e) => setValue(e.target.value)} className={INPUT} />}
+    <EditorForm label="Pickup" save={() => save(offered, parsePrice(value) ?? null)} done={done}
+      validate={() => onBox('pickupPrice', pickupEditProblem(offered, value, catalogPrice))}>
+      <label className="inline-flex items-center gap-1.5 font-normal"><input type="checkbox" checked={offered} onChange={(e) => setOffered(e.target.checked)} /> Offer pickup{where}</label>
+      {offered && <Checked name="pickupPrice" message={false}><input autoFocus aria-label="Pickup price" inputMode="decimal" value={value} placeholder={money(catalogPrice, ' catalog') ?? 'Price /mo'}
+        onChange={(e) => setValue(e.target.value)} className={INPUT} /></Checked>}
       <Actions done={done} />
     </EditorForm>
   )
@@ -247,15 +242,13 @@ function RentalEditor({ initialOn, pickupOffered, deliveryOffered, pickupPrice, 
   const [on, setOn] = useState(initialOn)
   const [pickup, setPickup] = useState(pickupPrice)
   const [delivery, setDelivery] = useState(deliveryPrice)
-  const submit = async () => {
-    refuse(rentalEditProblem({ on, pickup, delivery, pickupOffered, deliveryOffered }))
-    await save(on, on ? parsePrice(pickup) ?? null : null, on ? parsePrice(delivery) ?? null : null)
-  }
   return (
-    <EditorForm label="Rental" save={submit} done={done}>
+    <EditorForm label="Rental" done={done}
+      save={() => save(on, on ? parsePrice(pickup) ?? null : null, on ? parsePrice(delivery) ?? null : null)}
+      validate={() => priceBox(rentalEditProblem({ on, pickup, delivery, pickupOffered, deliveryOffered }), pickup)}>
       <Toggle on={on} setOn={setOn} />
-      {on && <PriceBox label={`Pickup${pickupOffered ? '' : ' (optional)'}`} value={pickup} onChange={setPickup} autoFocus />}
-      {on && <PriceBox label={`Delivery + return${deliveryOffered ? '' : ' (optional)'}`} value={delivery} onChange={setDelivery} />}
+      {on && <PriceBox name="pickup" label={`Pickup${pickupOffered ? '' : ' (optional)'}`} value={pickup} onChange={setPickup} autoFocus />}
+      {on && <PriceBox name="delivery" label={`Delivery + return${deliveryOffered ? '' : ' (optional)'}`} value={delivery} onChange={setDelivery} />}
       <Actions done={done} />
     </EditorForm>
   )
@@ -265,14 +258,11 @@ function RentalEditor({ initialOn, pickupOffered, deliveryOffered, pickupPrice, 
 function PurchaseEditor({ initialOn, price, save, done }: { initialOn: boolean; price: string; save: (on: boolean, price: number | null) => Promise<void>; done: () => void }) {
   const [on, setOn] = useState(initialOn)
   const [value, setValue] = useState(price)
-  const submit = async () => {
-    refuse(purchaseEditProblem(on, value))
-    await save(on, on ? parsePrice(value) ?? null : null)
-  }
   return (
-    <EditorForm label="Sale" save={submit} done={done}>
+    <EditorForm label="Sale" done={done} save={() => save(on, on ? parsePrice(value) ?? null : null)}
+      validate={() => onBox('salePrice', purchaseEditProblem(on, value))}>
       <Toggle on={on} setOn={setOn} />
-      {on && <PriceBox label="Sale price" value={value} onChange={setValue} autoFocus />}
+      {on && <PriceBox name="salePrice" label="Sale price" value={value} onChange={setValue} autoFocus />}
       <Actions done={done} />
     </EditorForm>
   )
@@ -287,16 +277,13 @@ function FulfillmentEditor({ pickup: p0, delivery: d0, rentable, pickupPrice, de
   const [delivery, setDelivery] = useState(d0)
   const [pp, setPp] = useState(pickupPrice)
   const [dp, setDp] = useState(deliveryPrice)
-  const submit = async () => {
-    refuse(fulfillmentEditProblem({ pickup, delivery, rentable, pickupPrice: pp, deliveryPrice: dp }))
-    await save(pickup, delivery, parsePrice(pp) ?? null, parsePrice(dp) ?? null)
-  }
   return (
-    <EditorForm label="Fulfillment" save={submit} done={done}>
+    <EditorForm label="Fulfillment" done={done} save={() => save(pickup, delivery, parsePrice(pp) ?? null, parsePrice(dp) ?? null)}
+      validate={() => priceBox(fulfillmentEditProblem({ pickup, delivery, rentable, pickupPrice: pp, deliveryPrice: dp }), pp)}>
       <label className="inline-flex items-center gap-1.5 font-normal"><input type="checkbox" checked={pickup} onChange={(e) => setPickup(e.target.checked)} /> Pickup</label>
-      {rentable && pickup && <PriceBox label="$/mo" value={pp} onChange={setPp} />}
+      {rentable && pickup && <PriceBox name="pickup" label="$/mo" value={pp} onChange={setPp} />}
       <label className="inline-flex items-center gap-1.5 font-normal"><input type="checkbox" checked={delivery} onChange={(e) => setDelivery(e.target.checked)} /> Delivery</label>
-      {rentable && delivery && <PriceBox label="$/mo" value={dp} onChange={setDp} />}
+      {rentable && delivery && <PriceBox name="delivery" label="$/mo" value={dp} onChange={setDp} />}
       <Actions done={done} />
     </EditorForm>
   )
@@ -330,25 +317,22 @@ function YesNoEditor({ initial, question, save, done }: { initial: boolean; ques
 
 function QuantityEditor({ initial, save, done }: { initial: number; save: (qty: number) => Promise<void>; done: () => void }) {
   const [value, setValue] = useState(String(initial))
-  const submit = async () => {
-    refuse(!/^\d+$/.test(value.trim()) || Number(value) > 100000 ? 'Enter a whole number, like 12.' : null)
-    await save(Number(value))
-  }
   return (
-    <EditorForm label="Quantity" save={submit} done={done}>
-      <input autoFocus aria-label="Quantity" inputMode="numeric" value={value} onChange={(e) => setValue(e.target.value)} className={INPUT} />
+    <EditorForm label="Quantity" save={() => save(Number(value))} done={done} validate={() => problems(rules.wholeNumber(value, 'quantity', 'Enter a whole number, like 12.'))}>
+      <Checked name="quantity" message={false}><input autoFocus aria-label="Quantity" inputMode="numeric" value={value} onChange={(e) => setValue(e.target.value)} className={INPUT} /></Checked>
       <Actions done={done} />
     </EditorForm>
   )
 }
 
-function TextEditor({ label, action, initial = '', multiline = false, save, done }: { label: string; action: string; initial?: string; multiline?: boolean; save: (text: string) => Promise<void>; done: () => void }) {
+/** `required` is the message when the value can't be left empty (a name, an asset tag). */
+function TextEditor({ label, action, initial = '', multiline = false, required, save, done }: { label: string; action: string; initial?: string; multiline?: boolean; required?: string; save: (text: string) => Promise<void>; done: () => void }) {
   const [value, setValue] = useState(initial)
   return (
-    <EditorForm label={label} save={() => save(value)} done={done}>
-      {multiline
+    <EditorForm label={label} save={() => save(value)} done={done} validate={() => (required ? problems(rules.required(value, 'text', required)) : [])}>
+      <Checked name="text" message={false}>{multiline
         ? <textarea autoFocus aria-label={label} value={value} rows={3} onChange={(e) => setValue(e.target.value)} className={`${INPUT} w-full`} />
-        : <input autoFocus aria-label={label} placeholder={label} value={value} onChange={(e) => setValue(e.target.value)} className={`${INPUT} w-56`} />}
+        : <input autoFocus aria-label={label} placeholder={label} value={value} onChange={(e) => setValue(e.target.value)} className={`${INPUT} w-56`} />}</Checked>
       <Actions done={done} saveLabel={action} />
     </EditorForm>
   )

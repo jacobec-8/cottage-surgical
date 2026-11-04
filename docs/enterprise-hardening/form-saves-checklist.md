@@ -1,87 +1,59 @@
 # Form saves checklist
 
-Decision 1 in [README.md](README.md). Tick an item only when every "done"
-check in the README passes for it, including the on-screen check. Line numbers
-are from 2026-11-04 and will drift as files change.
+Decisions 1 and 2 in [README.md](README.md). "Checks" means the form runs its
+own field checks before sending (decision 2). "On screen" means decision 1's
+outcomes were watched on nu-yin on 2026-11-04 against the live database with
+QA records. Line numbers drift; search by file.
 
-## Click-handler saves to convert to form submits (24)
+## Saves converted to form submits (24)
 
-### Inventory and products
+| Save | File | Checks | On screen |
+|---|---|---|---|
+| Edit product | `src/screens/InventoryItemDetail.tsx` | yes | yes |
+| Store stock and price override | `src/screens/InventoryItemDetail.tsx` | yes | yes |
+| Unit editor | `src/screens/InventoryItemDetail.tsx` | yes | yes |
+| Inventory note | `src/screens/InventoryItemDetail.tsx` | yes | yes |
+| New product | `src/screens/Inventory.tsx` | yes | yes |
+| In-place product field | `src/components/ProductDetailsList.tsx` | yes | yes |
+| In-place product text | `src/components/ProductDetailsList.tsx` | yes | yes |
+| New order | `src/screens/NewOrder.tsx` | yes | yes |
+| Unit serial | `src/screens/orders/UnitCell.tsx` | yes | yes |
+| In-place customer field | `src/screens/customers/EditableRow.tsx` | yes | yes |
+| Schedule | `src/screens/delivery/ScheduleForm.tsx` | yes | yes |
+| New return pickup | `src/screens/delivery/NewStopPanel.tsx` | yes | yes |
+| Missed stop | `src/screens/delivery/MissedStop.tsx` | yes | yes |
+| Add driver | `src/screens/Drivers.tsx` | yes | yes |
+| Edit driver | `src/screens/Drivers.tsx` | yes | yes |
+| Where a driver works | `src/screens/drivers/DriverLocations.tsx` | nothing typed | yes |
+| Staff profile | `src/screens/StaffDetail.tsx` | yes | yes |
+| Driver settings | `src/screens/StaffDetail.tsx` | yes | yes |
+| Staff note | `src/screens/StaffDetail.tsx` | yes | yes |
+| Add login | `src/screens/staff/AddLoginForm.tsx` | yes | yes |
+| Login profile (owner view) | `src/screens/staff/LoginAccess.tsx` | yes | not run: needs an owner login |
+| Set password | `src/screens/staff/LoginAccess.tsx` | yes | yes |
+| Pharmacy details | `src/screens/LocationDetail.tsx` | yes | yes |
+| Location users | `src/screens/LocationDetail.tsx` | yes | not run: the page needs https to add rows; the test server was http |
 
-- [ ] Edit product, Save changes. `src/screens/InventoryItemDetail.tsx:762`
-- [ ] Store stock and price override, Save stock. `src/screens/InventoryItemDetail.tsx:478`
-- [ ] Unit editor, Save unit. `src/screens/InventoryItemDetail.tsx:628`
-- [ ] Inventory note, Add inventory note. `src/screens/InventoryItemDetail.tsx:635`
-- [ ] New product, Save. `src/screens/Inventory.tsx:464`
-- [ ] In-place product field, Save. `src/components/ProductDetailsList.tsx:167`
-- [ ] In-place product text, Save. `src/components/ProductDetailsList.tsx:345`
+## Forms that already submitted (5)
 
-### Orders and customers
+| Form | File | Checks | On screen |
+|---|---|---|---|
+| Business contact | `src/components/BusinessContact.tsx` | yes | yes |
+| Edit rental | `src/screens/orders/EditRentalModal.tsx` | yes | yes |
+| Return address | `src/screens/orders/ReturnAddressForm.tsx` | yes | not run: no rental without an address to test on |
+| Storefront checkout | `src/screens/shop/Checkout.tsx` | yes | not run: nu-yin unreachable; browser suite passes |
+| Staff sign-in | `src/screens/Login.tsx` | yes | not run: nu-yin unreachable |
 
-- [ ] New order, Create. `src/screens/NewOrder.tsx:426`
-- [ ] Unit serial, Save. `src/screens/orders/UnitCell.tsx:70`
-- [ ] In-place customer field, Save. `src/screens/customers/EditableRow.tsx:48`
+Decision 2's field marks and cursor move are covered by unit tests. Their
+on-screen check is still to run.
 
-### Delivery and drivers
+## Left as buttons on purpose
 
-- [ ] Schedule, Save. `src/screens/delivery/ScheduleForm.tsx:105`
-- [ ] New stop, Add pickup. `src/screens/delivery/NewStopPanel.tsx:150`
-- [ ] Missed stop, Confirm. `src/screens/delivery/MissedStop.tsx:63`
-- [ ] Add driver, Save. `src/screens/Drivers.tsx:156`
-- [ ] Edit driver, Save changes. `src/screens/Drivers.tsx:292`
-  Watch: the driver row also renders Driver locations, which has its own Save.
-  The two forms must sit side by side, never one inside the other.
-- [ ] Driver locations, Save. `src/screens/drivers/DriverLocations.tsx:81`
+One-click actions with no fields: Mark all read, Rent Now and Purchase, Start
+stop, Mark picked up, Remove from catalog, Add item to order, Add from
+catalog, Turn retail sales on or off, Allocate unit, Mark refunded and Mark
+forfeited, Schedule pickup, Verify payment, Use scanned code as the serial,
+Remove stock during onboarding.
 
-### Staff and locations
-
-- [ ] Staff profile, Save profile. `src/screens/StaffDetail.tsx:153`
-- [ ] Driver settings, Save driver settings. `src/screens/StaffDetail.tsx:162`
-- [ ] Staff note, Add private staff note. `src/screens/StaffDetail.tsx:166`
-- [ ] Add login. `src/screens/staff/AddLoginForm.tsx:71`
-- [ ] Login profile, Save profile. `src/screens/staff/LoginAccess.tsx:55`
-- [ ] Set password. `src/screens/staff/LoginAccess.tsx:75`
-- [ ] Location details, Save details. `src/screens/LocationDetail.tsx:224`
-  Watch: the business contact form renders just above it, at line 202. The
-  new form must wrap only the location detail fields, not the contact form.
-- [ ] Location logins, Create. `src/screens/LocationDetail.tsx:234`
-
-## Existing forms that need noValidate and visible errors (5)
-
-- [ ] Business contact. `src/components/BusinessContact.tsx:31`
-- [ ] Edit rental. `src/screens/orders/EditRentalModal.tsx:119`
-- [ ] Return address. `src/screens/orders/ReturnAddressForm.tsx:25`
-- [ ] Storefront checkout. `src/screens/shop/Checkout.tsx:191`
-- [ ] Staff sign-in. `src/screens/Login.tsx:86`
-
-Already done: business onboarding, `src/screens/onboarding/BusinessOnboarding.tsx:165`.
-
-## Shared pieces
-
-- [ ] `SaveForm` component: form with noValidate, submit button, Saving state,
-  Saved and error messages.
-- [ ] Plain-language translation of database errors, used by `SaveForm`.
-
-## Deliberately left as buttons
-
-One-click actions with no fields. They stay plain buttons with
-`type="button"`.
-
-- Mark all read. `src/components/NotificationsBell.tsx:100`
-- Rent Now and Purchase. `src/components/shop/ProductCard.tsx:81`, `src/screens/shop/ProductPage.tsx:113`
-- Start stop. `src/screens/Delivery.tsx:257`
-- Mark picked up. `src/screens/delivery/StaffStopCard.tsx:98`
-- Remove from catalog. `src/screens/Inventory.tsx:137`
-- Add item to order. `src/screens/NewOrder.tsx:363`
-- Add from catalog. `src/screens/inventory/CatalogPicker.tsx:69`
-- Turn retail sales on or off. `src/screens/dashboard/RetailSalesSwitch.tsx:51`
-- Allocate unit. `src/screens/orders/DetailSections.tsx:129`
-- Mark refunded and Mark forfeited. `src/screens/orders/DetailSections.tsx:262`
-- Schedule pickup. `src/screens/orders/OrderDetailPanel.tsx:138`
-- Verify payment. `src/screens/orders/OrderDetailPanel.tsx:148`, `src/screens/orders/UnpaidRow.tsx:43`
-- Use scanned code as the serial. `src/screens/orders/UnitCell.tsx:74`
-- Remove stock during onboarding. `src/screens/onboarding/LocationEditor.tsx:106`
-
-Not saves, so out of scope: the storefront search box
-(`src/screens/shop/Shop.tsx:93`) and the customer assistant chat
-(`src/components/shop/CustomerAssistant.tsx:127`).
+Not saves, so out of scope: the storefront search box and the customer
+assistant chat.

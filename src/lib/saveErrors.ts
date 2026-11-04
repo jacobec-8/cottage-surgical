@@ -98,3 +98,18 @@ export function notSavedText(error: unknown, translate?: ErrorTranslator): strin
 export function ensureChanged(rows: readonly unknown[] | null | undefined): void {
   if (!rows || rows.length === 0) throw new Error(NOTHING_CHANGED)
 }
+
+/** A refusal about one field, so the form can mark that field and put the cursor there. */
+export class FieldRefusal extends Error {
+  readonly field: string
+  constructor(field: string, message: string) {
+    super(message)
+    this.name = 'FieldRefusal'
+    this.field = field
+  }
+}
+
+/** The field a failure is about, or null when it concerns the whole save. */
+export function failedField(error: unknown): string | null {
+  return error instanceof FieldRefusal ? error.field : null
+}

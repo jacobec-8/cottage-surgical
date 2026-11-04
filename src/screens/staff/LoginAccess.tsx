@@ -4,7 +4,8 @@ import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { KeyRound, Save, ShieldCheck } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { SaveForm, SubmitButton } from '../../components/SaveForm'
+import { Checked, SaveForm, SubmitButton } from '../../components/SaveForm'
+import { loginProfileProblems, passwordProblems } from '../../lib/formChecks/peopleChecks'
 import { storeLoginMessage, MIN_PASSWORD_LENGTH } from '../../lib/storeLogins'
 import type { StaffLocation } from '../../contexts/LocationContext'
 
@@ -26,23 +27,21 @@ export function LoginAccessSettings({ person, locations, onSaved }: { person: Pe
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => setForm((current) => ({ ...current, [key]: value }))
   const save = useMutation({
     mutationFn: () => {
-      if (!form.fullName.trim()) throw new Error('Enter the person’s full name.')
-      if (!form.locationId) throw new Error('Choose one of your stores.')
       return callLoginRpc('update_branch_login', { p_profile_id: person.id, p_full_name: form.fullName.trim(), p_phone: form.phone.trim(), p_location_id: form.locationId, p_active: form.active })
     },
     onSuccess: onSaved,
   })
   return (
-    <SaveForm aria-label="Profile and access" onSave={() => save.mutateAsync()} savedMessage="Profile saved." errorClassName="mt-3" className="bg-white border border-slate-200 rounded-2xl p-5">
+    <SaveForm aria-label="Profile and access" onSave={() => save.mutateAsync()} validate={() => loginProfileProblems({ fullName: form.fullName, locationId: form.locationId, phone: form.phone })} savedMessage="Profile saved." errorClassName="mt-3" className="bg-white border border-slate-200 rounded-2xl p-5">
       <div className="flex items-center gap-2 mb-5"><ShieldCheck size={18} className="text-blue-600" /><h2 className="font-semibold text-lg">Profile &amp; access</h2></div>
       <div className="grid sm:grid-cols-2 gap-4">
-        <Field label="Full name"><input className={INPUT} value={form.fullName} onChange={(e) => set('fullName', e.target.value)} /></Field>
-        <Field label="Phone"><input className={INPUT} value={form.phone} onChange={(e) => set('phone', e.target.value)} /></Field>
+        <Field label="Full name"><Checked name="fullName"><input className={INPUT} value={form.fullName} onChange={(e) => set('fullName', e.target.value)} /></Checked></Field>
+        <Field label="Phone"><Checked name="phone"><input className={INPUT} value={form.phone} onChange={(e) => set('phone', e.target.value)} /></Checked></Field>
         <Field label="Store">
-          <select className={INPUT} value={form.locationId} onChange={(e) => set('locationId', e.target.value)}>
+          <Checked name="locationId"><select className={INPUT} value={form.locationId} onChange={(e) => set('locationId', e.target.value)}>
             {!form.locationId && <option value="">Choose a store…</option>}
             {locations.map((location) => <option key={location.id} value={location.id}>{location.name}{location.is_active ? '' : ' (not open)'}</option>)}
-          </select>
+          </select></Checked>
         </Field>
         <Field label="Account status">
           <select className={INPUT} value={form.active ? 'active' : 'inactive'} onChange={(e) => set('active', e.target.value === 'active')}>
@@ -61,16 +60,15 @@ export function ResetPassword({ profileId }: { profileId: string }) {
   const [password, setPassword] = useState('')
   const reset = useMutation({
     mutationFn: () => {
-      if (password.length < MIN_PASSWORD_LENGTH) throw new Error(`Passwords need at least ${MIN_PASSWORD_LENGTH} characters.`)
       return callLoginRpc('reset_branch_login_password', { p_profile_id: profileId, p_password: password })
     },
     onSuccess: () => setPassword(''),
   })
   return (
-    <SaveForm aria-label="Reset password" onSave={() => reset.mutateAsync()} savedMessage="Password changed. They’ve been signed out and must use the new password." errorClassName="mt-3" className="bg-white border border-slate-200 rounded-2xl p-5">
+    <SaveForm aria-label="Reset password" onSave={() => reset.mutateAsync()} validate={() => passwordProblems(password)} savedMessage="Password changed. They’ve been signed out and must use the new password." errorClassName="mt-3" className="bg-white border border-slate-200 rounded-2xl p-5">
       <div className="flex items-center gap-2 mb-4"><KeyRound size={18} className="text-blue-600" /><h2 className="font-semibold text-lg">Reset password</h2></div>
       <div className="flex gap-2">
-        <input type="password" autoComplete="new-password" aria-label="New password" placeholder={`New password (at least ${MIN_PASSWORD_LENGTH} characters)`} className={INPUT} value={password} onChange={(e) => setPassword(e.target.value)} />
+        <Checked name="password" message={false}><input type="password" autoComplete="new-password" aria-label="New password" placeholder={`New password (at least ${MIN_PASSWORD_LENGTH} characters)`} className={INPUT} value={password} onChange={(e) => setPassword(e.target.value)} /></Checked>
         <SubmitButton disabled={!password} className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 text-sm disabled:opacity-50">{(pending) => pending ? 'Saving…' : 'Set password'}</SubmitButton>
       </div>
       <div className="text-xs text-slate-400 mt-2">Share the new password with the person directly.</div>

@@ -7,7 +7,8 @@ import { Plus, Truck, AlertTriangle, ExternalLink, Pencil } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { authEmailToUsername } from '../lib/staffLogin'
 import { supabase } from '../lib/supabase'
-import { SaveForm, SubmitButton } from '../components/SaveForm'
+import { Checked, SaveForm, SubmitButton } from '../components/SaveForm'
+import { driverProblems } from '../lib/formChecks/operationsChecks'
 import { ensureChanged } from '../lib/saveErrors'
 import { useLocationScope } from '../contexts/LocationContext'
 import { DRIVER_LOCATION_FIELDS, driversForLocation, type DriverWithLocations } from '../lib/driverLocations'
@@ -74,8 +75,6 @@ export default function Drivers() {
 
   const add = useMutation({
     mutationFn: async () => {
-      if (!f.first_name.trim() || !f.last_name.trim()) throw new Error('First and last name are required.')
-      if (!selectedLocationId) throw new Error('Choose the driver’s home store in the header first.')
       const { error } = await supabase.from('drivers').insert({
         first_name: f.first_name.trim(),
         last_name: f.last_name.trim(),
@@ -133,21 +132,22 @@ export default function Drivers() {
       </p>
 
       {adding && (
-        <SaveForm aria-label="Add driver" onSave={() => add.mutateAsync()} savedMessage="Driver added." errorClassName="col-span-3"
+        <SaveForm aria-label="Add driver" onSave={() => add.mutateAsync()}
+          validate={() => driverProblems({ first: f.first_name, last: f.last_name, phone: f.phone, email: '', storeChosen: Boolean(selectedLocationId) })} savedMessage="Driver added." errorClassName="col-span-3"
           className="bg-white border border-slate-200 rounded-xl p-4 mb-4 grid grid-cols-3 gap-3">
-          <input
+          <Checked name="first" message={false}><input
             placeholder="First name"
             value={f.first_name}
             onChange={(e) => setF({ ...f, first_name: e.target.value })}
             className={inp}
-          />
-          <input
+          /></Checked>
+          <Checked name="last" message={false}><input
             placeholder="Last name"
             value={f.last_name}
             onChange={(e) => setF({ ...f, last_name: e.target.value })}
             className={inp}
-          />
-          <input placeholder="Phone" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} className={inp} />
+          /></Checked>
+          <Checked name="phone" message={false}><input placeholder="Phone" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} className={inp} /></Checked>
           <div className="col-span-3 flex justify-end gap-2">
             <button type="button" onClick={() => setAdding(false)} className="px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">
               Cancel
@@ -225,8 +225,6 @@ function DriverRow({
     setEditing(true)
   }
   const save = async () => {
-    if (!form.first_name.trim() || !form.last_name.trim()) throw new Error('First and last name are required.')
-    if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) throw new Error('Enter a valid email.')
     await onSave({
       first_name: form.first_name.trim(), last_name: form.last_name.trim(),
       email: form.email.trim() || null, phone: form.phone.trim() || null,
@@ -254,12 +252,13 @@ function DriverRow({
         )}
       </div>
       {editing && (
-        <SaveForm aria-label={`Edit ${d.first_name} ${d.last_name}`} onSave={save} onSaved={() => setEditing(false)} savedMessage="Driver saved." errorClassName="sm:col-span-2"
+        <SaveForm aria-label={`Edit ${d.first_name} ${d.last_name}`} onSave={save}
+          validate={() => driverProblems({ first: form.first_name, last: form.last_name, phone: form.phone, email: form.email })} onSaved={() => setEditing(false)} savedMessage="Driver saved." errorClassName="sm:col-span-2"
           className="mt-4 grid grid-cols-1 gap-3 border-t border-slate-100 pt-4 sm:grid-cols-2">
-          <Field label="First name"><input value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} className={input} /></Field>
-          <Field label="Last name"><input value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} className={input} /></Field>
-          <Field label="Phone"><input type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className={input} /></Field>
-          <Field label="Email"><input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className={input} /></Field>
+          <Field label="First name"><Checked name="first"><input value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} className={input} /></Checked></Field>
+          <Field label="Last name"><Checked name="last"><input value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} className={input} /></Checked></Field>
+          <Field label="Phone"><Checked name="phone"><input inputMode="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className={input} /></Checked></Field>
+          <Field label="Email"><Checked name="email"><input inputMode="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className={input} /></Checked></Field>
           <Field label="License number"><input value={form.license_number} onChange={(e) => setForm({ ...form, license_number: e.target.value })} className={input} /></Field>
           <Field label="License expiry"><input type="date" value={form.license_expiry} onChange={(e) => setForm({ ...form, license_expiry: e.target.value })} className={input} /></Field>
           <Field label="Hire date"><input type="date" value={form.hire_date} onChange={(e) => setForm({ ...form, hire_date: e.target.value })} className={input} /></Field>

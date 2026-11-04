@@ -32,6 +32,12 @@ export function storeLoginMessage(reason: string | undefined, fallback = 'Couldn
   return (reason && REASONS[reason]) || fallback
 }
 
+/** A username the login functions accept: 3–63 lowercase letters, numbers or dashes, not reserved. */
+export function validUsername(value: string): boolean {
+  const username = value.trim().toLowerCase()
+  return USERNAME.test(username) && !RESERVED_USERNAMES.has(username)
+}
+
 /** Null when the draft can be sent; otherwise what to fix. */
 export function newLoginProblem(draft: NewLoginDraft): string | null {
   const username = draft.username.trim().toLowerCase()

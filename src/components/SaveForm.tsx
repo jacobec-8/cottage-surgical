@@ -1,17 +1,22 @@
 'use client'
 
-import { createContext, useContext, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
-import { notSavedText, type ErrorTranslator } from '../lib/saveErrors'
+import { cloneElement, createContext, useContext, useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent, type ReactElement, type ReactNode } from 'react'
+import type { FieldProblem } from '../lib/fieldRules'
+import { failedField, notSavedText, type ErrorTranslator } from '../lib/saveErrors'
 import { useSaveNotice } from './SaveNotice'
 
-// One way to save in the staff app (enterprise hardening, decision 1):
-// a real form with browser tooltips off, one submit button that locks while
-// the save runs, "Saved" only after the save really succeeded, and "Not saved."
-// with a plain reason when it didn't. See docs/enterprise-hardening/README.md.
+// One way to save in the staff app (enterprise hardening): a real form with
+// browser tooltips off. Before anything is sent, the form's own checks run;
+// a problem marks its field, its message sits under that field and beside
+// Save, the cursor goes to the first one, and nothing is sent. "Saved." shows
+// only after the save really succeeded; "Not saved." gives a plain reason, and
+// "Not confirmed." means the connection dropped. See docs/enterprise-hardening.
 
 type SavedMessage<T> = string | ((result: T) => string) | null
 
 type SaveFormProps<T> = {
+  /** The form's own checks; every problem it returns blocks the save. */
+  validate?: () => FieldProblem[]
   /** Runs the save. It must reject on every failure, including a refusal the server reports as data. */
   onSave: (submitter: HTMLElement | null) => Promise<T>
   /** After a successful save, e.g. to close the editor. */
@@ -31,45 +36,85 @@ type SaveFormProps<T> = {
   children: ReactNode
 }
 
-const PendingContext = createContext(false)
+type FormState = { pending: boolean; errors: Readonly<Record<string, string>>; idPrefix: string }
+const FormContext = createContext<FormState>({ pending: false, errors: {}, idPrefix: '' })
+
+const withoutField = (errors: Record<string, string>, name: string) =>
+  Object.fromEntries(Object.entries(errors).filter(([key]) => key !== name))
 
 export function SaveForm<T>({
-  onSave, onSaved, savedMessage = 'Saved.', translateError, submitOnEnter = true, size = 'normal',
+  validate, onSave, onSaved, savedMessage = 'Saved.', translateError, submitOnEnter = true, size = 'normal',
   className, errorClassName = '', onKeyDown, children, ...rest
 }: SaveFormProps<T>) {
   const notify = useSaveNotice()
+  const idPrefix = useId()
+  const formRef = useRef<HTMLFormElement>(null)
   const [pending, setPending] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  const [summary, setSummary] = useState<string[]>([])
+  const [failure, setFailure] = useState<string | null>(null)
   const [savedInline, setSavedInline] = useState<string | null>(null)
   const running = useRef(false)
   const mounted = useRef(true)
   useEffect(() => () => { mounted.current = false }, [])
+
+  const focusField = (field: string | null) => {
+    if (!field) return
+    const target = formRef.current?.querySelector<HTMLElement>(`[name="${CSS.escape(field)}"]`)
+    target?.focus()
+  }
+
+  const block = (found: FieldProblem[]) => {
+    setErrors(Object.fromEntries(found.filter((p) => p.field).map((p) => [p.field as string, p.message])))
+    setSummary(found.map((p) => p.message))
+    setFailure(null)
+    // Logged with its source until the failure table exists (decision 2).
+    console.warn('Save blocked', { form: rest['aria-label'], fields: found.map((p) => p.field ?? 'form') })
+    focusField(found.find((p) => p.field)?.field ?? null)
+  }
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     event.stopPropagation()
     // A double click, or a scanner that sends Enter twice, saves once.
     if (running.current) return
+    setSavedInline(null)
+    const found = validate?.() ?? []
+    if (found.length) { block(found); return }
+    setErrors({})
+    setSummary([])
+    setFailure(null)
     running.current = true
     setPending(true)
-    setError(null)
-    setSavedInline(null)
     const submitter = (event.nativeEvent as SubmitEvent).submitter ?? null
+    let result: T
     try {
-      const result = await onSave(submitter)
+      result = await onSave(submitter)
+    } catch (error) {
+      console.error('Save failed', { form: rest['aria-label'], error })
+      if (mounted.current) {
+        const field = failedField(error)
+        setFailure(notSavedText(error, translateError))
+        if (field) {
+          setErrors({ [field]: notSavedText(error, translateError).replace(/^Not saved\. /, '') })
+          focusField(field)
+        }
+      }
+      return
+    } finally {
+      running.current = false
+      if (mounted.current) setPending(false)
+    }
+    // The save is confirmed. Nothing after this point may report it as failed.
+    try {
       const message = typeof savedMessage === 'function' ? savedMessage(result) : savedMessage
       if (message) {
         if (notify) notify(message)
         else if (mounted.current) setSavedInline(message)
       }
       onSaved?.(result)
-    } catch (failure) {
-      // Staff see plain words; the raw error stays in the console for support.
-      console.error('Save failed', { form: rest['aria-label'], error: failure })
-      if (mounted.current) setError(notSavedText(failure, translateError))
-    } finally {
-      running.current = false
-      if (mounted.current) setPending(false)
+    } catch (error) {
+      console.error('After a confirmed save', { form: rest['aria-label'], error })
     }
   }
 
@@ -78,17 +123,27 @@ export function SaveForm<T>({
     if (!submitOnEnter && event.key === 'Enter' && event.target instanceof HTMLInputElement) event.preventDefault()
   }
 
+  // Editing a marked field clears its mark; the list beside Save waits for the next try.
+  const changed = (event: FormEvent<HTMLFormElement>) => {
+    const name = (event.target as HTMLInputElement).name
+    if (name && errors[name]) setErrors(withoutField(errors, name))
+  }
+
   const compact = size === 'compact'
+  const alertClass = compact
+    ? `block w-full text-xs font-normal text-red-700 ${errorClassName}`
+    : `rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 ${errorClassName}`
   return (
-    <form noValidate onSubmit={submit} onKeyDown={keyDown} className={className} aria-busy={pending || undefined} {...rest}>
-      <PendingContext.Provider value={pending}>{children}</PendingContext.Provider>
-      {error && (
-        <p role="alert" className={compact
-          ? `block w-full text-xs font-normal text-red-700 ${errorClassName}`
-          : `rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 ${errorClassName}`}>
-          {error}
-        </p>
+    <form ref={formRef} noValidate onSubmit={submit} onKeyDown={keyDown} onChange={changed} className={className} aria-busy={pending || undefined} {...rest}>
+      <FormContext.Provider value={{ pending, errors, idPrefix }}>{children}</FormContext.Provider>
+      {summary.length > 0 && (
+        <div role="alert" className={alertClass}>
+          {summary.length === 1
+            ? `Not saved. ${summary[0]}`
+            : <>Not saved. Fix these first:<ul className="mt-1 list-disc pl-5">{summary.map((message) => <li key={message}>{message}</li>)}</ul></>}
+        </div>
       )}
+      {failure && <p role="alert" className={alertClass}>{failure}</p>}
       {savedInline && <p role="status" className={`text-emerald-700 ${compact ? 'w-full text-xs' : 'text-sm'} ${errorClassName}`}>{savedInline}</p>}
     </form>
   )
@@ -106,7 +161,7 @@ type SubmitButtonProps = {
 
 /** The form's submit button. It locks while the save runs. */
 export function SubmitButton({ children, disabled = false, ...rest }: SubmitButtonProps) {
-  const pending = useContext(PendingContext)
+  const { pending } = useContext(FormContext)
   return (
     <button type="submit" disabled={pending || disabled} {...rest}>
       {typeof children === 'function' ? children(pending) : children}
@@ -116,5 +171,50 @@ export function SubmitButton({ children, disabled = false, ...rest }: SubmitButt
 
 /** True while the surrounding SaveForm is saving, for Cancel buttons and the like. */
 export function useSavePending(): boolean {
-  return useContext(PendingContext)
+  return useContext(FormContext).pending
+}
+
+/**
+ * Wraps one input the form's checks refer to by `name`. It gives the input
+ * that name (how the cursor finds it), turns it red when marked, points
+ * screen readers at its message, and shows the message under it. In-place
+ * editors pass `message={false}`: their one-line error already sits beside it.
+ */
+export function Checked({ name, message = true, children }: { name: string; message?: boolean; children: ReactElement<Record<string, unknown>> }) {
+  const { errors, idPrefix } = useContext(FormContext)
+  const marked = Boolean(errors[name])
+  const input = cloneElement(children, {
+    name,
+    'aria-invalid': marked || undefined,
+    'aria-describedby': marked && message ? `${idPrefix}-${name}-error` : undefined,
+  })
+  return <>{input}{message && <FieldError name={name} />}</>
+}
+
+/** The message under one field, shown when the form's checks mark it. */
+export function FieldError({ name, className = '' }: { name: string; className?: string }) {
+  const { errors, idPrefix } = useContext(FormContext)
+  if (!errors[name]) return null
+  return <span id={`${idPrefix}-${name}-error`} className={`mt-1 block text-xs font-normal text-red-700 ${className}`}>{errors[name]}</span>
+}
+
+/**
+ * The same field marking for forms that run their own submit (sign-in,
+ * checkout, edit rental, return address): wrap the fields so `Checked` can
+ * read which ones the form's checks flagged.
+ */
+export function FieldMarks({ errors, children }: { errors: Readonly<Record<string, string>>; children: ReactNode }) {
+  const idPrefix = useId()
+  return <FormContext.Provider value={{ pending: false, errors, idPrefix }}>{children}</FormContext.Provider>
+}
+
+/** Field → message, for FieldMarks. */
+export function fieldErrorsOf(found: readonly FieldProblem[]): Record<string, string> {
+  return Object.fromEntries(found.filter((p) => p.field).map((p) => [p.field as string, p.message]))
+}
+
+/** Puts the cursor in the first flagged field of a form. */
+export function focusFirstProblem(form: HTMLFormElement | null, found: readonly FieldProblem[]): void {
+  const field = found.find((p) => p.field)?.field
+  if (field) form?.querySelector<HTMLElement>(`[name="${CSS.escape(field)}"]`)?.focus()
 }

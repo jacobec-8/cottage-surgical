@@ -5,7 +5,8 @@ import { useQuery } from '@tanstack/react-query'
 import { useQueryClient } from '@tanstack/react-query'
 import { Search, Plus, Minus, Trash2, CheckCircle } from 'lucide-react'
 import ItemThumb from '../components/ItemThumb'
-import { SaveForm, SubmitButton } from '../components/SaveForm'
+import { Checked, SaveForm, SubmitButton } from '../components/SaveForm'
+import { newOrderProblems } from '../lib/formChecks/operationsChecks'
 import { supabase } from '../lib/supabase'
 import { invalidateOrderWorkflow } from '../lib/workflowKeys'
 import { useLocationScope } from '../contexts/LocationContext'
@@ -170,21 +171,14 @@ export default function NewOrder() {
   // Throws the reason on any failure; SaveForm shows it as "Not saved." and nothing is created.
   const create = async () => {
     setResult(null)
-    if (!selectedLocationId) throw new Error('Select a store before creating an order.')
-    if (cart.length === 0) throw new Error('Add at least one item.')
-    if (overStock.length > 0) throw new Error('Lower the quantities marked in red: the store doesn’t have that many.')
-    const timeProblem = windowProblem(deliv.time, deliv.end)
-    if (timeProblem) throw new Error(timeProblem)
     // Existing vs new customer — the new customer is created INSIDE the RPC
     // (one transaction), so a failed order can never leave an orphan customer
     // and a retry can't create a duplicate.
     let customerId: string | null = null
     let newCustomer: Record<string, string | null> | null = null
     if (custMode === 'existing') {
-      if (!cust?.id) throw new Error('Choose a customer.')
-      customerId = cust.id
+      customerId = cust?.id ?? null
     } else {
-      if (!nc.full_name.trim()) throw new Error('Enter the customer’s name.')
       newCustomer = {
         full_name: nc.full_name.trim(), phone: nc.phone || null, email: nc.email || null,
         dob: nc.dob || null, coverage: nc.coverage || null,
@@ -238,7 +232,11 @@ export default function NewOrder() {
   }
 
   return (
-    <SaveForm aria-label="New order" onSave={create} savedMessage={null} submitOnEnter={false} className="max-w-3xl space-y-4">
+    <SaveForm aria-label="New order" onSave={create} validate={() => newOrderProblems({
+      storeChosen: Boolean(selectedLocationId), itemCount: cart.length, overStock: overStock.length > 0, start: deliv.time, end: deliv.end,
+      customerMode: custMode, customerChosen: Boolean(cust?.id), newName: nc.full_name, newEmail: nc.email, newPhone: nc.phone, newZip: nc.zip,
+      rental: mode === 'rental', deposit: deliv.deposit,
+    })} savedMessage={null} submitOnEnter={false} className="max-w-3xl space-y-4">
       <div>
         <h2 className="sr-only">New Order</h2>
         <p className="text-slate-500 text-sm">Build a rental or purchase from {selectedLocation?.name ?? 'a selected store'}, reserve its equipment, and schedule a delivery or a counter pickup.</p>
@@ -289,8 +287,8 @@ export default function NewOrder() {
               <>
                 <div className="relative">
                   <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input value={custSearch} onChange={(e) => setCustSearch(e.target.value)} disabled={!selectedLocationId} autoComplete="off" aria-label="Search customers"
-                    placeholder={selectedLocationId ? 'Search by name, email or phone…' : 'Choose a store first'} className={`w-full pl-9 disabled:cursor-not-allowed disabled:bg-slate-100 ${inp}`} />
+                  <Checked name="customerSearch"><input value={custSearch} onChange={(e) => setCustSearch(e.target.value)} disabled={!selectedLocationId} autoComplete="off" aria-label="Search customers"
+                    placeholder={selectedLocationId ? 'Search by name, email or phone…' : 'Choose a store first'} className={`w-full pl-9 disabled:cursor-not-allowed disabled:bg-slate-100 ${inp}`} /></Checked>
                 </div>
                 <div className="mt-2 space-y-1">
                   {matchedCustomers.map((c) => (
@@ -310,9 +308,9 @@ export default function NewOrder() {
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3">
-            <input placeholder="Full name" value={nc.full_name} onChange={(e) => setNc({ ...nc, full_name: e.target.value })} className={`col-span-2 ${inp}`} />
-            <input placeholder="Phone" value={nc.phone} onChange={(e) => setNc({ ...nc, phone: e.target.value })} className={inp} />
-            <input type="email" placeholder="Email" value={nc.email} onChange={(e) => setNc({ ...nc, email: e.target.value })} className={inp} />
+            <Checked name="customerName" message={false}><input placeholder="Full name" value={nc.full_name} onChange={(e) => setNc({ ...nc, full_name: e.target.value })} className={`col-span-2 ${inp}`} /></Checked>
+            <Checked name="customerPhone" message={false}><input placeholder="Phone" value={nc.phone} onChange={(e) => setNc({ ...nc, phone: e.target.value })} className={inp} /></Checked>
+            <Checked name="customerEmail" message={false}><input placeholder="Email" value={nc.email} onChange={(e) => setNc({ ...nc, email: e.target.value })} className={inp} /></Checked>
             <input type="date" placeholder="DOB" value={nc.dob} onChange={(e) => setNc({ ...nc, dob: e.target.value })} className={inp} />
             <select value={nc.coverage} onChange={(e) => setNc({ ...nc, coverage: e.target.value })} className={inp}>
               <option value="">Coverage…</option>
@@ -323,7 +321,7 @@ export default function NewOrder() {
             </select>
             <input placeholder="Address" value={nc.line1} onChange={(e) => setNc({ ...nc, line1: e.target.value })} className={`col-span-2 ${inp}`} />
             <input placeholder="City" value={nc.city} onChange={(e) => setNc({ ...nc, city: e.target.value })} className={inp} />
-            <input placeholder="ZIP" value={nc.zip} onChange={(e) => setNc({ ...nc, zip: e.target.value })} className={inp} />
+            <Checked name="customerZip" message={false}><input placeholder="ZIP" value={nc.zip} onChange={(e) => setNc({ ...nc, zip: e.target.value })} className={inp} /></Checked>
           </div>
         )}
       </div>
@@ -408,9 +406,9 @@ export default function NewOrder() {
               {storeDrivers.map((d) => <option key={d.id} value={d.id}>{d.first_name} {d.last_name}{busyDrivers.data?.has(d.id) ? ' — busy then' : ''}</option>)}
             </select>
           </div> : <div className="self-end text-sm text-slate-500 pb-2">No driver: the customer collects at the counter.</div>}
-          <div><span className="text-xs text-slate-500">{method === 'pickup' ? 'Pickup time' : 'Delivery time'}</span><input type="time" value={deliv.time} onChange={(e) => setDeliv({ ...deliv, time: e.target.value })} className={`w-full ${inp}`} /></div>
-          <div><span className="text-xs text-slate-500">Until{deliv.time && !deliv.end ? ' (1 hour if blank)' : ''}</span><input type="time" aria-label="Delivery end time" value={deliv.end} onChange={(e) => setDeliv({ ...deliv, end: e.target.value })} className={`w-full ${inp}`} /></div>
-          {mode === 'rental' && <div><span className="text-xs text-slate-500">Deposit ($)</span><input type="number" value={deliv.deposit} onChange={(e) => setDeliv({ ...deliv, deposit: e.target.value })} className={`w-full ${inp}`} /></div>}
+          <div><span className="text-xs text-slate-500">{method === 'pickup' ? 'Pickup time' : 'Delivery time'}</span><Checked name="start"><input type="time" value={deliv.time} onChange={(e) => setDeliv({ ...deliv, time: e.target.value })} className={`w-full ${inp}`} /></Checked></div>
+          <div><span className="text-xs text-slate-500">Until{deliv.time && !deliv.end ? ' (1 hour if blank)' : ''}</span><Checked name="end"><input type="time" aria-label="Delivery end time" value={deliv.end} onChange={(e) => setDeliv({ ...deliv, end: e.target.value })} className={`w-full ${inp}`} /></Checked></div>
+          {mode === 'rental' && <div><span className="text-xs text-slate-500">Deposit ($)</span><Checked name="deposit"><input inputMode="decimal" value={deliv.deposit} onChange={(e) => setDeliv({ ...deliv, deposit: e.target.value })} className={`w-full ${inp}`} /></Checked></div>}
           <div className={mode === 'rental' ? '' : 'col-span-2'}><span className="text-xs text-slate-500">Notes</span><input value={deliv.notes} onChange={(e) => setDeliv({ ...deliv, notes: e.target.value })} placeholder={method === 'pickup' ? 'Who is collecting, when they said…' : 'Access, parking…'} className={`w-full ${inp}`} /></div>
         </div>
       </div>

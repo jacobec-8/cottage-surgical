@@ -4,7 +4,8 @@ import { useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Pencil } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { SaveForm, SubmitButton, useSavePending } from '../../components/SaveForm'
+import { Checked, SaveForm, SubmitButton, useSavePending } from '../../components/SaveForm'
+import { unitCodeProblems } from '../../lib/formChecks/operationsChecks'
 import { invalidateOrderWorkflow } from '../../lib/workflowKeys'
 import { scanRefusal, scanSuccess, type ScanResult } from './unitScan'
 
@@ -56,12 +57,12 @@ function UnitEditor({ lineId, itemName, onMessage, done }: { lineId: string; ite
   }
   return (
     // A scanner ends with Enter, which submits. SaveForm ignores a second Enter while the first is saving.
-    <SaveForm aria-label={`Unit for ${itemName}`} size="compact" onSave={save} onSaved={done} savedMessage={null}
+    <SaveForm aria-label={`Unit for ${itemName}`} size="compact" onSave={save} validate={() => unitCodeProblems(code)} onSaved={done} savedMessage={null}
       onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); done() } }}
       className="flex flex-wrap items-center gap-1.5 font-sans">
-      <input ref={input} autoFocus aria-label={`Asset tag or serial for ${itemName}`} placeholder="Scan or type tag or serial" value={code}
+      <Checked name="code" message={false}><input ref={input} autoFocus aria-label={`Asset tag or serial for ${itemName}`} placeholder="Scan or type tag or serial" value={code}
         onChange={(e) => { setCode(e.target.value); setRecordOn(null) }}
-        className="w-48 max-w-full rounded-lg border border-slate-300 px-2 py-1 text-sm font-normal focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        className="w-48 max-w-full rounded-lg border border-slate-300 px-2 py-1 text-sm font-normal focus:outline-none focus:ring-2 focus:ring-blue-500" /></Checked>
       <SubmitButton className="rounded-lg bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50">{(pending) => pending ? 'Saving…' : 'Save'}</SubmitButton>
       <CancelButton done={done} />
       {recordOn && (

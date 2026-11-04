@@ -1,71 +1,82 @@
 # Enterprise hardening
 
-Decisions for making Cottage Surgical behave like enterprise software. Each
-decision lists what we chose, why, and what "done" means. Work items live in
-their own checklist files in this folder.
+A form is only as good as the checks and error handling in its code. These
+decisions make every save in Cottage Surgical honest about what happened.
+Each lists what we chose, why, and what "done" means.
 
-## Decision 1: saves use real form submits (2026-11-04)
+- [form-saves-checklist.md](form-saves-checklist.md) tracks every save.
+- [before-after.md](before-after.md) shows the change on screen, before and after.
+
+## Decision 1: saves are real form submits with honest outcomes (2026-11-04)
 
 **Rule.** If staff enter something and it does not save, that must be
-obvious. The screen never shows staff a value the database did not accept
-without saying so.
-
-**What we found.** 24 data-entry saves in the staff app call the save from a
-button's click handler instead of a form submit. Five existing forms still
-rely on the browser's tooltip checks. The product edit form showed raw
-Postgres text on a rejected price and gave no confirmation on success.
-
-**What enterprises do.** Data entry uses a real form element with a submit
-button. GitHub, Shopify's admin and the Next.js documentation all build forms
-this way. Browser tooltip checks are turned off with `noValidate`, and the app
-shows its own message next to the field. The server stays the final authority,
-because browser checks can be skipped by anyone calling the API.
+obvious. The screen never shows a value the database did not accept without
+saying so.
 
 **What we chose.**
 
-- Every save that has fields to fill in becomes a form submit.
-- Every form gets `noValidate`.
-- Every save shows a visible "Saved" on success and a plain-language error on
-  failure, next to the Save button.
-- One-click actions with no fields stay plain buttons. Examples: Verify
-  payment, Mark picked up, Mark all read, Rent Now.
-- The save logic itself does not change. Only the wiring and the feedback do.
+- Every save with fields is a form submit through the shared `SaveForm`
+  (`src/components/SaveForm.tsx`). Browser tooltip checks are off
+  (`noValidate`).
+- The Save button is a `SubmitButton`. It locks while saving, so a double
+  click or a scanner's double Enter saves once.
+- Three outcomes, worded the same everywhere:
+  - **Saved.** A green notice, shown only after the database confirmed it.
+  - **Not saved.** A plain reason, never raw database text.
+  - **Not confirmed.** The connection dropped, so the save may have gone
+    through. The message says to reload and check before trying again.
+- Once a save is confirmed, nothing after it (closing an editor, reloading a
+  list) can show it as failed.
+- Updates confirm a row changed. A save blocked by access rules returns no
+  error and changes nothing; without the check it would say "Saved".
+- One-click actions with no fields (Verify payment, Mark picked up) stay
+  plain buttons.
 
-**How the change is made.** One shared component, so all saves behave the
-same way:
+## Decision 2: every form checks its own fields before sending (2026-11-04)
 
-```tsx
-<SaveForm onSave={() => save.mutate()} pending={save.isPending} error={save.error} saved={save.isSuccess}>
-  {/* existing fields, unchanged */}
-</SaveForm>
-```
+**Rule.** The form's code, not the browser and not only the database,
+catches a mistake before anything is sent, and points at the field.
 
-The component:
+**What we chose.**
 
-1. Renders `<form noValidate>` and calls `preventDefault` before the save, so
-   the page never reloads.
-2. Renders the Save button with `type="submit"`, disabled and reading
-   "Saving…" while the save runs, so a double click saves once.
-3. Shows "Saved" with `role="status"` on success, and the error with
-   `role="alert"` on failure, both beside the button.
-4. Translates database errors into plain words, for example a negative price
-   becomes "Prices can't be negative" instead of the check-constraint text.
+- **One shared set of field rules**, `src/lib/fieldRules.ts`: required,
+  price, whole number, email, phone, ZIP, state. The same mistake gets the
+  same words on every form.
+- **Each form's checks** live in `src/lib/formChecks/`, as plain functions
+  that return every problem with its field. They reuse each form's existing
+  wording and add the checks only the database made before: prices,
+  quantities, driver and staff phone and email, deposits and rates, ZIPs.
+- **The shared form runs them first.** A flagged field turns red, its message
+  sits under it, the list of problems sits beside Save, the cursor goes to
+  the first flagged field, and nothing is sent. Editing a field clears its
+  mark.
+- **Server refusals can name their field** (`FieldRefusal`), so "username
+  already taken" lands on the username box.
+- **Price and quantity boxes are text fields with a number keypad.** A browser
+  number field reports "empty" when someone types "$450", so the check could
+  not see what was typed.
+- **Forms that run their own submit** (sign-in, checkout, edit rental, return
+  address) use `FieldMarks` for the same marking.
 
-Each converted screen also follows two rules:
+**Found and fixed on the way.** The store stock count used to save −3 or
+"ten" as 0 without a word. It is now refused on the field.
 
-- Every other button inside the form gets `type="button"`. A button without a
-  type submits the form, so an unmarked Cancel would save.
-- A form never contains another form. HTML does not allow it, and the browser
-  silently drops the inner one.
+## Next, waiting for a go
 
-**Done means, for each save.**
+1. **Record every failure with its source.** Each save attempt gets a request
+   ID, sent with the save. Every blocked or refused save is stored with the
+   ID, form, field, layer that refused it and error code, never what was
+   typed. Staff see a short reference on the error. Needs migration 118.
+2. **Retries can't duplicate records.** Each submission carries one key; a
+   repeat returns the first result instead of a second record. Orders first.
+   Needs a migration.
 
-- Pressing Enter in a single-line field saves.
+## Done means, for each save
+
+- Pressing Enter in a single-line field saves (New Order is the exception:
+  Enter there never places an order).
 - Cancel and other buttons inside the form do not save.
 - A double click produces one save.
-- Success shows "Saved"; failure shows a plain error and nothing changes.
-- No form sits inside another form.
-- Typecheck and lint pass.
-- Checked on screen, not only in code.
-
-Tracking: [form-saves-checklist.md](form-saves-checklist.md).
+- A bad field is marked, explained and focused, and nothing is sent.
+- Success shows "Saved"; a refusal shows "Not saved." with the reason.
+- Typecheck, lint and the guard tests pass; the guards run in CI.

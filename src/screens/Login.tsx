@@ -1,6 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+import { Checked, FieldMarks, fieldErrorsOf, focusFirstProblem } from '../components/SaveForm'
+import { signInProblems } from '../lib/formChecks/peopleChecks'
 import type { FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { Shield, ClipboardList, Truck, CreditCard, Package, Eye, EyeOff, LogIn } from 'lucide-react'
@@ -21,6 +23,7 @@ export default function Login() {
   const [show, setShow] = useState(false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [marks, setMarks] = useState<Record<string, string>>({})
 
   const doSignIn = async (loginUsername: string, pw: string) => {
     setBusy(true)
@@ -35,8 +38,14 @@ export default function Login() {
   }
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    // The form has the browser's tooltips off; say what's missing on the page instead.
-    if (!username.trim() || !password) { setError('Enter your username and password.'); return }
+    // The form has the browser's tooltips off; its own checks say what's missing, on the field.
+    const found = signInProblems(username, password)
+    setMarks(fieldErrorsOf(found))
+    if (found.length) {
+      setError(found.map((p) => p.message).join(' '))
+      focusFirstProblem(e.currentTarget as HTMLFormElement, found)
+      return
+    }
     doSignIn(username, password)
   }
 
@@ -85,34 +94,30 @@ export default function Login() {
             <h2 className="text-xl font-bold">Sign In</h2>
             <p className="text-sm text-slate-500 mb-6">Enter your credentials to continue</p>
             {/* POST: a submit before hydration must never put credentials in the URL. */}
-            <form method="post" noValidate onSubmit={submit}>
+            <form method="post" noValidate onSubmit={submit}><FieldMarks errors={marks}>
               <label htmlFor="username" className="block text-xs font-medium tracking-wide text-slate-500 mb-1">USERNAME OR EMAIL</label>
-              <input
+              <Checked name="username" message={false}><input
                 id="username"
-                name="username"
-                value={username}
+                                value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 type="text"
                 autoComplete="username"
                 autoCapitalize="none"
                 spellCheck={false}
                 placeholder="Enter username or email"
-                required
                 className="w-full border border-slate-300 rounded-lg px-3 py-2.5 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+              /></Checked>
               <label htmlFor="password" className="block text-xs font-medium tracking-wide text-slate-500 mb-1">PASSWORD</label>
               <div className="relative mb-5">
-                <input
+                <Checked name="password" message={false}><input
                   id="password"
-                  name="password"
-                  value={password}
+                                    value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   type={show ? 'text' : 'password'}
                   autoComplete="current-password"
                   placeholder="Enter password"
-                  required
                   className="w-full border border-slate-300 rounded-lg px-3 py-2.5 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                /></Checked>
                 <button
                   type="button"
                   onClick={() => setShow((s) => !s)}
@@ -130,7 +135,7 @@ export default function Login() {
               >
                 <LogIn size={16} /> {busy ? 'Signing in…' : 'Sign In'}
               </button>
-            </form>
+            </FieldMarks></form>
           </div>
           <p className="text-center text-xs text-slate-400 mt-4">Staff sign-in</p>
         </div>

@@ -73,3 +73,22 @@ test('a save that confirms its row asks for a column the table has', () => {
   })
   assert.deepEqual(found, [], found.join('\n'))
 })
+
+test('every save form runs its own checks before sending', () => {
+  // Only a form with nothing typed may skip them: ticking the locations a driver works at.
+  const nothingToType = new Set(['src/screens/drivers/DriverLocations.tsx'])
+  // The whole opening tag: its props hold arrow functions, so count braces to find its end.
+  const openingTag = (text: string, start: number) => {
+    let depth = 0
+    for (let i = start; i < text.length; i++) {
+      if (text[i] === '{') depth++
+      else if (text[i] === '}') depth--
+      else if (text[i] === '>' && depth === 0) return text.slice(start, i + 1)
+    }
+    return text.slice(start)
+  }
+  const found = files.flatMap(({ file, text }) => [...text.matchAll(/<SaveForm\b/g)]
+    .filter((m) => !/\bvalidate=/.test(openingTag(text, m.index!)) && !nothingToType.has(file))
+    .map((m) => `${file}:${lineOf(text, m.index!)}`))
+  assert.deepEqual(found, [], `Give these forms validate={...} from src/lib/formChecks:\n${found.join('\n')}`)
+})

@@ -1,11 +1,13 @@
 'use client'
 
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Save, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { invalidateOrderWorkflow } from '../../lib/workflowKeys'
-import { notSavedText } from '../../lib/saveErrors'
+import { FieldRefusal, failedField, notSavedText } from '../../lib/saveErrors'
+import { Checked, FieldMarks, fieldErrorsOf, focusFirstProblem } from '../../components/SaveForm'
+import { rentalProblems } from '../../lib/formChecks/peopleChecks'
 import type { OrderDetail } from './types'
 
 const REASONS: Record<string, string> = {
@@ -23,6 +25,10 @@ const REASONS: Record<string, string> = {
   store_no_delivery: 'This store doesn’t deliver.',
   missing_address: 'Enter a delivery address before switching to delivery.',
   invalid_method: 'Choose delivery or in-store pickup.',
+}
+/** Server refusals about one field, so the message lands on that field. */
+const REASON_FIELDS: Record<string, string> = {
+  missing_name: 'fullName', invalid_rate: 'monthlyRate', invalid_deposit: 'deposit', invalid_dates: 'endDate', missing_address: 'line1',
 }
 type Method = 'delivery' | 'pickup'
 const OPEN_STOP = new Set(['pending', 'scheduled'])
@@ -75,9 +81,6 @@ export default function EditRentalModal({
 
   const save = useMutation({
     mutationFn: async () => {
-      // Checked before anything is written, so a bad field never leaves a half-saved rental.
-      if (!form.fullName.trim()) throw new Error('Enter the customer’s name.')
-      if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) throw new Error('Enter a valid email, like name@example.com.')
       if (method !== originalMethod) {
         const switched = await supabase.rpc('set_order_fulfillment', { p_order_id: order.id, p_method: method })
         if (switched.error) throw new Error('Couldn’t change how the customer gets it. Please try again.')
@@ -102,6 +105,9 @@ export default function EditRentalModal({
         throw new Error('A deposit is being held for this rental. Mark it refunded or forfeited under Billing on this order, then remove it here.')
       }
       if (error) throw new Error('Couldn’t save the rental. Please try again.')
+      // A refusal about one field lands on that field.
+      const field = REASON_FIELDS[data?.reason]
+      if (!data?.ok && field) throw new FieldRefusal(field, REASONS[data.reason])
       if (!data?.ok) throw new Error(REASONS[data?.reason] || 'Couldn’t save the rental.')
     },
     onSuccess: () => {
@@ -111,9 +117,30 @@ export default function EditRentalModal({
     },
   })
 
+  // The form's own checks run before anything is written, so a bad field never leaves a half-saved rental.
+  const formRef = useRef<HTMLFormElement>(null)
+  const [marks, setMarks] = useState<Record<string, string>>({})
+  const [blocked, setBlocked] = useState<string[]>([])
   const submit = (event: FormEvent) => {
     event.preventDefault()
-    save.mutate()
+    const found = rentalProblems({ fullName: form.fullName, email: form.email, phone: form.phone, zip: form.zip, monthlyRate: form.monthlyRate, deposit: form.deposit, startDate: form.startDate, endDate: form.endDate })
+    setMarks(fieldErrorsOf(found))
+    setBlocked(found.map((p) => p.message))
+    if (found.length) {
+      console.warn('Save blocked', { form: 'Edit rental', fields: found.map((p) => p.field ?? 'form') })
+      focusFirstProblem(formRef.current, found)
+      return
+    }
+    save.mutate(undefined, {
+      onError: (error) => {
+        const field = failedField(error)
+        if (field) { setMarks({ [field]: (error as Error).message }); focusFirstProblem(formRef.current, [{ field, message: '' }]) }
+      },
+    })
+  }
+  const unmark = (event: FormEvent<HTMLFormElement>) => {
+    const name = (event.target as HTMLInputElement).name
+    if (name && marks[name]) setMarks(Object.fromEntries(Object.entries(marks).filter(([key]) => key !== name)))
   }
   const input = 'w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100'
 
@@ -121,8 +148,10 @@ export default function EditRentalModal({
     <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-slate-950/45 p-4" onClick={onClose}
       onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onClose() } }}>
       <form
+        ref={formRef}
         noValidate
         onSubmit={submit}
+        onChange={unmark}
         onClick={(event) => event.stopPropagation()}
         className="my-auto w-full max-w-xl overflow-hidden rounded-2xl bg-white shadow-2xl"
       >
@@ -136,18 +165,19 @@ export default function EditRentalModal({
           </button>
         </header>
 
+        <FieldMarks errors={marks}>
         <div className="max-h-[calc(100dvh-10rem)] space-y-5 overflow-y-auto p-5">
           <fieldset>
             <legend className="mb-2 text-sm font-semibold text-slate-800">Customer</legend>
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="text-xs text-slate-500 sm:col-span-2">Name
-                <input required value={form.fullName} onChange={(e) => set('fullName')(e.target.value)} className={`mt-1 ${input}`} />
+                <Checked name="fullName"><input value={form.fullName} onChange={(e) => set('fullName')(e.target.value)} className={`mt-1 ${input}`} /></Checked>
               </label>
               <label className="text-xs text-slate-500">Phone
-                <input type="tel" value={form.phone} onChange={(e) => set('phone')(e.target.value)} className={`mt-1 ${input}`} />
+                <Checked name="phone"><input inputMode="tel" value={form.phone} onChange={(e) => set('phone')(e.target.value)} className={`mt-1 ${input}`} /></Checked>
               </label>
               <label className="text-xs text-slate-500">Email
-                <input type="email" value={form.email} onChange={(e) => set('email')(e.target.value)} className={`mt-1 ${input}`} />
+                <Checked name="email"><input inputMode="email" value={form.email} onChange={(e) => set('email')(e.target.value)} className={`mt-1 ${input}`} /></Checked>
               </label>
             </div>
           </fieldset>
@@ -169,7 +199,7 @@ export default function EditRentalModal({
             <legend className="mb-2 text-sm font-semibold text-slate-800">{method === 'pickup' ? 'Customer address' : 'Service address'}</legend>
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="text-xs text-slate-500 sm:col-span-2">Street
-                <input value={form.line1} onChange={(e) => set('line1')(e.target.value)} className={`mt-1 ${input}`} />
+                <Checked name="line1"><input value={form.line1} onChange={(e) => set('line1')(e.target.value)} className={`mt-1 ${input}`} /></Checked>
               </label>
               <label className="text-xs text-slate-500">City
                 <input value={form.city} onChange={(e) => set('city')(e.target.value)} className={`mt-1 ${input}`} />
@@ -179,7 +209,7 @@ export default function EditRentalModal({
                   <input maxLength={2} value={form.state} onChange={(e) => set('state')(e.target.value)} className={`mt-1 ${input}`} />
                 </label>
                 <label className="text-xs text-slate-500">ZIP
-                  <input inputMode="numeric" value={form.zip} onChange={(e) => set('zip')(e.target.value)} className={`mt-1 ${input}`} />
+                  <Checked name="zip"><input inputMode="numeric" value={form.zip} onChange={(e) => set('zip')(e.target.value)} className={`mt-1 ${input}`} /></Checked>
                 </label>
               </div>
             </div>
@@ -192,13 +222,13 @@ export default function EditRentalModal({
                 <input type="date" value={form.startDate} onChange={(e) => set('startDate')(e.target.value)} className={`mt-1 ${input}`} />
               </label>
               <label className="text-xs text-slate-500">Return/end date
-                <input type="date" value={form.endDate} onChange={(e) => set('endDate')(e.target.value)} className={`mt-1 ${input}`} />
+                <Checked name="endDate"><input type="date" value={form.endDate} onChange={(e) => set('endDate')(e.target.value)} className={`mt-1 ${input}`} /></Checked>
               </label>
               <label className="text-xs text-slate-500">Monthly rate ($)
-                <input type="number" min="0" step="0.01" value={form.monthlyRate} onChange={(e) => set('monthlyRate')(e.target.value)} className={`mt-1 ${input}`} />
+                <Checked name="monthlyRate"><input inputMode="decimal" value={form.monthlyRate} onChange={(e) => set('monthlyRate')(e.target.value)} className={`mt-1 ${input}`} /></Checked>
               </label>
               <label className="text-xs text-slate-500">Deposit held ($) — updates the held deposit record
-                <input type="number" min="0" step="0.01" value={form.deposit} onChange={(e) => set('deposit')(e.target.value)} className={`mt-1 ${input}`} />
+                <Checked name="deposit"><input inputMode="decimal" value={form.deposit} onChange={(e) => set('deposit')(e.target.value)} className={`mt-1 ${input}`} /></Checked>
               </label>
               <label className="text-xs text-slate-500 sm:col-span-2">Internal notes
                 <textarea rows={3} value={form.notes} onChange={(e) => set('notes')(e.target.value)} className={`mt-1 ${input}`} />
@@ -208,8 +238,10 @@ export default function EditRentalModal({
 
         </div>
 
+        </FieldMarks>
         {/* In the footer so a refusal is always on screen, not below the fold (ODD-006). */}
-        {save.error && <div role="alert" className="border-t border-red-200 bg-red-50 px-5 py-2 text-sm text-red-700">{notSavedText(save.error)}</div>}
+        {blocked.length > 0 && <div role="alert" className="border-t border-red-200 bg-red-50 px-5 py-2 text-sm text-red-700">{blocked.length === 1 ? `Not saved. ${blocked[0]}` : <>Not saved. Fix these first:<ul className="mt-1 list-disc pl-5">{blocked.map((m) => <li key={m}>{m}</li>)}</ul></>}</div>}
+        {!blocked.length && save.error && <div role="alert" className="border-t border-red-200 bg-red-50 px-5 py-2 text-sm text-red-700">{notSavedText(save.error)}</div>}
         <footer className="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">
           <button type="button" onClick={onClose} className="min-h-11 rounded-lg border border-slate-300 px-4 text-sm text-slate-700 hover:bg-white">Cancel</button>
           <button type="submit" disabled={save.isPending} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">

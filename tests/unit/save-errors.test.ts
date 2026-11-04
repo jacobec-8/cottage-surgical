@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { NOTHING_CHANGED, ensureChanged, notSavedText, saveErrorMessage } from '../../src/lib/saveErrors.ts'
+import { FieldRefusal, NOTHING_CHANGED, ensureChanged, failedField, notSavedText, saveErrorMessage } from '../../src/lib/saveErrors.ts'
 
 const check = (constraint: string, table = 'equipment_items') => ({
   code: '23514',
@@ -90,6 +90,14 @@ test('a custom translator wins when it has an answer', () => {
 test('every refusal is headed "Not saved."; a lost reply is "Not confirmed."', () => {
   assert.equal(notSavedText(check('equipment_items_sale_price_check')), 'Not saved. Prices can’t be negative.')
   assert.match(notSavedText(new TypeError('Failed to fetch')), /^Not confirmed\. The connection dropped/)
+})
+
+test('a refusal can name the field it is about', () => {
+  const refusal = new FieldRefusal('username', 'That username is already in use.')
+  assert.equal(failedField(refusal), 'username')
+  assert.equal(notSavedText(refusal), 'Not saved. That username is already in use.')
+  assert.equal(failedField(new Error('plain')), null)
+  assert.equal(failedField({ code: '23514', message: 'x' }), null)
 })
 
 test('an update that changed no row is a failure, not a success', () => {

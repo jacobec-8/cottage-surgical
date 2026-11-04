@@ -1,13 +1,15 @@
 'use client'
 
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
+import { Checked, FieldMarks, fieldErrorsOf, focusFirstProblem } from '../../components/SaveForm'
+import { checkoutProblems } from '../../lib/formChecks/peopleChecks'
 import Link from 'next/link'
 import { CheckCircle, CreditCard, Loader2, MapPin, ShoppingCart, Store, Truck, Zap } from 'lucide-react'
 import { useCart } from '../../components/shop/CartContext'
 import { useCartQuote } from '../../components/shop/useCartQuote'
 import ShopFooter from '../../components/shop/ShopFooter'
 import ShopHeader from '../../components/shop/ShopHeader'
-import { CHECKOUT_REASONS, checkoutFormProblem, dueToday, payLaterChoice, type Fulfillment, type PaymentChoice } from '../../lib/checkoutPlan'
+import { CHECKOUT_REASONS, dueToday, payLaterChoice, type Fulfillment, type PaymentChoice } from '../../lib/checkoutPlan'
 import { dispatchOrderEmails } from '../../lib/customerEmails'
 import { commonPickupLocations, pickupLocationSelection } from '../../lib/fulfillment'
 import { publicSupabase } from '../../lib/publicSupabase'
@@ -28,6 +30,8 @@ export default function Checkout() {
   const [busy, setBusy] = useState(false)
   const submittingRef = useRef(false)
   const [error, setError] = useState('')
+  const formRef = useRef<HTMLFormElement>(null)
+  const [marks, setMarks] = useState<Record<string, string>>({})
   const [done, setDone] = useState<{ numbers: number[]; fulfillment: Fulfillment } | null>(null)
 
   const rentItems = items.filter((i) => i.mode === 'rent')
@@ -58,16 +62,20 @@ export default function Checkout() {
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (submittingRef.current) return
+    // The form's own checks first: a flagged field turns red, gets the cursor, and nothing is sent.
+    const found = checkoutProblems(form, fulfillment, Boolean(selectedPickupLocation))
+    setMarks(fieldErrorsOf(found))
+    if (found.length) {
+      setError(found.map((p) => p.message).join(' '))
+      console.warn('Checkout blocked', { fields: found.map((p) => p.field ?? 'form') })
+      focusFirstProblem(formRef.current, found)
+      return
+    }
     submittingRef.current = true
     setBusy(true)
     setError('')
     clearRefusal()
     try {
-      const missing = checkoutFormProblem(form, fulfillment)
-      if (missing) throw new Error(missing)
-      if (fulfillment === 'pickup' && !selectedPickupLocation) {
-        throw new Error('Choose an available pickup location.')
-      }
       if (fulfillment === 'delivery' && !deliveryAvailable) {
         throw new Error('Delivery is not available for every item in your cart.')
       }
@@ -190,11 +198,11 @@ export default function Checkout() {
                 <CheckoutSummary items={items} priceOf={priceOf} rentTotal={rentTotal} buyTotal={buyTotal}
                   due={dueToday(rentTotal, buyTotal, paymentChoice)} payLater={rentItems.length > 0 && paymentChoice !== 'online'} onEdit={() => setOpen(true)} />
               </div>
-              <form noValidate onSubmit={submit} className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4">
+              <form ref={formRef} noValidate onSubmit={submit} onChange={(event) => { const name = (event.target as Element).getAttribute('name'); if (name && marks[name]) setMarks(Object.fromEntries(Object.entries(marks).filter(([key]) => key !== name))) }} className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4"><FieldMarks errors={marks}>
                 <div className="grid grid-cols-2 gap-3">
-                  <input required placeholder="Full name" value={form.full_name} onChange={set('full_name')} className={`col-span-2 ${INPUT}`} />
+                  <Checked name="full_name" message={false}><input placeholder="Full name" value={form.full_name} onChange={set('full_name')} className={`col-span-2 ${INPUT}`} /></Checked>
                   <input placeholder="Phone" value={form.phone} onChange={set('phone')} className={INPUT} />
-                  <input required type="email" placeholder="Email" value={form.email} onChange={set('email')} className={INPUT} />
+                  <Checked name="email" message={false}><input inputMode="email" placeholder="Email" value={form.email} onChange={set('email')} className={INPUT} /></Checked>
                 </div>
                 <fieldset>
                   <legend className="mb-2 text-sm font-semibold text-navy">How would you like to receive your order?</legend>
@@ -216,10 +224,10 @@ export default function Checkout() {
                 {fulfillment === 'pickup' ? (
                   <div className="space-y-2">
                     <label className="block text-sm font-semibold text-navy" htmlFor="pickup-location">Pickup location</label>
-                    <select id="pickup-location" required value={pickupLocationId} onChange={(event) => setPickupLocationId(event.target.value)} className={`w-full ${INPUT}`}>
+                    <Checked name="pickupLocation" message={false}><select id="pickup-location" value={pickupLocationId} onChange={(event) => setPickupLocationId(event.target.value)} className={`w-full ${INPUT}`}>
                       {pickupLocations.length > 1 && <option value="">Select a pickup location…</option>}
                       {pickupLocations.map((location) => <option key={location.id} value={location.id}>{location.name} — {location.address_city}</option>)}
-                    </select>
+                    </select></Checked>
                     {selectedPickupLocation && (
                       <div className="rounded-xl bg-slate-50 p-3 text-xs leading-5 text-slate-600">
                         <div className="flex items-start gap-2"><MapPin size={14} className="mt-0.5 shrink-0" /><span>{selectedPickupLocation.address_line1}{selectedPickupLocation.address_line2 ? `, ${selectedPickupLocation.address_line2}` : ''}<br />{selectedPickupLocation.address_city}, {selectedPickupLocation.address_state} {selectedPickupLocation.address_zip}</span></div>
@@ -230,9 +238,9 @@ export default function Checkout() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 gap-3">
-                    <input required placeholder="Delivery address" value={form.line1} onChange={set('line1')} className={`col-span-2 ${INPUT}`} />
-                    <input required placeholder="City" value={form.city} onChange={set('city')} className={INPUT} />
-                    <input required placeholder="ZIP" value={form.zip} onChange={set('zip')} className={INPUT} />
+                    <Checked name="line1" message={false}><input placeholder="Delivery address" value={form.line1} onChange={set('line1')} className={`col-span-2 ${INPUT}`} /></Checked>
+                    <Checked name="city" message={false}><input placeholder="City" value={form.city} onChange={set('city')} className={INPUT} /></Checked>
+                    <Checked name="zip" message={false}><input placeholder="ZIP" inputMode="numeric" value={form.zip} onChange={set('zip')} className={INPUT} /></Checked>
                   </div>
                 )}
                 <textarea placeholder={`${fulfillment === 'pickup' ? 'Pickup' : 'Delivery'} instructions (optional)`} value={form.notes} onChange={set('notes')} rows={2} className={`w-full ${INPUT}`} />
@@ -272,7 +280,7 @@ export default function Checkout() {
                         ? 'No payment is taken now. Pay the delivery person when your equipment arrives.'
                         : 'No payment is taken now. Pay in store when you pick up your equipment.'}
                 </p>
-              </form>
+              </FieldMarks></form>
             </div>
           </>
         )}

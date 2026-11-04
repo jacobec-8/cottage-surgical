@@ -45,7 +45,7 @@ jobs:
       # Enterprise hardening decision 1: saves are form submits with plain errors.
       # The full unit suite isn't in CI yet; these tests guard this decision.
       - name: Form save guards
-        run: node --test tests/unit/form-saves.test.ts tests/unit/save-errors.test.ts tests/unit/checkout-plan.test.ts
+        run: node --test tests/unit/form-saves.test.ts tests/unit/save-errors.test.ts tests/unit/checkout-plan.test.ts tests/unit/field-rules.test.ts tests/unit/form-checks.test.ts
 
       - name: Build
         run: npm run build
