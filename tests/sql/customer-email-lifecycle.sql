@@ -1,9 +1,9 @@
 \set ON_ERROR_STOP on
 -- Run after customer-email-access.sql in the disposable database only.
-INSERT INTO equipment_items(id,name,is_serialized) VALUES
- ('40000000-0000-0000-0000-000000000001','Chair <safe> & lift',true);
-INSERT INTO equipment_units(id,item_id,asset_tag,status) VALUES
- ('50000000-0000-0000-0000-000000000001','40000000-0000-0000-0000-000000000001','EMAIL-UNIT','reserved');
+INSERT INTO equipment_items(id,name,is_serialized,business_id,pickup_rental_price,delivery_rental_price,is_purchasable) VALUES
+ ('40000000-0000-0000-0000-000000000001','Chair <safe> & lift',true,'90000000-0000-0000-0000-000000000001',140,140,false);
+INSERT INTO equipment_units(id,item_id,asset_tag,status,location_id) VALUES
+ ('50000000-0000-0000-0000-000000000001','40000000-0000-0000-0000-000000000001','EMAIL-UNIT','reserved','10000000-0000-0000-0000-000000000001');
 BEGIN;
 INSERT INTO rental_orders(id,customer_id,location_id,status,source) VALUES
  ('30000000-0000-0000-0000-000000000003','20000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001','open','staff');
@@ -31,8 +31,8 @@ INSERT INTO rental_line_items(order_id,equipment_item_id,line_type,quantity) VAL
  ('30000000-0000-0000-0000-000000000001','40000000-0000-0000-0000-000000000001','rental',3);
 SELECT test_assert((SELECT text_body LIKE '%Chair <safe> & lift x 3%' FROM customer_email_outbox WHERE order_id='30000000-0000-0000-0000-000000000001'),'storefront details refresh preserved');
 -- Corrected appointments, no-op saves, and correction back to original address.
-INSERT INTO deliveries(id,order_id,leg_type,status,scheduled_date,address_line1) VALUES
- ('60000000-0000-0000-0000-000000000001','30000000-0000-0000-0000-000000000003','pickup','scheduled',current_date+3,'Old address');
+INSERT INTO deliveries(id,order_id,leg_type,status,scheduled_date,address_line1,location_id) VALUES
+ ('60000000-0000-0000-0000-000000000001','30000000-0000-0000-0000-000000000003','pickup','scheduled',current_date+3,'Old address','10000000-0000-0000-0000-000000000001');
 UPDATE customer_email_outbox SET status='sent' WHERE event_key LIKE 'pickup_60000000%';
 UPDATE deliveries SET address_line1='Correct address' WHERE id='60000000-0000-0000-0000-000000000001';
 SELECT test_assert((SELECT count(*)=2 FROM customer_email_outbox WHERE event_key LIKE 'pickup_60000000%'),'address-only change queues correction');
@@ -87,14 +87,18 @@ SELECT test_assert(record_rental_payment('70000000-0000-0000-0000-000000000001')
 SELECT set_config('request.jwt.claim.sub','',false);
 SELECT 'customer email lifecycle assertions passed' AS result;
 -- Another business's customers see that business's name and phone, never Cottage's (083).
-INSERT INTO businesses(id,name) VALUES ('70000000-0000-0000-0000-000000000001','Harbor Medical');
+INSERT INTO businesses(id,name,slug) VALUES ('70000000-0000-0000-0000-000000000001','Harbor Medical','harbor-medical');
+-- A store may only sell its own products (100), so Harbor gets a product of its own.
+INSERT INTO equipment_items(id,name,is_serialized,business_id,pickup_rental_price,delivery_rental_price,is_purchasable) VALUES
+ ('40000000-0000-0000-0000-000000000070','Harbor chair',true,'70000000-0000-0000-0000-000000000001',90,90,false);
 INSERT INTO pharmacy_settings(business_id,display_name,phone) VALUES ('70000000-0000-0000-0000-000000000001','Harbor <Medical>','555-0100');
-INSERT INTO pickup_locations(id,name,business_id,address_line1) VALUES ('10000000-0000-0000-0000-000000000070','Harbor North','70000000-0000-0000-0000-000000000001','1 Harbor St');
+-- Branding is per location now: the display name on the location wins over the business name.
+INSERT INTO pickup_locations(id,name,business_id,slug,address_line1,address_city,address_zip,email_display_name) VALUES ('10000000-0000-0000-0000-000000000070','Harbor North','70000000-0000-0000-0000-000000000001','harbor-north','1 Harbor St','Huntington','11743','Harbor <Medical>');
 INSERT INTO customers(id,full_name,email,location_id) VALUES ('20000000-0000-0000-0000-000000000070','Harbor Customer','harbor@example.test','10000000-0000-0000-0000-000000000070');
 INSERT INTO rental_orders(id,customer_id,location_id,status,source) VALUES
  ('30000000-0000-0000-0000-000000000070','20000000-0000-0000-0000-000000000070','10000000-0000-0000-0000-000000000070','open','staff');
 INSERT INTO rental_line_items(order_id,equipment_item_id,line_type,quantity,monthly_rate) VALUES
- ('30000000-0000-0000-0000-000000000070','40000000-0000-0000-0000-000000000001','rental',1,90);
+ ('30000000-0000-0000-0000-000000000070','40000000-0000-0000-0000-000000000070','rental',1,90);
 SELECT test_assert((SELECT bool_and(html_body LIKE '%HARBOR &lt;MEDICAL&gt;%' AND text_body LIKE '%Questions? Call 555-0100.%'
   AND html_body NOT LIKE '%COTTAGE SURGICAL%' AND text_body NOT LIKE '%516-367-9030%') FROM customer_email_outbox
   WHERE order_id='30000000-0000-0000-0000-000000000070'),'other business email uses its own escaped name and phone');

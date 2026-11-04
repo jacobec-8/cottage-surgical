@@ -6,19 +6,20 @@ INSERT INTO auth.users(id,email) VALUES
  ('00000000-0000-0000-0000-000000000002','email-a@example.invalid'),
  ('00000000-0000-0000-0000-000000000003','email-b@example.invalid'),
  ('00000000-0000-0000-0000-000000000004','email-driver@example.invalid');
-INSERT INTO public.pickup_locations(id,name) VALUES
- ('10000000-0000-0000-0000-000000000001','Test A'),
- ('10000000-0000-0000-0000-000000000002','Test B');
+INSERT INTO public.businesses(id,name,slug) VALUES ('90000000-0000-0000-0000-000000000001','Test Co','test-co');
+INSERT INTO public.pickup_locations(id,name,business_id,slug,address_line1,address_city,address_zip) VALUES
+ ('10000000-0000-0000-0000-000000000001','Test A','90000000-0000-0000-0000-000000000001','test-a','1 A St','Woodbury','11797'),
+ ('10000000-0000-0000-0000-000000000002','Test B','90000000-0000-0000-0000-000000000001','test-b','2 B St','Woodbury','11797');
 UPDATE public.profiles SET role=CASE WHEN id='00000000-0000-0000-0000-000000000001' THEN 'admin'
  WHEN id='00000000-0000-0000-0000-000000000004' THEN 'driver' ELSE 'staff' END,
  location_id=CASE WHEN id='00000000-0000-0000-0000-000000000003'
  THEN '10000000-0000-0000-0000-000000000002'::uuid ELSE '10000000-0000-0000-0000-000000000001'::uuid END;
-INSERT INTO customers(id,full_name,email) VALUES
- ('20000000-0000-0000-0000-000000000001','Test customer A','a@example.invalid'),
- ('20000000-0000-0000-0000-000000000002','Test customer B','b@example.invalid');
-INSERT INTO rental_orders(id,customer_id,location_id,status) VALUES
- ('30000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001','requested'),
- ('30000000-0000-0000-0000-000000000002','20000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000002','requested');
+INSERT INTO customers(id,full_name,email,location_id) VALUES
+ ('20000000-0000-0000-0000-000000000001','Test customer A','a@example.invalid','10000000-0000-0000-0000-000000000001'),
+ ('20000000-0000-0000-0000-000000000002','Test customer B','b@example.invalid','10000000-0000-0000-0000-000000000002');
+INSERT INTO rental_orders(id,customer_id,location_id,status,source) VALUES
+ ('30000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001','requested','storefront'),
+ ('30000000-0000-0000-0000-000000000002','20000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000002','requested','storefront');
 SELECT test_assert((SELECT count(*)=2 FROM customer_email_outbox),'both stores have queued mail');
 SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000002',false);
 SET ROLE authenticated;
@@ -39,16 +40,20 @@ SELECT test_assert((SELECT count(*)=0 FROM customer_email_outbox),'driver sees n
 RESET ROLE;
 SELECT set_config('request.jwt.claim.sub','',false);
 SET ROLE anon;
-DO $$ BEGIN
- BEGIN PERFORM recipient,text_body FROM customer_email_outbox; RAISE EXCEPTION 'anonymous unexpectedly read mail';
- EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+-- Supabase grants anon table access by default; row security must leave it nothing to read.
+DO $$ DECLARE n int; BEGIN
+ BEGIN SELECT count(*) INTO n FROM customer_email_outbox; EXCEPTION WHEN insufficient_privilege THEN n := 0; END;
+ IF n <> 0 THEN RAISE EXCEPTION 'anonymous unexpectedly read mail'; END IF;
 END $$;
 RESET ROLE;
+-- Only an admin may change activation, so act as the admin for the toggle itself.
+SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',false);
 UPDATE profiles SET is_active=false WHERE id='00000000-0000-0000-0000-000000000002';
 SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000002',false);
 SET ROLE authenticated;
 SELECT test_assert((SELECT count(*)=0 FROM customer_email_outbox),'inactive staff denied with existing identity');
 RESET ROLE;
+SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',false);
 UPDATE profiles SET is_active=true WHERE id='00000000-0000-0000-0000-000000000002';
 SELECT set_config('request.jwt.claim.sub','',false);
 SELECT 'customer email access assertions passed' AS result;
