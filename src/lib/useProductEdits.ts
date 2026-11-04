@@ -6,6 +6,7 @@ import { supabase } from './supabase'
 import { refreshWebsite } from './websiteRefresh'
 import { productEditProblem } from './storeProducts'
 import { ensureChanged } from './saveErrors'
+import { allStoresConfirmation, priceConfirmation, storesOverriding, type Prices } from './effectivePrice'
 import type { ProductDetailsItem } from '../components/ProductDetailsList'
 
 type StoreSettings = { pickup_enabled: boolean; pickup_rental_price: number | null; delivery_rental_price: number | null; sale_price: number | null; quantity_on_hand: number; scan_code: string | null }
@@ -19,13 +20,20 @@ export type ProductEdits = {
   canEditStore: boolean
   /** The product itself: admins, or staff for their store's own product. */
   canEditProduct: boolean
-  saveStore: (patch: StorePatch) => Promise<void>
-  saveProduct: (patch: ProductPatch) => Promise<void>
+  /** Resolve to the confirmation to show: what customers now pay, when a price or offer changed. */
+  saveStore: (patch: StorePatch) => Promise<string | undefined>
+  saveProduct: (patch: ProductPatch) => Promise<string | undefined>
   /** Online sales at the store in the header (null while loading or with no store). */
   retailOn: boolean | null
   setRetail: (enabled: boolean) => Promise<void>
   addUnit: (assetTag: string) => Promise<void>
 }
+
+const PRICE_FIELDS = ['pickup_rental_price', 'delivery_rental_price', 'sale_price', 'pickup_enabled', 'delivery_enabled', 'is_rentable', 'is_purchasable']
+/** A confirmation names what customers pay only when a price or an offer changed. */
+const touchesPrices = (patch: Record<string, unknown>) => PRICE_FIELDS.some((key) => key in patch)
+const catalogOf = (item: Pick<ProductDetailsItem, 'pickup_rental_price' | 'delivery_rental_price' | 'sale_price'>): Prices =>
+  ({ pickup: item.pickup_rental_price, delivery: item.delivery_rental_price, sale: item.sale_price ?? null })
 
 /** In-place edits for one product, scoped to the store in the header (option 1, 2026-10-29). */
 export function useProductEdits(item: ProductDetailsItem & { id: string; location_id?: string | null }, locationId: string | null, storeName: string | null): ProductEdits {
@@ -66,12 +74,20 @@ export function useProductEdits(item: ProductDetailsItem & { id: string; locatio
     saveStore: async (patch) => {
       const { data: changed, error } = await supabase.from('equipment_location_inventory')
         .update({ ...patch, updated_at: new Date().toISOString() })
-        .eq('equipment_item_id', item.id).eq('location_id', locationId!).select('equipment_item_id')
+        .eq('equipment_item_id', item.id).eq('location_id', locationId!)
+        .select('pickup_enabled,pickup_rental_price,delivery_rental_price,sale_price')
       if (error?.code === '23505') throw new Error('That scan code is already used for another product at this store.')
       // Other refusals go to SaveForm, which says why in plain words.
       if (error) throw error
       ensureChanged(changed)
       refresh()
+      const row = (changed as { pickup_enabled: boolean; pickup_rental_price: number | null; delivery_rental_price: number | null; sale_price: number | null }[])[0]
+      if (!touchesPrices(patch)) return undefined
+      return priceConfirmation({
+        heading: 'Saved.', storeName: storeName ?? 'this store', catalog: catalogOf(item),
+        store: { pickup: row.pickup_rental_price, delivery: row.delivery_rental_price, sale: row.sale_price },
+        offers: { pickup: item.is_rentable && row.pickup_enabled, delivery: item.is_rentable && item.delivery_enabled, sale: item.is_purchasable },
+      })
     },
     saveProduct: async (patch) => {
       // The store's own prices count: a store price is enough to turn on selling or delivery.
@@ -89,6 +105,23 @@ export function useProductEdits(item: ProductDetailsItem & { id: string; locatio
         ensureChanged(changed)
       }
       refresh()
+      if (!touchesPrices(patch)) return undefined
+      const next = { ...item, ...patch }
+      const catalog = catalogOf(next)
+      // A store can offer pickup when the catalog doesn't, so its own setting decides there.
+      const offers = { pickup: next.is_rentable && (store.data ? store.data.pickup_enabled : next.pickup_enabled), delivery: next.is_rentable && next.delivery_enabled, sale: next.is_purchasable }
+      if (locationId) {
+        const own = store.data ? { pickup: store.data.pickup_rental_price, delivery: store.data.delivery_rental_price, sale: store.data.sale_price } : null
+        return priceConfirmation({ heading: 'Saved.', storeName: storeName ?? 'this store', catalog, store: own, offers })
+      }
+      // No store chosen: say which stores' own price customers pay instead.
+      const { data: stores } = await supabase.from('equipment_location_inventory')
+        .select('pickup_rental_price,delivery_rental_price,sale_price,location:pickup_locations(name)').eq('equipment_item_id', item.id)
+      if (!stores) return undefined
+      return allStoresConfirmation('Saved.', storesOverriding((stores as unknown as { pickup_rental_price: number | null; delivery_rental_price: number | null; sale_price: number | null; location: { name: string } | { name: string }[] | null }[]).map((row) => ({
+        storeName: (Array.isArray(row.location) ? row.location[0]?.name : row.location?.name) ?? 'A store',
+        pickup: row.pickup_rental_price, delivery: row.delivery_rental_price, sale: row.sale_price,
+      })), offers))
     },
     retailOn: locationId ? retail.data ?? null : null,
     setRetail: async (enabled) => {

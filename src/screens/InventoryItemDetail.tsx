@@ -12,6 +12,7 @@ import { supabase } from '../lib/supabase'
 import { Checked, SaveForm, SubmitButton } from '../components/SaveForm'
 import { noteProblems, productFormProblems, stockProblems, unitProblems } from '../lib/formChecks/inventoryChecks'
 import { FieldRefusal, ensureChanged } from '../lib/saveErrors'
+import { allStoresConfirmation, priceConfirmation, storesOverriding } from '../lib/effectivePrice'
 import { statusLabel } from '../lib/status'
 import { fulfillmentLabel } from '../lib/fulfillment'
 import { useLocationScope } from '../contexts/LocationContext'
@@ -278,7 +279,7 @@ export default function InventoryItemDetail({ itemId }: { itemId: string }) {
       </div>
 
       {editing ? (
-        <EditItemForm item={product} onCancel={() => setEditing(false)} onSaved={() => { setEditing(false); qc.invalidateQueries({ queryKey: ['equipment_items'] }); void refreshWebsite() }} />
+        <EditItemForm item={product} storeId={selectedLocationId} storeName={selectedLocation?.name ?? null} onCancel={() => setEditing(false)} onSaved={() => { setEditing(false); qc.invalidateQueries({ queryKey: ['equipment_items'] }); void refreshWebsite() }} />
       ) : tab === 'overview' ? (
         <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(380px,0.9fr)] gap-5">
           <div className="space-y-5">
@@ -448,7 +449,7 @@ function PickupLocationsTab({ item, locations, assignments, loading }: {
                     {inventory && <span className="mt-2 block"><StockStatusBadges quantity={inventory.quantity_on_hand} pickupEligible={item.pickup_enabled} pickupEnabled={inventory.pickup_enabled} locationActive={location.is_active} /></span>}
                   </span>
                 </label>
-                {inventory && canManage && <LocationInventoryEditor item={item} inventory={inventory} onSaved={refresh} />}
+                {inventory && canManage && <LocationInventoryEditor item={item} inventory={inventory} storeName={location.name} onSaved={refresh} />}
               </div>
             </div>
           )
@@ -459,8 +460,12 @@ function PickupLocationsTab({ item, locations, assignments, loading }: {
   )
 }
 
-function LocationInventoryEditor({ item, inventory, onSaved }: { item: Item; inventory: LocationInventory; onSaved: () => void }) {
-  const [form, setForm] = useState({ quantity: String(inventory.quantity_on_hand), pickup: inventory.pickup_enabled, pickupPrice: inventory.pickup_rental_price?.toString() ?? '', deliveryPrice: inventory.delivery_rental_price?.toString() ?? '' })
+type StockRow = { quantity_on_hand: number; pickup_enabled: boolean; pickup_rental_price: number | null; delivery_rental_price: number | null; sale_price: number | null }
+const stockForm = (row: Pick<StockRow, 'quantity_on_hand' | 'pickup_enabled' | 'pickup_rental_price' | 'delivery_rental_price'>) =>
+  ({ quantity: String(row.quantity_on_hand), pickup: row.pickup_enabled, pickupPrice: row.pickup_rental_price?.toString() ?? '', deliveryPrice: row.delivery_rental_price?.toString() ?? '' })
+
+function LocationInventoryEditor({ item, inventory, storeName, onSaved }: { item: Item; inventory: LocationInventory; storeName: string; onSaved: () => void }) {
+  const [form, setForm] = useState(() => stockForm(inventory))
   const save = useMutation({
     mutationFn: async () => {
       // A unit-tracked count follows its available units (089); only bulk counts are typed.
@@ -469,15 +474,24 @@ function LocationInventoryEditor({ item, inventory, onSaved }: { item: Item; inv
         pickup_rental_price: form.pickupPrice === '' ? null : Number(form.pickupPrice),
         delivery_rental_price: form.deliveryPrice === '' ? null : Number(form.deliveryPrice),
         updated_at: new Date().toISOString(),
-      }).eq('equipment_item_id', item.id).eq('location_id', inventory.location_id).select('equipment_item_id')
+      }).eq('equipment_item_id', item.id).eq('location_id', inventory.location_id)
+        .select('quantity_on_hand,pickup_enabled,pickup_rental_price,delivery_rental_price,sale_price')
       if (error) throw error
       ensureChanged(changed)
+      return (changed as StockRow[])[0]
     },
-    onSuccess: onSaved,
+    // The boxes show what the database stored, not what was typed.
+    onSuccess: (row) => { setForm(stockForm(row)); onSaved() },
+  })
+  const confirmation = (row: StockRow) => priceConfirmation({
+    heading: 'Stock and prices saved.', storeName,
+    catalog: { pickup: item.pickup_rental_price, delivery: item.delivery_rental_price, sale: item.sale_price },
+    store: { pickup: row.pickup_rental_price, delivery: row.delivery_rental_price, sale: row.sale_price },
+    offers: { pickup: item.is_rentable && row.pickup_enabled, delivery: item.is_rentable && item.delivery_enabled, sale: item.is_purchasable },
   })
   const input = 'w-full rounded-lg border border-slate-300 px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
   return <SaveForm aria-label="Stock and price override" onSave={() => save.mutateAsync()}
-    validate={() => stockProblems({ serialized: item.is_serialized, quantity: form.quantity, pickupPrice: form.pickupPrice, deliveryPrice: form.deliveryPrice })} savedMessage="Stock and prices saved for this store." className="grid gap-3 border-t border-slate-200 pt-3 sm:grid-cols-4" errorClassName="sm:col-span-4">{item.is_serialized
+    validate={() => stockProblems({ serialized: item.is_serialized, quantity: form.quantity, pickupPrice: form.pickupPrice, deliveryPrice: form.deliveryPrice })} savedMessage={confirmation} className="grid gap-3 border-t border-slate-200 pt-3 sm:grid-cols-4" errorClassName="sm:col-span-4">{item.is_serialized
     ? <div><span className="mb-1 block text-xs text-slate-500">Available units</span><div className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-sm font-medium text-slate-800">{inventory.quantity_on_hand}</div><span className="mt-1 block text-xs text-slate-500">Counted from units. To change it, add a unit or set one to Retired under Serialized units.</span></div>
     : <label><span className="mb-1 block text-xs text-slate-500">Quantity on hand</span><Checked name="quantity"><input inputMode="numeric" value={form.quantity} onChange={(event) => setForm({ ...form, quantity: event.target.value })} className={input} /></Checked></label>}{item.is_rentable && <><label><span className="mb-1 block text-xs text-slate-500">Pickup price override</span><Checked name="pickupPrice"><input inputMode="decimal" placeholder={item.pickup_rental_price?.toString()} value={form.pickupPrice} onChange={(event) => setForm({ ...form, pickupPrice: event.target.value })} className={input} /></Checked></label><label><span className="mb-1 block text-xs text-slate-500">Delivery price override</span><Checked name="deliveryPrice"><input inputMode="decimal" placeholder={item.delivery_rental_price?.toString()} value={form.deliveryPrice} onChange={(event) => setForm({ ...form, deliveryPrice: event.target.value })} className={input} /></Checked></label></>}<div className="flex items-end gap-2"><label className="mb-2 flex items-center gap-1.5 text-xs"><input type="checkbox" checked={form.pickup} onChange={(event) => setForm({ ...form, pickup: event.target.checked })} /> Pickup</label><SubmitButton className="ml-auto rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white disabled:opacity-50">{(pending) => pending ? 'Saving…' : 'Save stock'}</SubmitButton></div></SaveForm>
 }
@@ -642,7 +656,10 @@ function NotesCard({ notes, loading, limit, onViewAll }: { notes: ItemNote[]; lo
   return <section className="bg-white border border-slate-200 rounded-2xl p-5"><div className="flex justify-between items-center mb-4"><div className="flex items-center gap-2"><History size={18} className="text-slate-500" /><h2 className="font-semibold text-lg">Notes ({notes.length})</h2></div>{limit && notes.length > limit && <button onClick={onViewAll} className="text-sm text-blue-600">View all</button>}</div>{loading ? <div className="text-sm text-slate-500">Loading notes…</div> : visible.length === 0 ? <div className="text-sm text-slate-500">No notes have been added.</div> : <div className="space-y-4">{visible.map((entry) => <div key={entry.id} className="border-l-2 border-blue-100 pl-3"><div className="text-sm text-slate-800 whitespace-pre-wrap">{entry.body}</div><div className="text-xs text-slate-400 mt-1">{entry.author?.full_name || entry.author?.email || 'Staff'} · {new Date(entry.created_at).toLocaleString()}</div></div>)}</div>}</section>
 }
 
-function EditItemForm({ item, onCancel, onSaved }: { item: Item; onCancel: () => void; onSaved: () => void }) {
+type StorePriceRow = { location_id: string; pickup_enabled: boolean; pickup_rental_price: number | null; delivery_rental_price: number | null; sale_price: number | null; location: { name: string } | { name: string }[] | null }
+const storeNameOf = (row: StorePriceRow) => (Array.isArray(row.location) ? row.location[0]?.name : row.location?.name) ?? 'A store'
+
+function EditItemForm({ item, storeId, storeName, onCancel, onSaved }: { item: Item; storeId: string | null; storeName: string | null; onCancel: () => void; onSaved: () => void }) {
   const [form, setForm] = useState({
     name: item.name,
     description: item.description ?? '',
@@ -719,13 +736,35 @@ function EditItemForm({ item, onCancel, onSaved }: { item: Item; onCancel: () =>
         if (error) throw error
         ensureChanged(changed)
       }
+      // Store prices override the catalog at checkout; read them so the confirmation tells the truth.
+      const { data: stores } = await supabase.from('equipment_location_inventory')
+        .select('location_id,pickup_enabled,pickup_rental_price,delivery_rental_price,sale_price,location:pickup_locations(name)')
+        .eq('equipment_item_id', item.id)
+      return (stores ?? null) as unknown as StorePriceRow[] | null
     },
     onSuccess: onSaved,
   })
+  const productConfirmation = (stores: StorePriceRow[] | null) => {
+    if (!stores) return 'Product saved.'
+    const offers = { pickup: form.rentable && form.pickup, delivery: form.rentable && form.delivery, sale: form.purchasable }
+    const catalog = {
+      pickup: offers.pickup ? Number(form.pickupPrice) : null,
+      delivery: offers.delivery ? Number(form.deliveryPrice) : null,
+      sale: offers.sale ? Number(form.sale) : null,
+    }
+    const own = (row: StorePriceRow) => ({ pickup: row.pickup_rental_price, delivery: row.delivery_rental_price, sale: row.sale_price })
+    if (storeId && storeName) {
+      const row = stores.find((entry) => entry.location_id === storeId)
+      // A store can offer pickup when the catalog doesn't, so its own setting decides.
+      const here = { ...offers, pickup: form.rentable && (row ? row.pickup_enabled : form.pickup) }
+      return priceConfirmation({ heading: 'Product saved.', storeName, catalog, store: row ? own(row) : null, offers: here })
+    }
+    return allStoresConfirmation('Product saved.', storesOverriding(stores.map((row) => ({ storeName: storeNameOf(row), ...own(row) })), offers))
+  }
   const input = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
   return (
     <SaveForm aria-label="Edit product" onSave={() => save.mutateAsync()}
-      validate={() => productFormProblems({ name: form.name, rentable: form.rentable, purchasable: form.purchasable, pickup: form.pickup, delivery: form.delivery, pickupPrice: form.pickupPrice, deliveryPrice: form.deliveryPrice, salePrice: form.sale })} savedMessage="Product saved." className="rounded-2xl border border-slate-200 bg-white p-6" errorClassName="mt-4">
+      validate={() => productFormProblems({ name: form.name, rentable: form.rentable, purchasable: form.purchasable, pickup: form.pickup, delivery: form.delivery, pickupPrice: form.pickupPrice, deliveryPrice: form.deliveryPrice, salePrice: form.sale })} savedMessage={(stores) => productConfirmation(stores)} className="rounded-2xl border border-slate-200 bg-white p-6" errorClassName="mt-4">
       <h2 className="mb-5 text-lg font-semibold">Edit product</h2>
       <div className="grid gap-4 md:grid-cols-2">
         <div className="md:col-span-2">

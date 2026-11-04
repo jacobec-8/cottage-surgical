@@ -156,7 +156,7 @@ function Row({ label, value, editor, open: startOpen = false }: { label: string;
 function useSave(done: () => void) {
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const run = async (fn: () => Promise<void>) => {
+  const run = async (fn: () => Promise<unknown>) => {
     setPending(true); setError(null)
     try { await fn(); done() } catch (e) { setError(notSavedText(e)) } finally { setPending(false) }
   }
@@ -170,9 +170,10 @@ const INPUT = 'w-28 rounded-lg border border-slate-300 px-2 py-1 text-sm font-no
  * saves, Esc cancels, a failure reads "Not saved." and a success "Saved.".
  * `save` throws to refuse, with the reason staff should see.
  */
-function EditorForm({ label, save, done, validate, children }: { label: string; save: () => Promise<void>; done: () => void; validate?: () => FieldProblem[]; children: ReactNode }) {
+function EditorForm({ label, save, done, validate, children }: { label: string; save: () => Promise<unknown>; done: () => void; validate?: () => FieldProblem[]; children: ReactNode }) {
   return (
     <SaveForm aria-label={label} size="compact" validate={validate} onSave={save} onSaved={done}
+      savedMessage={(result) => (typeof result === 'string' ? result : 'Saved.')}
       onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); done() } }}
       className="flex flex-wrap items-center gap-2">
       {children}
@@ -206,7 +207,7 @@ function PriceBox({ name, label, value, onChange, autoFocus = false }: { name: s
   )
 }
 
-function PriceEditor({ initial, placeholder, save, done }: { initial: number | null; placeholder: string; save: (price: number | null) => Promise<void>; done: () => void }) {
+function PriceEditor({ initial, placeholder, save, done }: { initial: number | null; placeholder: string; save: (price: number | null) => Promise<unknown>; done: () => void }) {
   const [value, setValue] = useState(initial?.toString() ?? '')
   return (
     <EditorForm label="Price" save={() => save(parsePrice(value) ?? null)} done={done}
@@ -219,7 +220,7 @@ function PriceEditor({ initial, placeholder, save, done }: { initial: number | n
 
 function PickupEditor({ where, initialOn, initialPrice, catalogPrice, save, done }: {
   where: string; initialOn: boolean; initialPrice: number | null; catalogPrice: number | null
-  save: (on: boolean, price: number | null) => Promise<void>; done: () => void
+  save: (on: boolean, price: number | null) => Promise<unknown>; done: () => void
 }) {
   const [offered, setOffered] = useState(initialOn)
   const [value, setValue] = useState(initialPrice?.toString() ?? '')
@@ -237,7 +238,7 @@ function PickupEditor({ where, initialOn, initialPrice, catalogPrice, save, done
 /** Yes shows the price boxes; one Save turns rental on with its prices. */
 function RentalEditor({ initialOn, pickupOffered, deliveryOffered, pickupPrice, deliveryPrice, save, done }: {
   initialOn: boolean; pickupOffered: boolean; deliveryOffered: boolean; pickupPrice: string; deliveryPrice: string
-  save: (on: boolean, pickup: number | null, delivery: number | null) => Promise<void>; done: () => void
+  save: (on: boolean, pickup: number | null, delivery: number | null) => Promise<unknown>; done: () => void
 }) {
   const [on, setOn] = useState(initialOn)
   const [pickup, setPickup] = useState(pickupPrice)
@@ -255,7 +256,7 @@ function RentalEditor({ initialOn, pickupOffered, deliveryOffered, pickupPrice, 
 }
 
 /** Yes shows the sale price box; one Save turns selling on with its price. */
-function PurchaseEditor({ initialOn, price, save, done }: { initialOn: boolean; price: string; save: (on: boolean, price: number | null) => Promise<void>; done: () => void }) {
+function PurchaseEditor({ initialOn, price, save, done }: { initialOn: boolean; price: string; save: (on: boolean, price: number | null) => Promise<unknown>; done: () => void }) {
   const [on, setOn] = useState(initialOn)
   const [value, setValue] = useState(price)
   return (
@@ -271,7 +272,7 @@ function PurchaseEditor({ initialOn, price, save, done }: { initialOn: boolean; 
 /** Pickup and delivery; a rentable product gets a price box for each chosen method. */
 function FulfillmentEditor({ pickup: p0, delivery: d0, rentable, pickupPrice, deliveryPrice, save, done }: {
   pickup: boolean; delivery: boolean; rentable: boolean; pickupPrice: string; deliveryPrice: string
-  save: (pickup: boolean, delivery: boolean, pickupPrice: number | null, deliveryPrice: number | null) => Promise<void>; done: () => void
+  save: (pickup: boolean, delivery: boolean, pickupPrice: number | null, deliveryPrice: number | null) => Promise<unknown>; done: () => void
 }) {
   const [pickup, setPickup] = useState(p0)
   const [delivery, setDelivery] = useState(d0)
@@ -300,7 +301,7 @@ function Toggle({ on, setOn }: { on: boolean; setOn: (v: boolean) => void }) {
 }
 
 /** A one-click picker: Yes or No saves at once, so it stays buttons, not a form. */
-function YesNoEditor({ initial, question, save, done }: { initial: boolean; question?: string; save: (value: boolean) => Promise<void>; done: () => void }) {
+function YesNoEditor({ initial, question, save, done }: { initial: boolean; question?: string; save: (value: boolean) => Promise<unknown>; done: () => void }) {
   const s = useSave(done)
   const pick = (value: boolean) => { if (value === initial) { done(); return } void s.run(() => save(value)) }
   const button = (value: boolean) => `rounded-lg border px-2.5 py-1 text-xs ${value === initial ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`
@@ -315,7 +316,7 @@ function YesNoEditor({ initial, question, save, done }: { initial: boolean; ques
   )
 }
 
-function QuantityEditor({ initial, save, done }: { initial: number; save: (qty: number) => Promise<void>; done: () => void }) {
+function QuantityEditor({ initial, save, done }: { initial: number; save: (qty: number) => Promise<unknown>; done: () => void }) {
   const [value, setValue] = useState(String(initial))
   return (
     <EditorForm label="Quantity" save={() => save(Number(value))} done={done} validate={() => problems(rules.wholeNumber(value, 'quantity', 'Enter a whole number, like 12.'))}>
@@ -326,7 +327,7 @@ function QuantityEditor({ initial, save, done }: { initial: number; save: (qty: 
 }
 
 /** `required` is the message when the value can't be left empty (a name, an asset tag). */
-function TextEditor({ label, action, initial = '', multiline = false, required, save, done }: { label: string; action: string; initial?: string; multiline?: boolean; required?: string; save: (text: string) => Promise<void>; done: () => void }) {
+function TextEditor({ label, action, initial = '', multiline = false, required, save, done }: { label: string; action: string; initial?: string; multiline?: boolean; required?: string; save: (text: string) => Promise<unknown>; done: () => void }) {
   const [value, setValue] = useState(initial)
   return (
     <EditorForm label={label} save={() => save(value)} done={done} validate={() => (required ? problems(rules.required(value, 'text', required)) : [])}>
@@ -338,7 +339,7 @@ function TextEditor({ label, action, initial = '', multiline = false, required, 
   )
 }
 
-function CategoryEditor({ initial, save, done }: { initial: string; save: (category: string) => Promise<void>; done: () => void }) {
+function CategoryEditor({ initial, save, done }: { initial: string; save: (category: string) => Promise<unknown>; done: () => void }) {
   const [value, setValue] = useState(initial)
   const options = CATEGORIES.includes(initial) ? CATEGORIES : [initial, ...CATEGORIES]
   return (

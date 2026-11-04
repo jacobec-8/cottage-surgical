@@ -142,14 +142,16 @@ function ProfileSettings({ profile, currentUserId, driver, onSaved }: { profile:
         if (driverError) throw driverError
         insertedDriverId = createdDriver.id
       }
-      const { data: changed, error } = await supabase.from('profiles').update(payload).eq('id', profile.id).select('id')
+      const { data: changed, error } = await supabase.from('profiles').update(payload).eq('id', profile.id).select('full_name,phone,role,is_active')
       if (error || !changed?.length) {
         if (insertedDriverId) await supabase.from('drivers').delete().eq('id', insertedDriverId)
         if (error) throw error
         ensureChanged(changed)
       }
+      return (changed as { full_name: string | null; phone: string | null; role: Profile['role']; is_active: boolean }[])[0]
     },
-    onSuccess: onSaved,
+    // The boxes show what the database stored, not what was typed.
+    onSuccess: (row) => { setForm({ fullName: row.full_name ?? '', phone: row.phone ?? '', role: row.role, active: row.is_active }); onSaved() },
   })
   const set = (key: keyof typeof form, value: string | boolean) => setForm((current) => ({ ...current, [key]: value }))
   const input = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'

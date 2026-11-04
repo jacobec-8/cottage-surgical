@@ -29,7 +29,8 @@ export function LoginAccessSettings({ person, locations, onSaved }: { person: Pe
     mutationFn: () => {
       return callLoginRpc('update_branch_login', { p_profile_id: person.id, p_full_name: form.fullName.trim(), p_phone: form.phone.trim(), p_location_id: form.locationId, p_active: form.active })
     },
-    onSuccess: onSaved,
+    // The function returns only ok, so show exactly what was sent: the trimmed values.
+    onSuccess: () => { setForm((current) => ({ ...current, fullName: current.fullName.trim(), phone: current.phone.trim() })); onSaved() },
   })
   return (
     <SaveForm aria-label="Profile and access" onSave={() => save.mutateAsync()} validate={() => loginProfileProblems({ fullName: form.fullName, locationId: form.locationId, phone: form.phone })} savedMessage="Profile saved." errorClassName="mt-3" className="bg-white border border-slate-200 rounded-2xl p-5">
