@@ -1,25 +1,18 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
-import { Search, Check, Truck, Wrench, ShieldCheck, Clock, Phone, ArrowRight } from 'lucide-react'
+import { Search, Check, Truck, Phone, ArrowRight } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { PRODUCT_FIELDS, type Product } from '../../lib/shop'
 import ShopHeader from '../../components/shop/ShopHeader'
 import ShopFooter from '../../components/shop/ShopFooter'
 import ProductCard from '../../components/shop/ProductCard'
-import { SHOP_CATEGORIES } from './shopCategories'
+import CategoryCarousel from './CategoryCarousel'
 import { EMPTY_FILTER, applyLinkedSearch, clearSearch, matchesFilter, pickCategory, pickMode, typeSearch, type ShopFilter } from './shopFilter'
 import { CategoryChips, NoMatches } from './ShopFilterBar'
 
-const BENEFITS = [
-  { icon: Truck, title: 'Same-Day Delivery', sub: 'Order by 2 PM across Nassau & Suffolk' },
-  { icon: Wrench, title: 'Setup Included', sub: 'Delivered & assembled by our techs' },
-  { icon: ShieldCheck, title: 'Service Included', sub: 'Free repairs & swaps while you rent' },
-  { icon: Clock, title: 'Month-to-Month', sub: 'Keep it as long as you need it' },
-]
 const EMPTY_PRODUCTS: Product[] = []
 
 export default function Shop({ initialProducts }: { initialProducts?: Product[] }) {
@@ -99,58 +92,25 @@ export default function Shop({ initialProducts }: { initialProducts?: Product[] 
             <button className="bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-lg px-5 sm:px-6 py-2.5 shrink-0">Search</button>
           </form>
           <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 mt-5 text-sm font-medium text-slate-600">
-            <span className="inline-flex items-center gap-1.5"><Check size={16} className="text-brand-600" /> No assembly required</span>
-            <span className="inline-flex items-center gap-1.5"><Check size={16} className="text-brand-600" /> Setup included</span>
             <span className="inline-flex items-center gap-1.5"><Check size={16} className="text-brand-600" /> Delivered same-day</span>
+            <span className="inline-flex items-center gap-1.5"><Check size={16} className="text-brand-600" /> Setup included</span>
+            <span className="inline-flex items-center gap-1.5"><Check size={16} className="text-brand-600" /> Free repairs while you rent</span>
+            <span className="inline-flex items-center gap-1.5"><Check size={16} className="text-brand-600" /> Month-to-month</span>
           </div>
         </div>
       </section>
 
       {/* Shop by category */}
-      <section className="max-w-6xl mx-auto px-4 py-14">
-        <div className="flex items-end justify-between flex-wrap gap-2 mb-7">
-          <div>
-            <h2 className="font-heading font-extrabold tracking-tight text-slate-900 text-2xl sm:text-3xl">Shop by category</h2>
-            <p className="text-slate-500 mt-1">Our most-requested home medical equipment.</p>
-          </div>
+      <section className="py-14">
+        <div className="max-w-6xl mx-auto px-4 text-center mb-7">
+          <h2 className="font-heading font-extrabold tracking-tight text-navy text-2xl sm:text-3xl">Shop by category</h2>
+          <p className="text-slate-500 mt-1">Our most-requested home medical equipment.</p>
+        </div>
+        <CategoryCarousel onPick={searchFromLink} />
+        <div className="mt-4 text-center">
           <button onClick={goShop} className="text-brand-600 font-semibold text-sm inline-flex items-center gap-1 hover:gap-2 transition-all">
             View all equipment <ArrowRight size={16} />
           </button>
-        </div>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-          {SHOP_CATEGORIES.map((c) => (
-            <Link key={c.label} href={`/?q=${encodeURIComponent(c.q)}`} onClick={() => searchFromLink(c.q)}
-              className="group bg-white border border-slate-200 rounded-xl overflow-hidden hover:shadow-lg hover:border-brand-200 transition flex flex-col">
-              <div className="aspect-[4/3] bg-slate-50 grid place-items-center overflow-hidden">
-                <img src={c.img} alt={c.label} className="w-full h-full object-contain p-4 group-hover:scale-105 transition-transform duration-300" />
-              </div>
-              <div className="flex flex-1 flex-col p-4">
-                <div className="font-bold text-slate-900 leading-snug">{c.label}</div>
-                <div className="text-sm text-slate-500 mt-1">{c.tagline}</div>
-                <span className="mt-auto pt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-600 group-hover:gap-2.5 transition-all">
-                  {c.cta} <ArrowRight size={16} className="shrink-0" />
-                </span>
-              </div>
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      {/* Benefit bar */}
-      <section className="bg-brand-50 border-y border-brand-100">
-        <div className="max-w-6xl mx-auto px-4 py-8 grid grid-cols-2 lg:grid-cols-4 gap-6">
-          {BENEFITS.map((b) => {
-            const I = b.icon
-            return (
-              <div key={b.title} className="flex items-start gap-3">
-                <span className="w-11 h-11 rounded-lg bg-white text-brand-600 grid place-items-center shrink-0 ring-1 ring-brand-100"><I size={20} /></span>
-                <span>
-                  <span className="block text-sm font-bold text-slate-900">{b.title}</span>
-                  <span className="block text-xs text-slate-500 mt-0.5">{b.sub}</span>
-                </span>
-              </div>
-            )
-          })}
         </div>
       </section>
 
