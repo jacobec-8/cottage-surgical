@@ -1,6 +1,28 @@
 'use client'
 
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
+import { Checked, FieldMarks, fieldErrorsOf, focusFirstProblem } from '../../components/SaveForm'
+import { checkoutProblems } from '../../lib/formChecks/peopleChecks'
+import { newRequestId, newSaveKey, shortRef, withRequestId } from '../../lib/requestId'
+import { UnconfirmedSave, unconfirmedReply } from '../../lib/saveErrors'
+import { failureCode, failureLayer } from '../../lib/saveFailure'
+import { logSaveFailure } from '../../lib/saveFailureLog'
+
+// One key per create in this checkout, kept in the tab so a reload after a lost
+// reply reuses it: the repeat returns the first order, never a second one (migration 118).
+type CheckoutKeys = { rent: string; buy: string }
+const KEYS = 'cottage-checkout-keys'
+function loadKeys(): CheckoutKeys {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(KEYS) ?? 'null') as CheckoutKeys | null
+    if (saved?.rent && saved?.buy) return saved
+  } catch { /* storage blocked: fresh keys */ }
+  return { rent: newSaveKey(), buy: newSaveKey() }
+}
+function storeKeys(keys: CheckoutKeys): void {
+  try { sessionStorage.setItem(KEYS, JSON.stringify(keys)) } catch { /* storage blocked */ }
+}
+const LOST_REPLY = 'The connection dropped before we could confirm your order. Press the button again: it won’t create a second order.'
 import Link from 'next/link'
 import { CheckCircle, CreditCard, Loader2, MapPin, ShoppingCart, Store, Truck, Zap } from 'lucide-react'
 import { useCart } from '../../components/shop/CartContext'
@@ -28,6 +50,8 @@ export default function Checkout() {
   const [busy, setBusy] = useState(false)
   const submittingRef = useRef(false)
   const [error, setError] = useState('')
+  const formRef = useRef<HTMLFormElement>(null)
+  const [marks, setMarks] = useState<Record<string, string>>({})
   const [done, setDone] = useState<{ numbers: number[]; fulfillment: Fulfillment } | null>(null)
 
   const rentItems = items.filter((i) => i.mode === 'rent')
@@ -58,14 +82,25 @@ export default function Checkout() {
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (submittingRef.current) return
+    // The form's own checks first: a flagged field turns red, gets the cursor, and nothing is sent.
+    const found = checkoutProblems(form, fulfillment, Boolean(selectedPickupLocation))
+    setMarks(fieldErrorsOf(found))
+    const requestId = newRequestId()
+    if (found.length) {
+      setError(`${found.map((p) => p.message).join(' ')} Ref ${shortRef(requestId)}`)
+      logSaveFailure(publicSupabase, { requestId, form: 'Checkout', field: found.find((p) => p.field)?.field ?? null, layer: 'check', code: `fields:${found.map((p) => p.field ?? 'form').join(',')}`, message: found.map((p) => p.message).join(' ') })
+      focusFirstProblem(formRef.current, found)
+      return
+    }
     submittingRef.current = true
     setBusy(true)
     setError('')
     clearRefusal()
-    try {
-      if (fulfillment === 'pickup' && !selectedPickupLocation) {
-        throw new Error('Choose an available pickup location.')
-      }
+    const keys = loadKeys()
+    storeKeys(keys)
+    // A definite refusal frees that create's key; a lost reply keeps it for a safe retry.
+    const refused = (which: keyof CheckoutKeys, error: Error) => { storeKeys({ ...keys, [which]: newSaveKey() }); return error }
+    try { await withRequestId(requestId, async () => {
       if (fulfillment === 'delivery' && !deliveryAvailable) {
         throw new Error('Delivery is not available for every item in your cart.')
       }
@@ -86,7 +121,8 @@ export default function Checkout() {
       let rentNo: number | null = null
       if (rentItems.length) {
         if (paymentChoice === 'online') {
-          const { data, error: rpcError } = await publicSupabase.rpc('create_stripe_rental_checkout_with_fulfillment', {
+          const { data, error: rpcError } = await publicSupabase.rpc('create_stripe_rental_checkout_once', {
+            p_request_key: keys.rent,
             p_items: rentItems.map((i) => ({ item_id: i.id, quantity: i.qty })),
             p_customer: customer,
             p_address: address,
@@ -94,35 +130,42 @@ export default function Checkout() {
             p_redirect_base: window.location.origin,
             p_fulfillment: details,
           })
-          if (rpcError) throw new Error('Couldn’t start checkout. Please try again or call us.')
+          if (rpcError) throw new UnconfirmedSave('network', LOST_REPLY, true)
+          const uncertain = unconfirmedReply(data?.reason)
+          if (uncertain) throw uncertain
           if (!data?.ok) {
             if (data?.reason === 'invalid_redirect') {
-              throw new Error('Checkout is misconfigured for this site. Please call us.')
+              throw refused('rent', new Error('Checkout is misconfigured for this site. Please call us.'))
             }
             if (data?.reason === 'missing_email') {
-              throw new Error('Please enter a valid email for payment and order updates.')
+              throw refused('rent', new Error('Please enter a valid email for payment and order updates.'))
             }
             if (data?.reason === 'out_of_stock') {
+              refused('rent', new Error('out_of_stock'))
               refuseForStock(outOfStockMessage(data.shortages, fulfillment))
               return
             }
-            throw new Error(CHECKOUT_REASONS[data?.reason] || 'We couldn’t start your payment. Please call us.')
+            throw refused('rent', new Error(CHECKOUT_REASONS[data?.reason] || 'We couldn’t start your payment. Please call us.'))
           }
           clear()
           window.location.assign(data.checkout_url)
           return
         } else {
-          const { data, error: rpcError } = await publicSupabase.rpc('submit_rental_request_with_fulfillment', {
+          const { data, error: rpcError } = await publicSupabase.rpc('submit_rental_request_once', {
+            p_request_key: keys.rent,
             p_order_type: 'rental', p_items: rentItems.map((i) => ({ item_id: i.id, quantity: i.qty })),
             p_customer: customer, p_address: address, p_notes: form.notes || null,
             p_fulfillment: details,
           })
-          if (rpcError) throw new Error('Something went wrong. Please try again or call us.')
+          if (rpcError) throw new UnconfirmedSave('network', LOST_REPLY, true)
+          const uncertain = unconfirmedReply(data?.reason)
+          if (uncertain) throw uncertain
           if (data?.reason === 'out_of_stock') {
+            refused('rent', new Error('out_of_stock'))
             refuseForStock(outOfStockMessage(data.shortages, fulfillment))
             return
           }
-          if (!data?.ok) throw new Error(CHECKOUT_REASONS[data?.reason] || 'We couldn’t submit your rental request. Please call us.')
+          if (!data?.ok) throw refused('rent', new Error(CHECKOUT_REASONS[data?.reason] || 'We couldn’t submit your rental request. Please call us.'))
           rentNo = data.order_no
           // Guests may send only their own order's mail (100); the scheduler is the backstop.
           void dispatchOrderEmails(data.order_id)
@@ -131,20 +174,23 @@ export default function Checkout() {
 
       // Purchases → Stripe Checkout; the server refuses them while retail sales are off (094).
       if (buyItems.length) {
-        const { data, error: rpcError } = await publicSupabase.rpc('create_stripe_checkout_with_fulfillment', {
+        const { data, error: rpcError } = await publicSupabase.rpc('create_stripe_checkout_once', {
+          p_request_key: keys.buy,
           p_items: buyItems.map((i) => ({ item_id: i.id, quantity: i.qty })),
           p_customer: customer,
           p_address: address,
           p_redirect_base: window.location.origin,
           p_fulfillment: details,
         })
-        if (rpcError) throw new Error('Couldn’t start checkout. Please try again or call us.')
+        if (rpcError) throw new UnconfirmedSave('network', LOST_REPLY, true)
+        const uncertain = unconfirmedReply(data?.reason)
+        if (uncertain) throw uncertain
         if (!data?.ok) {
           if (data?.reason === 'invalid_redirect') {
-            throw new Error('Checkout is misconfigured for this site. Please call us.')
+            throw refused('buy', new Error('Checkout is misconfigured for this site. Please call us.'))
           }
-          if (data?.reason === 'out_of_stock') throw new Error(outOfStockMessage(data.shortages, fulfillment))
-          throw new Error(CHECKOUT_REASONS[data?.reason] || 'We couldn’t start your payment. Please call us.')
+          if (data?.reason === 'out_of_stock') throw refused('buy', new Error(outOfStockMessage(data.shortages, fulfillment)))
+          throw refused('buy', new Error(CHECKOUT_REASONS[data?.reason] || 'We couldn’t start your payment. Please call us.'))
         }
         clear()
         window.location.assign(data.checkout_url) // → Stripe, then back to /checkout/success
@@ -152,9 +198,11 @@ export default function Checkout() {
       }
 
       clear()
+      storeKeys({ rent: newSaveKey(), buy: newSaveKey() })
       setDone({ numbers: rentNo ? [rentNo] : [], fulfillment })
-    } catch (e) {
-      setError((e as Error).message)
+    }) } catch (e) {
+      logSaveFailure(publicSupabase, { requestId, form: 'Checkout', field: null, layer: failureLayer(e), code: failureCode(e), message: (e as Error).message })
+      setError(`${(e as Error).message} Ref ${shortRef(requestId)}`)
     } finally {
       submittingRef.current = false
       setBusy(false)
@@ -188,11 +236,11 @@ export default function Checkout() {
                 <CheckoutSummary items={items} priceOf={priceOf} rentTotal={rentTotal} buyTotal={buyTotal}
                   due={dueToday(rentTotal, buyTotal, paymentChoice)} payLater={rentItems.length > 0 && paymentChoice !== 'online'} onEdit={() => setOpen(true)} />
               </div>
-              <form onSubmit={submit} className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4">
+              <form ref={formRef} noValidate onSubmit={submit} onChange={(event) => { const name = (event.target as Element).getAttribute('name'); if (name && marks[name]) setMarks(Object.fromEntries(Object.entries(marks).filter(([key]) => key !== name))) }} className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4"><FieldMarks errors={marks}>
                 <div className="grid grid-cols-2 gap-3">
-                  <input required placeholder="Full name" value={form.full_name} onChange={set('full_name')} className={`col-span-2 ${INPUT}`} />
+                  <Checked name="full_name" message={false}><input placeholder="Full name" value={form.full_name} onChange={set('full_name')} className={`col-span-2 ${INPUT}`} /></Checked>
                   <input placeholder="Phone" value={form.phone} onChange={set('phone')} className={INPUT} />
-                  <input required type="email" placeholder="Email" value={form.email} onChange={set('email')} className={INPUT} />
+                  <Checked name="email" message={false}><input inputMode="email" placeholder="Email" value={form.email} onChange={set('email')} className={INPUT} /></Checked>
                 </div>
                 <fieldset>
                   <legend className="mb-2 text-sm font-semibold text-navy">How would you like to receive your order?</legend>
@@ -214,10 +262,10 @@ export default function Checkout() {
                 {fulfillment === 'pickup' ? (
                   <div className="space-y-2">
                     <label className="block text-sm font-semibold text-navy" htmlFor="pickup-location">Pickup location</label>
-                    <select id="pickup-location" required value={pickupLocationId} onChange={(event) => setPickupLocationId(event.target.value)} className={`w-full ${INPUT}`}>
+                    <Checked name="pickupLocation" message={false}><select id="pickup-location" value={pickupLocationId} onChange={(event) => setPickupLocationId(event.target.value)} className={`w-full ${INPUT}`}>
                       {pickupLocations.length > 1 && <option value="">Select a pickup location…</option>}
                       {pickupLocations.map((location) => <option key={location.id} value={location.id}>{location.name} — {location.address_city}</option>)}
-                    </select>
+                    </select></Checked>
                     {selectedPickupLocation && (
                       <div className="rounded-xl bg-slate-50 p-3 text-xs leading-5 text-slate-600">
                         <div className="flex items-start gap-2"><MapPin size={14} className="mt-0.5 shrink-0" /><span>{selectedPickupLocation.address_line1}{selectedPickupLocation.address_line2 ? `, ${selectedPickupLocation.address_line2}` : ''}<br />{selectedPickupLocation.address_city}, {selectedPickupLocation.address_state} {selectedPickupLocation.address_zip}</span></div>
@@ -228,9 +276,9 @@ export default function Checkout() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 gap-3">
-                    <input required placeholder="Delivery address" value={form.line1} onChange={set('line1')} className={`col-span-2 ${INPUT}`} />
-                    <input required placeholder="City" value={form.city} onChange={set('city')} className={INPUT} />
-                    <input required placeholder="ZIP" value={form.zip} onChange={set('zip')} className={INPUT} />
+                    <Checked name="line1" message={false}><input placeholder="Delivery address" value={form.line1} onChange={set('line1')} className={`col-span-2 ${INPUT}`} /></Checked>
+                    <Checked name="city" message={false}><input placeholder="City" value={form.city} onChange={set('city')} className={INPUT} /></Checked>
+                    <Checked name="zip" message={false}><input placeholder="ZIP" inputMode="numeric" value={form.zip} onChange={set('zip')} className={INPUT} /></Checked>
                   </div>
                 )}
                 <textarea placeholder={`${fulfillment === 'pickup' ? 'Pickup' : 'Delivery'} instructions (optional)`} value={form.notes} onChange={set('notes')} rows={2} className={`w-full ${INPUT}`} />
@@ -256,7 +304,7 @@ export default function Checkout() {
                 {priceNotice && <div role="status" className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">Price updated — {priceNotice}</div>}
                 {problem && !error && <div role="alert" className="text-sm text-red-600">{problem}</div>}
                 {error && <div role="alert" className="text-sm text-red-600">{error}</div>}
-                <button disabled={busy || Boolean(problem)} className="w-full bg-terracotta hover:opacity-90 text-white rounded-lg py-3 font-semibold disabled:opacity-50">
+                <button type="submit" disabled={busy || Boolean(problem)} className="w-full bg-terracotta hover:opacity-90 text-white rounded-lg py-3 font-semibold disabled:opacity-50">
                   {busy
                     ? (buyItems.length || paymentChoice === 'online' ? 'Redirecting…' : 'Submitting…')
                     : buyItems.length || paymentChoice === 'online' ? 'Continue to Secure Payment' : 'Submit Request'}
@@ -270,7 +318,7 @@ export default function Checkout() {
                         ? 'No payment is taken now. Pay the delivery person when your equipment arrives.'
                         : 'No payment is taken now. Pay in store when you pick up your equipment.'}
                 </p>
-              </form>
+              </FieldMarks></form>
             </div>
           </>
         )}

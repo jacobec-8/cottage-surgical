@@ -7,6 +7,9 @@ import { Plus, Truck, AlertTriangle, ExternalLink, Pencil } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { authEmailToUsername } from '../lib/staffLogin'
 import { supabase } from '../lib/supabase'
+import { Checked, SaveForm, SubmitButton } from '../components/SaveForm'
+import { driverProblems } from '../lib/formChecks/operationsChecks'
+import { ensureChanged } from '../lib/saveErrors'
 import { useLocationScope } from '../contexts/LocationContext'
 import { DRIVER_LOCATION_FIELDS, driversForLocation, type DriverWithLocations } from '../lib/driverLocations'
 import { canSwitchStores } from '../lib/roles'
@@ -72,8 +75,6 @@ export default function Drivers() {
 
   const add = useMutation({
     mutationFn: async () => {
-      if (!f.first_name.trim() || !f.last_name.trim()) throw new Error('First and last name are required.')
-      if (!selectedLocationId) throw new Error('Choose the driver’s home store in the header first.')
       const { error } = await supabase.from('drivers').insert({
         first_name: f.first_name.trim(),
         last_name: f.last_name.trim(),
@@ -87,9 +88,7 @@ export default function Drivers() {
       qc.invalidateQueries({ queryKey: ['drivers'] })
       setAdding(false)
       setF({ first_name: '', last_name: '', phone: '' })
-      setErr('')
     },
-    onError: (e) => setErr((e as Error).message),
   })
 
   const link = useMutation({
@@ -106,14 +105,13 @@ export default function Drivers() {
 
   const update = useMutation({
     mutationFn: async (args: { driverId: string; values: DriverUpdate }) => {
-      const { error } = await supabase.from('drivers').update(args.values).eq('id', args.driverId)
+      const { data: changed, error } = await supabase.from('drivers').update(args.values).eq('id', args.driverId).select('id')
       if (error) throw error
+      ensureChanged(changed)
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['drivers'] })
-      setErr('')
     },
-    onError: (e) => setErr((e as Error).message),
   })
 
   const inp = 'border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
@@ -134,34 +132,31 @@ export default function Drivers() {
       </p>
 
       {adding && (
-        <div className="bg-white border border-slate-200 rounded-xl p-4 mb-4 grid grid-cols-3 gap-3">
-          <input
+        <SaveForm aria-label="Add driver" onSave={() => add.mutateAsync()}
+          validate={() => driverProblems({ first: f.first_name, last: f.last_name, phone: f.phone, email: '', storeChosen: Boolean(selectedLocationId) })} savedMessage="Driver added." errorClassName="col-span-3"
+          className="bg-white border border-slate-200 rounded-xl p-4 mb-4 grid grid-cols-3 gap-3">
+          <Checked name="first" message={false}><input
             placeholder="First name"
             value={f.first_name}
             onChange={(e) => setF({ ...f, first_name: e.target.value })}
             className={inp}
-          />
-          <input
+          /></Checked>
+          <Checked name="last" message={false}><input
             placeholder="Last name"
             value={f.last_name}
             onChange={(e) => setF({ ...f, last_name: e.target.value })}
             className={inp}
-          />
-          <input placeholder="Phone" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} className={inp} />
-          {err && <div className="col-span-3 text-sm text-red-600">{err}</div>}
+          /></Checked>
+          <Checked name="phone" message={false}><input placeholder="Phone" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} className={inp} /></Checked>
           <div className="col-span-3 flex justify-end gap-2">
-            <button onClick={() => setAdding(false)} className="px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">
+            <button type="button" onClick={() => setAdding(false)} className="px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">
               Cancel
             </button>
-            <button
-              onClick={() => add.mutate()}
-              disabled={add.isPending}
-              className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50"
-            >
-              {add.isPending ? 'Saving…' : 'Save'}
-            </button>
+            <SubmitButton className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50">
+              {(pending) => pending ? 'Saving…' : 'Save'}
+            </SubmitButton>
           </div>
-        </div>
+        </SaveForm>
       )}
 
       {!adding && err && <div className="text-sm text-red-600 mb-3">{err}</div>}
@@ -176,7 +171,6 @@ export default function Drivers() {
             d={d}
             unlinkedLogins={unlinkedLogins}
             linking={link.isPending}
-            saving={update.isPending}
             openSettings={profile?.role === 'admin'}
             canEdit={canSwitchStores(profile?.role) || d.location_id === profile?.location_id}
             coverage={<DriverLocations driver={d} locations={locations} canEdit={canSwitchStores(profile?.role)} />}
@@ -193,7 +187,6 @@ function DriverRow({
   d,
   unlinkedLogins,
   linking,
-  saving,
   openSettings,
   canEdit,
   coverage,
@@ -203,7 +196,6 @@ function DriverRow({
   d: Driver
   unlinkedLogins: DriverLogin[]
   linking: boolean
-  saving: boolean
   openSettings: boolean
   canEdit: boolean
   coverage: React.ReactNode
@@ -212,7 +204,6 @@ function DriverRow({
 }) {
   const [selected, setSelected] = useState('')
   const [editing, setEditing] = useState(false)
-  const [editError, setEditError] = useState('')
   const [form, setForm] = useState({
     first_name: d.first_name,
     last_name: d.last_name,
@@ -231,26 +222,16 @@ function DriverRow({
       license_number: d.license_number ?? '', license_expiry: d.license_expiry ?? '',
       hire_date: d.hire_date ?? '', status: d.status,
     })
-    setEditError('')
     setEditing(true)
   }
   const save = async () => {
-    if (!form.first_name.trim() || !form.last_name.trim()) {
-      setEditError('First and last name are required.')
-      return
-    }
-    try {
-      await onSave({
-        first_name: form.first_name.trim(), last_name: form.last_name.trim(),
-        email: form.email.trim() || null, phone: form.phone.trim() || null,
-        license_number: form.license_number.trim() || null,
-        license_expiry: form.license_expiry || null, hire_date: form.hire_date || null,
-        status: form.status,
-      })
-      setEditing(false)
-    } catch (error) {
-      setEditError((error as Error).message || 'Couldn’t update the driver.')
-    }
+    await onSave({
+      first_name: form.first_name.trim(), last_name: form.last_name.trim(),
+      email: form.email.trim() || null, phone: form.phone.trim() || null,
+      license_number: form.license_number.trim() || null,
+      license_expiry: form.license_expiry || null, hire_date: form.hire_date || null,
+      status: form.status,
+    })
   }
 
   return (
@@ -271,11 +252,13 @@ function DriverRow({
         )}
       </div>
       {editing && (
-        <div className="mt-4 grid grid-cols-1 gap-3 border-t border-slate-100 pt-4 sm:grid-cols-2">
-          <Field label="First name"><input value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} className={input} /></Field>
-          <Field label="Last name"><input value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} className={input} /></Field>
-          <Field label="Phone"><input type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className={input} /></Field>
-          <Field label="Email"><input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className={input} /></Field>
+        <SaveForm aria-label={`Edit ${d.first_name} ${d.last_name}`} onSave={save}
+          validate={() => driverProblems({ first: form.first_name, last: form.last_name, phone: form.phone, email: form.email })} onSaved={() => setEditing(false)} savedMessage="Driver saved." errorClassName="sm:col-span-2"
+          className="mt-4 grid grid-cols-1 gap-3 border-t border-slate-100 pt-4 sm:grid-cols-2">
+          <Field label="First name"><Checked name="first"><input value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} className={input} /></Checked></Field>
+          <Field label="Last name"><Checked name="last"><input value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} className={input} /></Checked></Field>
+          <Field label="Phone"><Checked name="phone"><input inputMode="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className={input} /></Checked></Field>
+          <Field label="Email"><Checked name="email"><input inputMode="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className={input} /></Checked></Field>
           <Field label="License number"><input value={form.license_number} onChange={(e) => setForm({ ...form, license_number: e.target.value })} className={input} /></Field>
           <Field label="License expiry"><input type="date" value={form.license_expiry} onChange={(e) => setForm({ ...form, license_expiry: e.target.value })} className={input} /></Field>
           <Field label="Hire date"><input type="date" value={form.hire_date} onChange={(e) => setForm({ ...form, hire_date: e.target.value })} className={input} /></Field>
@@ -286,14 +269,13 @@ function DriverRow({
               <option value="inactive">Inactive</option>
             </select>
           </Field>
-          {editError && <div className="text-sm text-red-600 sm:col-span-2">{editError}</div>}
           <div className="flex justify-end gap-2 sm:col-span-2">
-            <button onClick={() => setEditing(false)} className="rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100">Cancel</button>
-            <button onClick={save} disabled={saving} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
-              {saving ? 'Saving…' : 'Save changes'}
-            </button>
+            <button type="button" onClick={() => setEditing(false)} className="rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100">Cancel</button>
+            <SubmitButton className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+              {(pending) => pending ? 'Saving…' : 'Save changes'}
+            </SubmitButton>
           </div>
-        </div>
+        </SaveForm>
       )}
       {!editing && coverage}
       {!editing && unlinked && canEdit && (

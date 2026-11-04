@@ -11,6 +11,9 @@ import {
 import { authEmailToUsername } from '../lib/staffLogin'
 import { roleLabel } from '../lib/roles'
 import { supabase } from '../lib/supabase'
+import { Checked, SaveForm, SubmitButton } from '../components/SaveForm'
+import { locationProblems, locationUserProblems } from '../lib/formChecks/peopleChecks'
+import { FieldRefusal, ensureChanged } from '../lib/saveErrors'
 import StockStatusBadges from '../components/StockStatusBadges'
 import BusinessContact from '../components/BusinessContact'
 
@@ -112,18 +115,9 @@ export default function LocationDetail({ locationId }: { locationId: string }) {
 
   const save = useMutation({
     mutationFn: async () => {
-      if (!form.name.trim() || !form.line1.trim() || !form.city.trim() || !form.zip.trim()) {
-        throw new Error('Shop name, street, city, and ZIP are required.')
-      }
-      // Same rules as onboarding, so a full address can't be pasted into one field (ODD-004).
-      if (!/^\d{5}(-\d{4})?$/.test(form.zip.trim())) throw new Error('Enter a five-digit ZIP code (or ZIP+4).')
-      if (!/^[A-Za-z]{2}$/.test(form.state.trim())) throw new Error('Enter the two-letter state code.')
-      if (/,/.test(form.line1) && /\d{5}/.test(form.line1)) throw new Error('Enter only the street in Street; put city, state and ZIP in their own fields.')
-      const zips = parseZips(form.deliveryZips)
-      if (zips === null) throw new Error('Delivery ZIP codes must be five digits, separated by commas.')
-      if (form.fulfillmentMode === 'pickup_and_delivery' && !zips.length && !form.deliversAnywhere) throw new Error('Enter the ZIP codes this store delivers to.')
-      if (form.replyTo.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.replyTo.trim())) throw new Error('Enter a valid reply-to email.')
-      const { error } = await supabase.from('pickup_locations').update({
+      // The form's checks passed (locationProblems), so the ZIP list parses.
+      const zips = parseZips(form.deliveryZips) ?? []
+      const { data: changed, error } = await supabase.from('pickup_locations').update({
         name: form.name.trim(), address_line1: form.line1.trim(),
         address_line2: form.line2.trim() || null, address_city: form.city.trim(),
         address_state: form.state.trim().toUpperCase(), address_zip: form.zip.trim(),
@@ -133,8 +127,9 @@ export default function LocationDetail({ locationId }: { locationId: string }) {
         delivery_zips: form.fulfillmentMode === 'pickup_and_delivery' ? zips : [],
         delivers_anywhere: form.fulfillmentMode === 'pickup_and_delivery' && form.deliversAnywhere,
         email_display_name: form.emailName.trim() || null, reply_to_email: form.replyTo.trim() || null,
-      }).eq('id', locationId)
+      }).eq('id', locationId).select('id')
       if (error) throw error
+      ensureChanged(changed)
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['location_detail', locationId] })
@@ -145,10 +140,6 @@ export default function LocationDetail({ locationId }: { locationId: string }) {
 
   const createUsers = useMutation({
     mutationFn: async () => {
-      if (userDrafts.length === 0) throw new Error('Add at least one user.')
-      if (userDrafts.some((user) => !user.username.trim() || !user.password)) {
-        throw new Error('Enter a username and password for each added user.')
-      }
       const { data, error } = await supabase.rpc('create_location_users', {
         p_location_id: locationId,
         p_users: userDrafts.map((user) => ({
@@ -156,6 +147,10 @@ export default function LocationDetail({ locationId }: { locationId: string }) {
         })),
       })
       if (error) throw error
+      if (data?.reason === 'username_taken') {
+        const taken = userDrafts.find((user) => user.username.trim().toLowerCase() === data.username)
+        if (taken) throw new FieldRefusal(`username-${taken.id}`, `Username “${data.username}” is already in use.`)
+      }
       if (!data?.ok) {
         const reasons: Record<string, string> = {
           username_taken: `Username “${data?.username ?? ''}” is already in use.`,
@@ -202,27 +197,26 @@ export default function LocationDetail({ locationId }: { locationId: string }) {
       {location.data.business && <BusinessContact businessId={location.data.business.id} businessName={location.data.business.name} />}
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(340px,0.85fr)]">
-        <section className="rounded-2xl border border-slate-200 bg-white p-5">
+        <SaveForm aria-label="Pharmacy details" onSave={() => save.mutateAsync()}
+          validate={() => locationProblems({ name: form.name, line1: form.line1, city: form.city, state: form.state, zip: form.zip, phone: form.phone, deliveryZips: form.deliveryZips, fulfillmentMode: form.fulfillmentMode, deliversAnywhere: form.deliversAnywhere, replyTo: form.replyTo })} savedMessage="Pharmacy details saved." errorClassName="mt-3" className="rounded-2xl border border-slate-200 bg-white p-5">
           <div className="mb-5 flex items-center gap-2"><MapPin size={18} className="text-blue-600" /><h2 className="text-lg font-semibold">Pharmacy details</h2></div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <div className="sm:col-span-2"><Field label="Shop name"><input className={INPUT} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></Field></div>
-            <div className="sm:col-span-2"><Field label="Street address"><input className={INPUT} value={form.line1} onChange={(event) => setForm({ ...form, line1: event.target.value })} /></Field></div>
+            <div className="sm:col-span-2"><Field label="Shop name"><Checked name="name"><input className={INPUT} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></Checked></Field></div>
+            <div className="sm:col-span-2"><Field label="Street address"><Checked name="line1"><input className={INPUT} value={form.line1} onChange={(event) => setForm({ ...form, line1: event.target.value })} /></Checked></Field></div>
             <div className="sm:col-span-2"><Field label="Suite / unit"><input className={INPUT} value={form.line2} onChange={(event) => setForm({ ...form, line2: event.target.value })} /></Field></div>
-            <Field label="City"><input className={INPUT} value={form.city} onChange={(event) => setForm({ ...form, city: event.target.value })} /></Field>
-            <div className="grid grid-cols-[90px_1fr] gap-3"><Field label="State"><input className={INPUT} value={form.state} onChange={(event) => setForm({ ...form, state: event.target.value })} /></Field><Field label="ZIP"><input className={INPUT} value={form.zip} onChange={(event) => setForm({ ...form, zip: event.target.value })} /></Field></div>
-            <Field label="Phone"><input className={INPUT} value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} /></Field>
+            <Field label="City"><Checked name="city"><input className={INPUT} value={form.city} onChange={(event) => setForm({ ...form, city: event.target.value })} /></Checked></Field>
+            <div className="grid grid-cols-[90px_1fr] gap-3"><Field label="State"><Checked name="state"><input className={INPUT} value={form.state} onChange={(event) => setForm({ ...form, state: event.target.value })} /></Checked></Field><Field label="ZIP"><Checked name="zip"><input className={INPUT} value={form.zip} onChange={(event) => setForm({ ...form, zip: event.target.value })} /></Checked></Field></div>
+            <Field label="Phone"><Checked name="phone"><input className={INPUT} value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} /></Checked></Field>
             <Field label="Location capability"><select className={INPUT} value={form.fulfillmentMode} onChange={(event) => setForm({ ...form, fulfillmentMode: event.target.value as Location['fulfillment_mode'] })}><option value="pickup_and_delivery">Pickup and delivery</option><option value="pickup_only">Pickup only</option></select></Field>
             <Field label="Store relationship"><select className={INPUT} value={form.partnerType} onChange={(event) => setForm({ ...form, partnerType: event.target.value as Location['partner_type'] })}><option value="owned">Owned store</option><option value="partner">Partner pickup store</option></select></Field>
             <Field label="Location status"><select className={INPUT} value={form.active ? 'active' : 'inactive'} onChange={(event) => setForm({ ...form, active: event.target.value === 'active' })}><option value="active">Active</option><option value="inactive">Inactive</option></select></Field>
-            {form.fulfillmentMode === 'pickup_and_delivery' && <div className="sm:col-span-2"><Field label="Delivery ZIP codes"><input className={INPUT} value={form.deliveryZips} placeholder="e.g. 11954, 11930" onChange={(event) => setForm({ ...form, deliveryZips: event.target.value })} /></Field><p className="mt-1 text-xs text-slate-500">Website deliveries for these ZIP codes go to this store only.</p><label className="mt-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={form.deliversAnywhere} onChange={(event) => setForm({ ...form, deliversAnywhere: event.target.checked })} /> Also deliver to ZIP codes no store lists</label></div>}
+            {form.fulfillmentMode === 'pickup_and_delivery' && <div className="sm:col-span-2"><Field label="Delivery ZIP codes"><Checked name="deliveryZips"><input className={INPUT} value={form.deliveryZips} placeholder="e.g. 11954, 11930" onChange={(event) => setForm({ ...form, deliveryZips: event.target.value })} /></Checked></Field><p className="mt-1 text-xs text-slate-500">Website deliveries for these ZIP codes go to this store only.</p><label className="mt-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={form.deliversAnywhere} onChange={(event) => setForm({ ...form, deliversAnywhere: event.target.checked })} /> Also deliver to ZIP codes no store lists</label></div>}
             <Field label="Name on customer emails"><input className={INPUT} value={form.emailName} placeholder="Store name" onChange={(event) => setForm({ ...form, emailName: event.target.value })} /></Field>
-            <Field label="Reply-to email"><input type="email" className={INPUT} value={form.replyTo} placeholder="store@example.com" onChange={(event) => setForm({ ...form, replyTo: event.target.value })} /></Field>
+            <Field label="Reply-to email"><Checked name="replyTo"><input inputMode="email" className={INPUT} value={form.replyTo} placeholder="store@example.com" onChange={(event) => setForm({ ...form, replyTo: event.target.value })} /></Checked></Field>
             <div className="sm:col-span-2"><Field label="Notes"><textarea rows={3} className={INPUT} value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></Field></div>
           </div>
-          {save.error && <div className="mt-3 text-sm text-red-600">{(save.error as Error).message}</div>}
-          {save.isSuccess && <div className="mt-3 text-sm text-emerald-700">Pharmacy details saved.</div>}
-          <div className="mt-5 flex justify-end"><button onClick={() => save.mutate()} disabled={save.isPending} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"><Save size={15} /> {save.isPending ? 'Saving…' : 'Save details'}</button></div>
-        </section>
+          <div className="mt-5 flex justify-end"><SubmitButton className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">{(pending) => <><Save size={15} /> {pending ? 'Saving…' : 'Save details'}</>}</SubmitButton></div>
+        </SaveForm>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-5">
           <div className="flex items-start justify-between gap-3"><div><div className="flex items-center gap-2"><Users size={18} className="text-blue-600" /><h2 className="text-lg font-semibold">Users</h2></div><p className="mt-1 text-xs text-slate-500">Accounts assigned to this pharmacy</p></div><button onClick={addUser} className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-50"><UserPlus size={14} /> Add user</button></div>
@@ -231,7 +225,7 @@ export default function LocationDetail({ locationId }: { locationId: string }) {
             {users.length === 0 && <div className="rounded-xl bg-slate-50 p-4 text-center text-sm text-slate-500">No users assigned yet.</div>}
           </div>
 
-          {userDrafts.length > 0 && <div className="mt-5 border-t border-slate-200 pt-4"><div className="space-y-3">{userDrafts.map((user, index) => <div key={user.id} className="rounded-xl bg-slate-50 p-3"><div className="grid gap-3 sm:grid-cols-2"><Field label="Type"><select className={INPUT} value={user.role} onChange={(event) => updateUser(user.id, 'role', event.target.value as UserRole)}><option value="owner">Owner (all locations)</option><option value="staff">Store staff</option><option value="driver">Driver</option></select></Field><button onClick={() => setUserDrafts((current) => current.filter((entry) => entry.id !== user.id))} aria-label={`Remove user ${index + 1}`} className="ml-auto grid h-9 w-9 place-items-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={15} /></button><Field label="Username"><input className={INPUT} value={user.username} onChange={(event) => updateUser(user.id, 'username', event.target.value.toLowerCase())} /></Field><Field label="Password"><input type="password" className={INPUT} value={user.password} onChange={(event) => updateUser(user.id, 'password', event.target.value)} /></Field></div></div>)}</div><div className="mt-3 flex items-center justify-between gap-3"><button onClick={addUser} className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-700"><Plus size={13} /> Add another</button><button onClick={() => createUsers.mutate()} disabled={createUsers.isPending} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50">{createUsers.isPending ? 'Creating…' : `Create ${userDrafts.length} ${userDrafts.length === 1 ? 'user' : 'users'}`}</button></div>{createUsers.error && <div className="mt-3 text-xs text-red-600">{(createUsers.error as Error).message}</div>}</div>}
+          {userDrafts.length > 0 && <SaveForm aria-label="New users" onSave={() => createUsers.mutateAsync()} validate={() => locationUserProblems(userDrafts)} savedMessage="Users created." errorClassName="mt-3" className="mt-5 border-t border-slate-200 pt-4"><div className="space-y-3">{userDrafts.map((user, index) => <div key={user.id} className="rounded-xl bg-slate-50 p-3"><div className="grid gap-3 sm:grid-cols-2"><Field label="Type"><select className={INPUT} value={user.role} onChange={(event) => updateUser(user.id, 'role', event.target.value as UserRole)}><option value="owner">Owner (all locations)</option><option value="staff">Store staff</option><option value="driver">Driver</option></select></Field><button type="button" onClick={() => setUserDrafts((current) => current.filter((entry) => entry.id !== user.id))} aria-label={`Remove user ${index + 1}`} className="ml-auto grid h-9 w-9 place-items-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={15} /></button><Field label="Username"><Checked name={`username-${user.id}`}><input className={INPUT} value={user.username} onChange={(event) => updateUser(user.id, 'username', event.target.value.toLowerCase())} /></Checked></Field><Field label="Password"><Checked name={`password-${user.id}`}><input type="password" className={INPUT} value={user.password} onChange={(event) => updateUser(user.id, 'password', event.target.value)} /></Checked></Field></div></div>)}</div><div className="mt-3 flex items-center justify-between gap-3"><button type="button" onClick={addUser} className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-700"><Plus size={13} /> Add another</button><SubmitButton className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50">{(pending) => pending ? 'Creating…' : `Create ${userDrafts.length} ${userDrafts.length === 1 ? 'user' : 'users'}`}</SubmitButton></div></SaveForm>}
         </section>
       </div>
 

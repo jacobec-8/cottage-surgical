@@ -1,6 +1,7 @@
 import 'client-only'
 
 import { createClient } from '@supabase/supabase-js'
+import { requestIdFetch } from './requestId'
 
 // Storefront checkout RPCs are public by design. Keep them isolated from the
 // staff browser session so an expired or partially refreshed admin/staff token
@@ -14,5 +15,6 @@ export const publicSupabase = createClient(
       autoRefreshToken: false,
       detectSessionInUrl: false,
     },
+    global: { fetch: requestIdFetch },
   },
 )

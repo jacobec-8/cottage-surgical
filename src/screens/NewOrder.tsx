@@ -5,6 +5,9 @@ import { useQuery } from '@tanstack/react-query'
 import { useQueryClient } from '@tanstack/react-query'
 import { Search, Plus, Minus, Trash2, CheckCircle } from 'lucide-react'
 import ItemThumb from '../components/ItemThumb'
+import { Checked, SaveForm, SubmitButton } from '../components/SaveForm'
+import { unconfirmedReply } from '../lib/saveErrors'
+import { newOrderProblems } from '../lib/formChecks/operationsChecks'
 import { supabase } from '../lib/supabase'
 import { invalidateOrderWorkflow } from '../lib/workflowKeys'
 import { useLocationScope } from '../contexts/LocationContext'
@@ -74,8 +77,6 @@ export default function NewOrder() {
   const [itemSearch, setItemSearch] = useState('')
   const [deliv, setDeliv] = useState({ date: '', time: '', end: '', driver: '', notes: '', deposit: '' })
 
-  const [busy, setBusy] = useState(false)
-  const [err, setErr] = useState('')
   const [result, setResult] = useState<{ order_no: number; unallocated: number; method: Method } | null>(null)
 
   useEffect(() => {
@@ -168,56 +169,49 @@ export default function NewOrder() {
   const setQty = (id: string, d: number) => setCart((c) => c.map((l) => (l.item_id === id ? { ...l, qty: nextQty(l.qty, d, availableFor(id)) } : l)))
   const removeItem = (id: string) => setCart((c) => c.filter((l) => l.item_id !== id))
 
-  const create = async () => {
-    setBusy(true); setErr(''); setResult(null)
-    try {
-      if (!selectedLocationId) throw new Error('Select a store before creating an order.')
-      if (cart.length === 0) throw new Error('Add at least one item.')
-      if (overStock.length > 0) throw new Error('Lower the quantities marked in red: the store doesn’t have that many.')
-      const timeProblem = windowProblem(deliv.time, deliv.end)
-      if (timeProblem) throw new Error(timeProblem)
-      // Existing vs new customer — the new customer is created INSIDE the RPC
-      // (one transaction), so a failed order can never leave an orphan customer
-      // and a retry can't create a duplicate.
-      let customerId: string | null = null
-      let newCustomer: Record<string, string | null> | null = null
-      if (custMode === 'existing') {
-        if (!cust?.id) throw new Error('Choose a customer.')
-        customerId = cust.id
-      } else {
-        if (!nc.full_name.trim()) throw new Error('Enter the customer’s name.')
-        newCustomer = {
-          full_name: nc.full_name.trim(), phone: nc.phone || null, email: nc.email || null,
-          dob: nc.dob || null, coverage: nc.coverage || null,
-          line1: nc.line1 || null, city: nc.city || null, state: nc.state || 'NY', zip: nc.zip || null,
-        }
+  // Throws the reason on any failure; SaveForm shows it as "Not saved." and nothing is created.
+  const create = async (_submitter: HTMLElement | null, { saveKey }: { saveKey: string }) => {
+    setResult(null)
+    // Existing vs new customer — the new customer is created INSIDE the RPC
+    // (one transaction), so a failed order can never leave an orphan customer
+    // and a retry can't create a duplicate.
+    let customerId: string | null = null
+    let newCustomer: Record<string, string | null> | null = null
+    if (custMode === 'existing') {
+      customerId = cust?.id ?? null
+    } else {
+      newCustomer = {
+        full_name: nc.full_name.trim(), phone: nc.phone || null, email: nc.email || null,
+        dob: nc.dob || null, coverage: nc.coverage || null,
+        line1: nc.line1 || null, city: nc.city || null, state: nc.state || 'NY', zip: nc.zip || null,
       }
-      const { data, error } = await supabase.rpc('create_staff_order', {
-        p_customer_id: customerId,
-        p_order_type: mode,
-        p_items: cart.map((l) => ({ item_id: l.item_id, quantity: l.qty })),
-        p_delivery: { location_id: selectedLocationId, method, scheduled_date: deliv.date || null, window_start: deliv.time || null, window_end: deliv.time ? deliv.end || null : null, driver_id: method === 'delivery' ? deliv.driver || null : null, notes: deliv.notes || null },
-        p_deposit: mode === 'rental' && deliv.deposit ? Math.max(0, Number(deliv.deposit)) : null,
-        p_new_customer: newCustomer,
-      })
-      if (error) throw new Error(dispatchErrorMessage(error, 'Couldn’t create the order. Please try again.'))
-      if (data?.reason === 'out_of_stock') {
-        // Someone took the last unit first: nothing was created; show the real counts.
-        const refreshed = await items.refetch()
-        throw new Error(outOfStockMessage((data.shortages ?? []) as Shortage[], selectedLocation?.name ?? 'this store', !refreshed.error))
-      }
-      if (!data?.ok) throw new Error(orderErrorMessage(data?.reason))
-      setResult({ order_no: data.order_no, unallocated: data.unallocated, method })
-      setCart([]); setCust(null); setNc({ full_name: '', phone: '', email: '', dob: '', coverage: '', line1: '', city: '', state: 'NY', zip: '' })
-      setDeliv({ date: '', time: '', end: '', driver: '', notes: '', deposit: '' })
-      // create_staff_order may create a customer, reserve stock, and queue a
-      // delivery — refresh every board so the actor's screens match the toast.
-      invalidateOrderWorkflow(qc)
-    } catch (e) {
-      setErr((e as Error).message)
-    } finally {
-      setBusy(false)
     }
+    // Sent with this submission's key: a retry after a lost reply returns the
+    // first order instead of creating a second one (migration 118).
+    const { data, error } = await supabase.rpc('create_staff_order_once', {
+      p_request_key: saveKey,
+      p_customer_id: customerId,
+      p_order_type: mode,
+      p_items: cart.map((l) => ({ item_id: l.item_id, quantity: l.qty })),
+      p_delivery: { location_id: selectedLocationId, method, scheduled_date: deliv.date || null, window_start: deliv.time || null, window_end: deliv.time ? deliv.end || null : null, driver_id: method === 'delivery' ? deliv.driver || null : null, notes: deliv.notes || null },
+      p_deposit: mode === 'rental' && deliv.deposit ? Math.max(0, Number(deliv.deposit)) : null,
+      p_new_customer: newCustomer,
+    })
+    if (error) throw new Error(dispatchErrorMessage(error, 'Couldn’t create the order. Please try again.'))
+    if (data?.reason === 'out_of_stock') {
+      // Someone took the last unit first: nothing was created; show the real counts.
+      const refreshed = await items.refetch()
+      throw new Error(outOfStockMessage((data.shortages ?? []) as Shortage[], selectedLocation?.name ?? 'this store', !refreshed.error))
+    }
+    const uncertain = unconfirmedReply(data?.reason)
+    if (uncertain) throw uncertain
+    if (!data?.ok) throw new Error(orderErrorMessage(data?.reason))
+    setResult({ order_no: data.order_no, unallocated: data.unallocated, method })
+    setCart([]); setCust(null); setNc({ full_name: '', phone: '', email: '', dob: '', coverage: '', line1: '', city: '', state: 'NY', zip: '' })
+    setDeliv({ date: '', time: '', end: '', driver: '', notes: '', deposit: '' })
+    // create_staff_order may create a customer, reserve stock, and queue a
+    // delivery — refresh every board so the actor's screens match the toast.
+    invalidateOrderWorkflow(qc)
   }
 
   const inp = 'border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
@@ -244,7 +238,11 @@ export default function NewOrder() {
   }
 
   return (
-    <div className="max-w-3xl space-y-4">
+    <SaveForm aria-label="New order" onSave={create} validate={() => newOrderProblems({
+      storeChosen: Boolean(selectedLocationId), itemCount: cart.length, overStock: overStock.length > 0, start: deliv.time, end: deliv.end,
+      customerMode: custMode, customerChosen: Boolean(cust?.id), newName: nc.full_name, newEmail: nc.email, newPhone: nc.phone, newZip: nc.zip,
+      rental: mode === 'rental', deposit: deliv.deposit,
+    })} savedMessage={null} submitOnEnter={false} className="max-w-3xl space-y-4">
       <div>
         <h2 className="sr-only">New Order</h2>
         <p className="text-slate-500 text-sm">Build a rental or purchase from {selectedLocation?.name ?? 'a selected store'}, reserve its equipment, and schedule a delivery or a counter pickup.</p>
@@ -263,13 +261,13 @@ export default function NewOrder() {
 
       <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1">
         {(['rental', 'purchase'] as const).map((m) => (
-          <button key={m} onClick={() => { setMode(m); setCart([]); setDeliv((dv) => ({ ...dv, deposit: '' })) }}
+          <button type="button" key={m} onClick={() => { setMode(m); setCart([]); setDeliv((dv) => ({ ...dv, deposit: '' })) }}
             className={`px-4 py-1.5 text-sm rounded-md capitalize ${mode === m ? 'bg-slate-900 text-white' : 'text-slate-600'}`}>{m}</button>
         ))}
       </div>
       <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1 ml-3" role="group" aria-label="How the customer gets it">
         {([['delivery', 'Delivery'], ['pickup', 'In-store pickup']] as const).map(([m, text]) => (
-          <button key={m} onClick={() => { setMethod(m); setCart([]); setDeliv((dv) => ({ ...dv, driver: '' })) }}
+          <button type="button" key={m} onClick={() => { setMethod(m); setCart([]); setDeliv((dv) => ({ ...dv, driver: '' })) }}
             className={`px-4 py-1.5 text-sm rounded-md ${method === m ? 'bg-blue-600 text-white' : 'text-slate-600'}`}>{text}</button>
         ))}
       </div>
@@ -279,7 +277,7 @@ export default function NewOrder() {
         <div className={label}>Customer</div>
         <div className="inline-flex rounded-lg border border-slate-200 p-1 mb-3">
           {(['existing', 'new'] as const).map((m) => (
-            <button key={m} onClick={() => setCustMode(m)} className={`px-3 py-1 text-xs rounded-md capitalize ${custMode === m ? 'bg-blue-600 text-white' : 'text-slate-600'}`}>
+            <button type="button" key={m} onClick={() => setCustMode(m)} className={`px-3 py-1 text-xs rounded-md capitalize ${custMode === m ? 'bg-blue-600 text-white' : 'text-slate-600'}`}>
               {m === 'existing' ? 'Existing' : 'New customer'}
             </button>
           ))}
@@ -289,18 +287,18 @@ export default function NewOrder() {
             {cust ? (
               <div className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
                 <span className="text-sm font-medium">{cust.name}</span>
-                <button onClick={() => setCust(null)} className="text-xs text-blue-600">change</button>
+                <button type="button" onClick={() => setCust(null)} className="text-xs text-blue-600">change</button>
               </div>
             ) : (
               <>
                 <div className="relative">
                   <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input value={custSearch} onChange={(e) => setCustSearch(e.target.value)} disabled={!selectedLocationId} autoComplete="off" aria-label="Search customers"
-                    placeholder={selectedLocationId ? 'Search by name, email or phone…' : 'Choose a store first'} className={`w-full pl-9 disabled:cursor-not-allowed disabled:bg-slate-100 ${inp}`} />
+                  <Checked name="customerSearch"><input value={custSearch} onChange={(e) => setCustSearch(e.target.value)} disabled={!selectedLocationId} autoComplete="off" aria-label="Search customers"
+                    placeholder={selectedLocationId ? 'Search by name, email or phone…' : 'Choose a store first'} className={`w-full pl-9 disabled:cursor-not-allowed disabled:bg-slate-100 ${inp}`} /></Checked>
                 </div>
                 <div className="mt-2 space-y-1">
                   {matchedCustomers.map((c) => (
-                    <button key={c.id} onClick={() => { setCust({ id: c.id, name: c.full_name }); setCustSearch('') }}
+                    <button type="button" key={c.id} onClick={() => { setCust({ id: c.id, name: c.full_name }); setCustSearch('') }}
                       className="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-50 text-sm flex justify-between gap-3">
                       <span className="min-w-0 truncate">{c.full_name}</span><span className="min-w-0 truncate text-slate-400">{[c.phone, c.email].filter(Boolean).join(' · ')}</span>
                     </button>
@@ -316,9 +314,9 @@ export default function NewOrder() {
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3">
-            <input placeholder="Full name" value={nc.full_name} onChange={(e) => setNc({ ...nc, full_name: e.target.value })} className={`col-span-2 ${inp}`} />
-            <input placeholder="Phone" value={nc.phone} onChange={(e) => setNc({ ...nc, phone: e.target.value })} className={inp} />
-            <input type="email" placeholder="Email" value={nc.email} onChange={(e) => setNc({ ...nc, email: e.target.value })} className={inp} />
+            <Checked name="customerName" message={false}><input placeholder="Full name" value={nc.full_name} onChange={(e) => setNc({ ...nc, full_name: e.target.value })} className={`col-span-2 ${inp}`} /></Checked>
+            <Checked name="customerPhone" message={false}><input placeholder="Phone" value={nc.phone} onChange={(e) => setNc({ ...nc, phone: e.target.value })} className={inp} /></Checked>
+            <Checked name="customerEmail" message={false}><input placeholder="Email" value={nc.email} onChange={(e) => setNc({ ...nc, email: e.target.value })} className={inp} /></Checked>
             <input type="date" placeholder="DOB" value={nc.dob} onChange={(e) => setNc({ ...nc, dob: e.target.value })} className={inp} />
             <select value={nc.coverage} onChange={(e) => setNc({ ...nc, coverage: e.target.value })} className={inp}>
               <option value="">Coverage…</option>
@@ -329,7 +327,7 @@ export default function NewOrder() {
             </select>
             <input placeholder="Address" value={nc.line1} onChange={(e) => setNc({ ...nc, line1: e.target.value })} className={`col-span-2 ${inp}`} />
             <input placeholder="City" value={nc.city} onChange={(e) => setNc({ ...nc, city: e.target.value })} className={inp} />
-            <input placeholder="ZIP" value={nc.zip} onChange={(e) => setNc({ ...nc, zip: e.target.value })} className={inp} />
+            <Checked name="customerZip" message={false}><input placeholder="ZIP" value={nc.zip} onChange={(e) => setNc({ ...nc, zip: e.target.value })} className={inp} /></Checked>
           </div>
         )}
       </div>
@@ -360,7 +358,7 @@ export default function NewOrder() {
               }
               const full = !canAddMore(available, inCart(it.id))
               return (
-                <button key={it.id} onClick={() => addItem(it)} disabled={full}
+                <button type="button" key={it.id} onClick={() => addItem(it)} disabled={full}
                   className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400 disabled:hover:bg-transparent">
                   <span className="flex min-w-0 items-center gap-2"><ItemThumb src={it.image_url} /><span>{it.name}</span></span>
                   <span className="flex shrink-0 items-center gap-3">
@@ -388,13 +386,13 @@ export default function NewOrder() {
                   {over && <span className="block text-xs font-normal text-red-600">{available === 0 ? 'Out of stock now. Remove it.' : `Only ${available} in stock now.`}</span>}
                 </div>
                 <div className="flex items-center gap-1">
-                  <button onClick={() => setQty(l.item_id, -1)} aria-label={`One fewer ${l.name}`} className="w-6 h-6 rounded border border-slate-300 grid place-items-center text-slate-500"><Minus size={13} /></button>
+                  <button type="button" onClick={() => setQty(l.item_id, -1)} aria-label={`One fewer ${l.name}`} className="w-6 h-6 rounded border border-slate-300 grid place-items-center text-slate-500"><Minus size={13} /></button>
                   <span className={`w-6 text-center text-sm ${over ? 'font-semibold text-red-600' : ''}`}>{l.qty}</span>
-                  <button onClick={() => setQty(l.item_id, 1)} disabled={!canAddMore(available, l.qty)} aria-label={`One more ${l.name}`}
+                  <button type="button" onClick={() => setQty(l.item_id, 1)} disabled={!canAddMore(available, l.qty)} aria-label={`One more ${l.name}`}
                     className="w-6 h-6 rounded border border-slate-300 grid place-items-center text-slate-500 disabled:cursor-not-allowed disabled:opacity-40"><Plus size={13} /></button>
                 </div>
                 <div className="w-24 text-right text-sm font-medium">${((l.rate ?? 0) * l.qty).toFixed(0)}{mode === 'rental' ? '/mo' : ''}</div>
-                <button onClick={() => removeItem(l.item_id)} aria-label={`Remove ${l.name}`} className="text-slate-400 hover:text-red-600"><Trash2 size={15} /></button>
+                <button type="button" onClick={() => removeItem(l.item_id)} aria-label={`Remove ${l.name}`} className="text-slate-400 hover:text-red-600"><Trash2 size={15} /></button>
               </div>
               )
             })}
@@ -414,19 +412,18 @@ export default function NewOrder() {
               {storeDrivers.map((d) => <option key={d.id} value={d.id}>{d.first_name} {d.last_name}{busyDrivers.data?.has(d.id) ? ' — busy then' : ''}</option>)}
             </select>
           </div> : <div className="self-end text-sm text-slate-500 pb-2">No driver: the customer collects at the counter.</div>}
-          <div><span className="text-xs text-slate-500">{method === 'pickup' ? 'Pickup time' : 'Delivery time'}</span><input type="time" value={deliv.time} onChange={(e) => setDeliv({ ...deliv, time: e.target.value })} className={`w-full ${inp}`} /></div>
-          <div><span className="text-xs text-slate-500">Until{deliv.time && !deliv.end ? ' (1 hour if blank)' : ''}</span><input type="time" aria-label="Delivery end time" value={deliv.end} onChange={(e) => setDeliv({ ...deliv, end: e.target.value })} className={`w-full ${inp}`} /></div>
-          {mode === 'rental' && <div><span className="text-xs text-slate-500">Deposit ($)</span><input type="number" value={deliv.deposit} onChange={(e) => setDeliv({ ...deliv, deposit: e.target.value })} className={`w-full ${inp}`} /></div>}
+          <div><span className="text-xs text-slate-500">{method === 'pickup' ? 'Pickup time' : 'Delivery time'}</span><Checked name="start"><input type="time" value={deliv.time} onChange={(e) => setDeliv({ ...deliv, time: e.target.value })} className={`w-full ${inp}`} /></Checked></div>
+          <div><span className="text-xs text-slate-500">Until{deliv.time && !deliv.end ? ' (1 hour if blank)' : ''}</span><Checked name="end"><input type="time" aria-label="Delivery end time" value={deliv.end} onChange={(e) => setDeliv({ ...deliv, end: e.target.value })} className={`w-full ${inp}`} /></Checked></div>
+          {mode === 'rental' && <div><span className="text-xs text-slate-500">Deposit ($)</span><Checked name="deposit"><input inputMode="decimal" value={deliv.deposit} onChange={(e) => setDeliv({ ...deliv, deposit: e.target.value })} className={`w-full ${inp}`} /></Checked></div>}
           <div className={mode === 'rental' ? '' : 'col-span-2'}><span className="text-xs text-slate-500">Notes</span><input value={deliv.notes} onChange={(e) => setDeliv({ ...deliv, notes: e.target.value })} placeholder={method === 'pickup' ? 'Who is collecting, when they said…' : 'Access, parking…'} className={`w-full ${inp}`} /></div>
         </div>
       </div>
 
-      {err && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{err}</div>}
       <div className="flex justify-end">
-        <button onClick={create} disabled={busy || !selectedLocationId || overStock.length > 0} className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-6 py-2.5 text-sm font-medium disabled:opacity-50">
-          {busy ? 'Creating…' : `Create ${mode} order${method === 'pickup' ? ' for pickup' : ''}`}
-        </button>
+        <SubmitButton disabled={!selectedLocationId || overStock.length > 0} className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-6 py-2.5 text-sm font-medium disabled:opacity-50">
+          {(pending) => pending ? 'Creating…' : `Create ${mode} order${method === 'pickup' ? ' for pickup' : ''}`}
+        </SubmitButton>
       </div>
-    </div>
+    </SaveForm>
   )
 }

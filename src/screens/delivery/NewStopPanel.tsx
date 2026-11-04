@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../lib/supabase'
+import { Checked, SaveForm, SubmitButton } from '../../components/SaveForm'
+import { newStopProblems } from '../../lib/formChecks/operationsChecks'
 import { invalidateOrderWorkflow } from '../../lib/workflowKeys'
 import { servesLocation } from '../../lib/driverLocations'
 import { dispatchErrorMessage, windowProblem } from '../../lib/dispatchErrors'
@@ -37,7 +39,6 @@ export default function NewStopPanel({ locationId, drivers: allDrivers, onDone, 
   const [date, setDate] = useState('')
   const [start, setStart] = useState('')
   const [end, setEnd] = useState('')
-  const [error, setError] = useState('')
 
   const candidates = useQuery({
     queryKey: ['return_candidates', locationId],
@@ -65,11 +66,6 @@ export default function NewStopPanel({ locationId, drivers: allDrivers, onDone, 
   const create = useMutation({
     mutationFn: async () => {
       if (!order) throw new Error('Choose an order.')
-      if (!onFile && !(addr.line1.trim() && addr.city.trim() && addr.state.trim())) {
-        throw new Error('This rental has no home address. Enter the street, city and state to collect from.')
-      }
-      const problem = windowProblem(start, end)
-      if (problem) throw new Error(problem)
       const { data, error } = await supabase.rpc('schedule_pickup', {
         p_order_id: order.id,
         p_driver_id: driver || null,
@@ -83,19 +79,20 @@ export default function NewStopPanel({ locationId, drivers: allDrivers, onDone, 
       if (!res?.ok) throw new Error(res?.reason === 'address_required' ? 'Enter where the driver should collect it.' : 'Couldn’t add the pickup. Please try again.')
       return { orderNo: order.order_no, already: Boolean(res.already_scheduled) }
     },
-    onMutate: () => setError(''),
     onSuccess: ({ orderNo, already }) => {
       invalidateOrderWorkflow(qc)
       qc.invalidateQueries({ queryKey: ['return_candidates'] })
       onDone(already ? `#${orderNo} already has a return pickup on the board.` : `Return pickup added for #${orderNo}.`)
     },
-    onError: (e) => setError((e as Error).message),
   })
 
   const label = (text: string) => <div className="mb-0.5 text-[11px] text-slate-400">{text}</div>
   const list = candidates.data ?? []
   return (
-    <div className="mb-5 rounded-xl border border-slate-200 bg-white p-4">
+    // The board shows the confirmation (onDone), so SaveForm doesn't add one.
+    <SaveForm aria-label="New return pickup" onSave={() => create.mutateAsync()}
+      validate={() => newStopProblems({ orderChosen: Boolean(order), addressOnFile: Boolean(onFile), street: addr.line1, city: addr.city, state: addr.state, zip: addr.zip, start, end })} savedMessage={null} errorClassName="mt-3"
+      className="mb-5 rounded-xl border border-slate-200 bg-white p-4">
       <div className="mb-3">
         <h3 className="font-medium text-slate-900">New return pickup</h3>
         <p className="text-sm text-slate-500">Bring a rental back from the customer. Deliveries are added automatically when an order is approved.</p>
@@ -103,11 +100,11 @@ export default function NewStopPanel({ locationId, drivers: allDrivers, onDone, 
       <div className="flex flex-wrap items-end gap-2">
         <div className="min-w-64 flex-1">
           {label('Order')}
-          <select aria-label="Order" value={orderId} onChange={(e) => { setOrderId(e.target.value); setDriver(''); setError('') }}
+          <Checked name="order"><select aria-label="Order" value={orderId} onChange={(e) => { setOrderId(e.target.value); setDriver('') }}
             disabled={candidates.isLoading} className={`w-full ${inp} bg-white`}>
             <option value="">{candidates.isLoading ? 'Loading orders…' : list.length ? 'Choose an order…' : 'No rentals out without a return pickup'}</option>
             {list.map((o) => <option key={o.id} value={o.id}>{candidateLabel(o)}</option>)}
-          </select>
+          </select></Checked>
         </div>
       </div>
       {candidates.error && <p role="alert" className="mt-2 text-xs text-red-600">Couldn’t load orders. Please try again.</p>}
@@ -120,10 +117,10 @@ export default function NewStopPanel({ locationId, drivers: allDrivers, onDone, 
             <div>
               <p className="mb-1 text-sm font-medium text-amber-700">No address on this order. Where should the driver collect it?</p>
               <div className="flex flex-wrap gap-2">
-                <div className="min-w-48 flex-[2]">{label('Street')}<input value={addr.line1} onChange={(e) => setAddr({ ...addr, line1: e.target.value })} className={`w-full ${inp}`} /></div>
-                <div className="min-w-32 flex-1">{label('City')}<input value={addr.city} onChange={(e) => setAddr({ ...addr, city: e.target.value })} className={`w-full ${inp}`} /></div>
-                <div className="w-16">{label('State')}<input value={addr.state} maxLength={2} onChange={(e) => setAddr({ ...addr, state: e.target.value })} className={`w-full ${inp}`} /></div>
-                <div className="w-24">{label('ZIP')}<input value={addr.zip} inputMode="numeric" onChange={(e) => setAddr({ ...addr, zip: e.target.value })} className={`w-full ${inp}`} /></div>
+                <div className="min-w-48 flex-[2]">{label('Street')}<Checked name="street"><input value={addr.line1} onChange={(e) => setAddr({ ...addr, line1: e.target.value })} className={`w-full ${inp}`} /></Checked></div>
+                <div className="min-w-32 flex-1">{label('City')}<Checked name="city"><input value={addr.city} onChange={(e) => setAddr({ ...addr, city: e.target.value })} className={`w-full ${inp}`} /></Checked></div>
+                <div className="w-16">{label('State')}<Checked name="state"><input value={addr.state} maxLength={2} onChange={(e) => setAddr({ ...addr, state: e.target.value })} className={`w-full ${inp}`} /></Checked></div>
+                <div className="w-24">{label('ZIP')}<Checked name="zip"><input value={addr.zip} inputMode="numeric" onChange={(e) => setAddr({ ...addr, zip: e.target.value })} className={`w-full ${inp}`} /></Checked></div>
               </div>
             </div>
           )}
@@ -140,20 +137,19 @@ export default function NewStopPanel({ locationId, drivers: allDrivers, onDone, 
               </select>
             </div>
             <div>{label('Date')}<input type="date" aria-label="Date" value={date} onChange={(e) => setDate(e.target.value)} className={inp} /></div>
-            <div>{label('Pickup time')}<input type="time" aria-label="Pickup time" value={start} onChange={(e) => setStart(e.target.value)} className={inp} /></div>
-            <div>{label(`Until${start && !end ? ' (1 hour if blank)' : ''}`)}<input type="time" aria-label="End time" value={end} onChange={(e) => setEnd(e.target.value)} className={inp} /></div>
+            <div>{label('Pickup time')}<Checked name="start"><input type="time" aria-label="Pickup time" value={start} onChange={(e) => setStart(e.target.value)} className={inp} /></Checked></div>
+            <div>{label(`Until${start && !end ? ' (1 hour if blank)' : ''}`)}<Checked name="end"><input type="time" aria-label="End time" value={end} onChange={(e) => setEnd(e.target.value)} className={inp} /></Checked></div>
           </div>
         </div>
       )}
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <button type="button" onClick={() => create.mutate()} disabled={!order || create.isPending}
+        <SubmitButton disabled={!order}
           className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50">
-          {create.isPending ? 'Adding…' : 'Add pickup'}
-        </button>
+          {(pending) => pending ? 'Adding…' : 'Add pickup'}
+        </SubmitButton>
         <button type="button" onClick={onCancel} className="rounded-lg px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
-        {error && <span role="alert" className="text-xs text-red-600">{error}</span>}
       </div>
-    </div>
+    </SaveForm>
   )
 }

@@ -4,11 +4,13 @@ import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Search, Pencil, Trash2, X, ImagePlus, Building2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { Checked, SaveForm, SubmitButton } from '../components/SaveForm'
+import { productFormProblems, startingStockProblems } from '../lib/formChecks/inventoryChecks'
 import { useLocationScope } from '../contexts/LocationContext'
 import { canSwitchStores } from '../lib/roles'
 import { useCatalogManager } from '../lib/useCatalogManager'
 import { refreshWebsite } from '../lib/websiteRefresh'
-import { canManageStore, parseAssetTags, removeProductMessage, startingStockProblem } from '../lib/storeProducts'
+import { canManageStore, parseAssetTags, removeProductMessage } from '../lib/storeProducts'
 import { useAuth } from '../contexts/AuthContext'
 import { CATEGORIES } from '../lib/categories'
 import CatalogPicker from './inventory/CatalogPicker'
@@ -318,14 +320,6 @@ function ItemModal({ item, onClose }: { item: Partial<InventoryItem>; onClose: (
         same_day_pickup: f.pickup_enabled && f.same_day_pickup,
         installation_required: f.installation_required,
       }
-      if (!payload.name) throw new Error('Name is required')
-      if (!payload.is_rentable && !payload.is_purchasable) throw new Error('Choose rental, purchase, or both.')
-      if (payload.is_rentable && payload.pickup_enabled && payload.pickup_rental_price == null) throw new Error('Enter the in-store pickup rental price.')
-      if (payload.is_rentable && payload.delivery_enabled && payload.delivery_rental_price == null) throw new Error('Enter the delivery + return pickup rental price.')
-      if (payload.is_purchasable && payload.sale_price == null) throw new Error('Enter a sale price for purchasable items.')
-      if (!payload.pickup_enabled && !payload.delivery_enabled) throw new Error('Choose pickup, delivery, or both.')
-      const stockProblem = isNew && stockStore ? startingStockProblem(payload.is_serialized, stock) : null
-      if (stockProblem) throw new Error(stockProblem)
 
       let uploadedPath: string | null = null
       if (imageFile) {
@@ -354,7 +348,6 @@ function ItemModal({ item, onClose }: { item: Partial<InventoryItem>; onClose: (
       void refreshWebsite()
       onClose()
     },
-    onError: (e: any) => setErr(e.message),
   })
 
   const inp = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
@@ -364,11 +357,15 @@ function ItemModal({ item, onClose }: { item: Partial<InventoryItem>; onClose: (
       <div className="max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 shadow-lg sm:p-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold">{isNew ? 'Add Item' : 'Edit Item'}</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700">
+          <button type="button" onClick={onClose} aria-label="Close" className="text-slate-400 hover:text-slate-700">
             <X size={18} />
           </button>
         </div>
-        <div className="space-y-3">
+        <SaveForm aria-label={isNew ? 'Add item' : 'Edit item'} onSave={() => save.mutateAsync()}
+          validate={() => [
+            ...productFormProblems({ name: f.name, rentable: f.is_rentable, purchasable: f.is_purchasable, pickup: f.pickup_enabled, delivery: f.delivery_enabled, pickupPrice: f.pickup_rental_price, deliveryPrice: f.delivery_rental_price, salePrice: f.sale_price }),
+            ...(isNew && stockStore ? startingStockProblems(f.is_serialized, stock) : []),
+          ]} savedMessage={isNew ? 'Item added.' : 'Item saved.'} className="space-y-3">
           <div>
             <label className="mb-1 block text-xs text-slate-500">Product image</label>
             <label className="flex min-h-28 cursor-pointer items-center gap-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-3 transition hover:border-blue-400 hover:bg-blue-50/40">
@@ -398,7 +395,7 @@ function ItemModal({ item, onClose }: { item: Partial<InventoryItem>; onClose: (
           </div>
           <div>
             <label className="block text-xs text-slate-500 mb-1">Name</label>
-            <input aria-label="Name" value={f.name} onChange={set('name')} className={inp} />
+            <Checked name="name"><input aria-label="Name" value={f.name} onChange={set('name')} className={inp} /></Checked>
           </div>
           <div>
             <label className="block text-xs text-slate-500 mb-1">Description</label>
@@ -421,19 +418,19 @@ function ItemModal({ item, onClose }: { item: Partial<InventoryItem>; onClose: (
             </div>
             <div>
               <label className="block text-xs text-slate-500 mb-1">Pickup rental ($/mo)</label>
-              <input aria-label="Pickup rental price" value={f.pickup_rental_price} onChange={set('pickup_rental_price')} type="number" min="0" step="0.01" disabled={!f.is_rentable || !f.pickup_enabled} className={inp} />
+              <Checked name="pickupPrice"><input aria-label="Pickup rental price" value={f.pickup_rental_price} onChange={set('pickup_rental_price')} inputMode="decimal" disabled={!f.is_rentable || !f.pickup_enabled} className={inp} /></Checked>
             </div>
             <div>
               <label className="block text-xs text-slate-500 mb-1">Delivery + return pickup rental ($/mo)</label>
-              <input aria-label="Delivery rental price" value={f.delivery_rental_price} onChange={set('delivery_rental_price')} type="number" min="0" step="0.01" disabled={!f.is_rentable || !f.delivery_enabled} className={inp} />
+              <Checked name="deliveryPrice"><input aria-label="Delivery rental price" value={f.delivery_rental_price} onChange={set('delivery_rental_price')} inputMode="decimal" disabled={!f.is_rentable || !f.delivery_enabled} className={inp} /></Checked>
             </div>
-            <div><label className="block text-xs text-slate-500 mb-1">Sale price ($) {f.is_purchasable ? '' : '— not required'}</label><input aria-label="Sale price" value={f.sale_price} onChange={set('sale_price')} type="number" min="0" step="0.01" disabled={!f.is_purchasable} className={inp} /></div>
+            <div><label className="block text-xs text-slate-500 mb-1">Sale price ($) {f.is_purchasable ? '' : '— not required'}</label><Checked name="salePrice"><input aria-label="Sale price" value={f.sale_price} onChange={set('sale_price')} inputMode="decimal" disabled={!f.is_purchasable} className={inp} /></Checked></div>
             {isNew && stockStore && (
             <div>
               <label className="block text-xs text-slate-500 mb-1">{f.is_serialized ? `Units at ${stockStoreInfo?.name ?? 'this store'}: asset tags, one per unit (optional)` : `Starting stock at ${stockStoreInfo?.name ?? 'this store'} (optional)`}</label>
               {f.is_serialized
-                ? <textarea aria-label="Asset tags" value={stock} onChange={(e) => setStock(e.target.value)} placeholder="e.g. WC-1, WC-2, WC-3" className={inp} rows={2} />
-                : <input aria-label="Starting stock" value={stock} onChange={(e) => setStock(e.target.value)} inputMode="numeric" placeholder="0" className={inp} />}
+                ? <Checked name="stock"><textarea aria-label="Asset tags" value={stock} onChange={(e) => setStock(e.target.value)} placeholder="e.g. WC-1, WC-2, WC-3" className={inp} rows={2} /></Checked>
+                : <Checked name="stock"><input aria-label="Starting stock" value={stock} onChange={(e) => setStock(e.target.value)} inputMode="numeric" placeholder="0" className={inp} /></Checked>}
             </div>
           )}
           <div className="space-y-3 sm:mt-6">
@@ -458,18 +455,14 @@ function ItemModal({ item, onClose }: { item: Partial<InventoryItem>; onClose: (
           </fieldset>
           {err && <div className="text-sm text-red-600">{err}</div>}
           <div className="flex justify-end gap-2 pt-2">
-            <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">
               Cancel
             </button>
-            <button
-              onClick={() => save.mutate()}
-              disabled={save.isPending}
-              className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50"
-            >
-              {save.isPending ? 'Saving…' : 'Save'}
-            </button>
+            <SubmitButton disabled={Boolean(err)} className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50">
+              {(pending) => pending ? 'Saving…' : 'Save'}
+            </SubmitButton>
           </div>
-        </div>
+        </SaveForm>
       </div>
     </div>
   )
