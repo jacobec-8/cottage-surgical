@@ -5,7 +5,7 @@ import { useEffect, useRef } from 'react'
 /** The van drives in over the first seconds; after that only the idle part repeats. */
 const LOOP_FROM_S = 3.5
 /** Fades the clip's edges into the band, so a browser that draws its cream a shade off shows no box. */
-const EDGE_FADE = '[mask-image:linear-gradient(to_right,transparent,#000_15%,#000_85%,transparent),linear-gradient(to_bottom,transparent,#000_10%,#000_90%,transparent)] [mask-composite:intersect]'
+const EDGE_FADE = '[mask-image:linear-gradient(to_right,transparent,#000_4%,#000_96%,transparent),linear-gradient(to_bottom,transparent,#000_4%,#000_96%,transparent)] [mask-composite:intersect]'
 
 /**
  * The delivery van animation behind the hero text. Decorative, muted, and left on
