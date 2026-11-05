@@ -9,8 +9,14 @@ const card = (page: Page, name: string) => grid(page).getByRole('link', { name, 
 const chip = (page: Page, name: string) =>
   grid(page).getByRole('group', { name: 'Filter by category' }).getByRole('button', { name: new RegExp(`^${name}$`, 'i') })
 const filterBox = (page: Page) => page.getByRole('textbox', { name: 'Filter equipment…' })
-const tile = (page: Page, cta: string) => page.getByRole('link', { name: new RegExp(cta) })
 const noMatch = (page: Page) => grid(page).getByText(/^No equipment matches/)
+
+/** Bring a category tile to the middle of the carousel (only that one is a link), then open it. */
+async function openTile(page: Page, label: string) {
+  const carousel = page.getByRole('region', { name: 'Shop by category' })
+  await carousel.getByRole('button', { name: `Show ${label}` }).click()
+  await carousel.getByRole('link', { name: new RegExp(label) }).click()
+}
 
 /** A click before hydration does nothing; retry until a chip visibly takes effect. */
 async function openHydratedShop(page: Page) {
@@ -28,7 +34,7 @@ async function openHydratedShop(page: Page) {
 test('a category tile and then a category chip shows that category, not an empty grid', async ({ page }) => {
   await openHydratedShop(page)
 
-  await tile(page, 'Shop Hospital Beds').click()
+  await openTile(page, 'Hospital Beds')
   await expect(filterBox(page)).toHaveValue('bed')
   await expect(card(page, BED)).toBeVisible()
   await expect(card(page, WHEELCHAIR)).toBeHidden()
@@ -49,7 +55,7 @@ test('a category chip and then a tile shows the tile’s equipment', async ({ pa
   await expect(card(page, BED)).toBeVisible()
   await expect(card(page, WHEELCHAIR)).toBeHidden()
 
-  await tile(page, 'Shop Wheelchairs').click()
+  await openTile(page, 'Wheelchairs')
   await expect(filterBox(page)).toHaveValue('wheelchair')
   await expect(chip(page, 'All')).toHaveAttribute('aria-pressed', 'true')
   await expect(card(page, WHEELCHAIR)).toBeVisible()
@@ -60,12 +66,12 @@ test('a category chip and then a tile shows the tile’s equipment', async ({ pa
 test('the same tile works again after the search box was cleared', async ({ page }) => {
   await openHydratedShop(page)
 
-  await tile(page, 'Shop Wheelchairs').click()
+  await openTile(page, 'Wheelchairs')
   await expect(filterBox(page)).toHaveValue('wheelchair')
   await filterBox(page).fill('')
   await expect(card(page, BED)).toBeVisible()
 
-  await tile(page, 'Shop Wheelchairs').click()
+  await openTile(page, 'Wheelchairs')
   await expect(filterBox(page)).toHaveValue('wheelchair')
   await expect(card(page, WHEELCHAIR)).toBeVisible()
   await expect(card(page, BED)).toBeHidden()

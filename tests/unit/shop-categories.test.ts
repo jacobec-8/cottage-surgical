@@ -2,9 +2,9 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { SHOP_CATEGORIES } from '../../src/screens/shop/shopCategories.ts'
 
-test('quick select lists the five most-used choices, the first three unchanged', () => {
+test('quick select lists the five most-used choices under short names', () => {
   assert.deepEqual(SHOP_CATEGORIES.map((c) => c.label), [
-    'Wheelchairs', 'Hospital Beds', 'Knee Walkers', '3 Position Seat Lift Chair', '5 Liter Compact Stationary Oxygen Concentrator',
+    'Wheelchairs', 'Hospital Beds', 'Knee Walkers', 'Lift Chairs', 'Oxygen',
   ])
 })
 
@@ -18,5 +18,6 @@ test('every tile has a picture and a short description', () => {
     assert.match(category.img, /^https:\/\//)
     assert.ok(category.tagline.length > 0)
     assert.ok(category.cta.length > 0)
+    assert.match(category.tint, /^#[0-9a-f]{6}$/)
   }
 })
