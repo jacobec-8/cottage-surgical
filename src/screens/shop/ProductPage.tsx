@@ -1,7 +1,7 @@
 'use client'
 
 import { shopPrice } from '../../lib/shopPrice'
-import { useState } from 'react'
+import { useLayoutEffect, useState } from 'react'
 import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
 import { Check, Truck, Plus, Minus, ArrowLeft, MapPin, Wrench, Zap } from 'lucide-react'
@@ -20,6 +20,9 @@ export default function ProductPage({
 }) {
   const { add } = useCart()
   const [qty, setQty] = useState(1)
+  // Open each product at its top. Some phone browsers keep the long catalog's
+  // scroll on the way in, which lands the visitor at the bottom of this page.
+  useLayoutEffect(() => { window.scrollTo(0, 0) }, [handle])
 
   const { data: p, isLoading } = useQuery({
     queryKey: ['shop_product', handle],

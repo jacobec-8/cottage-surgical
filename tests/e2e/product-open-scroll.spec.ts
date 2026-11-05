@@ -19,3 +19,17 @@ test.describe('on a phone', () => {
     expect(where.y).toBeLessThan(50)
   })
 })
+
+test('a product page opens at its top even when the router keeps the old scroll', async ({ page }) => {
+  // Some phone browsers keep the grid's scroll on the way in; this navigation does the same.
+  await page.setViewportSize({ width: 390, height: 844 })
+  await mockCatalogReads(page)
+  await openPublicRoute(page, '/')
+  const href = await page.locator('#favorites a[href^="/product/"]').first().getAttribute('href')
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(800)
+  await page.evaluate((to) => (window as unknown as { next: { router: { push: (h: string, o: { scroll: boolean }) => void } } }).next.router.push(to!, { scroll: false }), href)
+  await expect(page).toHaveURL(/\/product\//)
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(50)
+})
