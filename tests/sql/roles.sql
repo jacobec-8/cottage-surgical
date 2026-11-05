@@ -522,5 +522,41 @@ SELECT test_as('a2000000-0000-0000-0000-000000000002'); SET ROLE authenticated;
 UPDATE pickup_locations SET is_active = true WHERE id = 'a1000000-0000-0000-0000-0000000000a2';
 RESET ROLE;
 
+
+-- ── Change history (125): who changed what, readable by admin and the owner ─
+SELECT test_as('a2000000-0000-0000-0000-000000000002'); SET ROLE authenticated;
+UPDATE equipment_location_inventory SET pickup_rental_price = 46
+ WHERE equipment_item_id = 'a7000000-0000-0000-0000-00000000000a' AND location_id = 'a1000000-0000-0000-0000-0000000000a1';
+SELECT test_assert((SELECT count(*) = 1 FROM change_log
+                     WHERE table_name = 'equipment_location_inventory' AND action = 'update'
+                       AND user_id = 'a2000000-0000-0000-0000-000000000002'
+                       AND location_id = 'a1000000-0000-0000-0000-0000000000a1'
+                       AND (changed->'pickup_rental_price'->>'old')::numeric = 45
+                       AND (changed->'pickup_rental_price'->>'new')::numeric = 46),
+  'a price change is recorded with who, where, old and new');
+SELECT test_assert((SELECT bool_and(business_id = 'a0000000-0000-0000-0000-00000000000a') FROM change_log),
+  'the owner reads only their own business''s history');
+RESET ROLE;
+SELECT test_as('a2000000-0000-0000-0000-000000000003'); SET ROLE authenticated;
+SELECT test_assert((SELECT count(*) = 0 FROM change_log), 'staff see no history');
+RESET ROLE;
+SELECT test_as('a2000000-0000-0000-0000-000000000006'); SET ROLE authenticated;
+SELECT test_assert((SELECT count(*) = 0 FROM change_log WHERE business_id = 'a0000000-0000-0000-0000-00000000000a'),
+  'another owner sees none of it');
+RESET ROLE;
+SELECT test_as('a2000000-0000-0000-0000-000000000001'); SET ROLE authenticated;
+SELECT test_assert((SELECT count(*) > 0 FROM change_log WHERE table_name = 'memberships'), 'admin sees membership changes too');
+DO $$ BEGIN
+  BEGIN
+    INSERT INTO change_log (table_name, row_id, action, changed) VALUES ('x', 'y', 'insert', '{}');
+    RAISE EXCEPTION 'FAILED: history was written by hand';
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+  BEGIN
+    DELETE FROM change_log;
+    IF (SELECT count(*) FROM change_log) = 0 THEN RAISE EXCEPTION 'FAILED: history was deleted'; END IF;
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+END $$;
+RESET ROLE;
+
 SELECT test_as('');
 SELECT 'roles assertions passed' AS result;
