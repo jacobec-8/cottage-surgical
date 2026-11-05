@@ -3,6 +3,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from './supabase'
+import { useStaffModuleAccess } from './useStaffModuleAccess'
 import { refreshWebsite } from './websiteRefresh'
 import { productEditProblem } from './storeProducts'
 import { ensureChanged } from './saveErrors'
@@ -15,10 +16,14 @@ type ProductPatch = Partial<Pick<ProductDetailsItem, 'name' | 'description' | 'c
 export type ProductEdits = {
   storeName: string | null
   store: StoreSettings | null
-  /** Pickup and delivery price at the selected store: store staff there and admins. */
+  /** Stock count and scan code at the selected store: store staff there, the owner and admins. */
   canEditStore: boolean
-  /** The product itself: admins, or staff for their store's own product. */
+  /** Prices at the selected store: staff only when the store's "Change prices" switch is on (121). */
+  canEditPrices: boolean
+  /** The product itself: admins and the owner; staff for their store's own product when "Change products" is on. */
   canEditProduct: boolean
+  /** Online sales at the store: a product decision, same switch as canEditProduct for staff. */
+  canSetRetail: boolean
   saveStore: (patch: StorePatch) => Promise<void>
   saveProduct: (patch: ProductPatch) => Promise<void>
   /** Online sales at the store in the header (null while loading or with no store). */
@@ -51,8 +56,13 @@ export function useProductEdits(item: ProductDetailsItem & { id: string; locatio
       return Boolean(data?.online_retail_enabled)
     },
   })
+  const access = useStaffModuleAccess()
   const isAdmin = profile?.role === 'admin'
+  const isOwner = profile?.role === 'owner'
   const staffHere = profile?.role === 'staff' && Boolean(locationId) && profile.location_id === locationId
+  const mayPrices = staffHere && access.canAccess('edit_prices')
+  const mayProducts = staffHere && access.canAccess('edit_products')
+  const ownProduct = Boolean(item.location_id) && item.location_id === locationId
   const refresh = () => {
     for (const key of ['store_product', 'store_retail', 'equipment_items', 'equipment_units', 'product_panel_shop', 'equipment_item_pickup_locations', 'inventory_assignments']) void qc.invalidateQueries({ queryKey: [key] })
     void refreshWebsite()
@@ -60,9 +70,11 @@ export function useProductEdits(item: ProductDetailsItem & { id: string; locatio
   return {
     storeName,
     store: store.data ?? null,
-    canEditStore: Boolean(store.data) && (isAdmin || staffHere),
-    // Staff edit every field of a product their store carries (108); admins any product.
-    canEditProduct: isAdmin || (staffHere && Boolean(store.data)) || (profile?.role === 'owner' && Boolean(store.data)),
+    canEditStore: Boolean(store.data) && (isAdmin || isOwner || staffHere),
+    canEditPrices: Boolean(store.data) && (isAdmin || isOwner || mayPrices),
+    // Owner-wide products are the owner's and admins'; staff edit their own store's product when the switch is on (121).
+    canEditProduct: isAdmin || (isOwner && Boolean(store.data)) || (mayProducts && ownProduct && Boolean(store.data)),
+    canSetRetail: Boolean(store.data) && (isAdmin || isOwner || mayProducts),
     saveStore: async (patch) => {
       const { data: changed, error } = await supabase.from('equipment_location_inventory')
         .update({ ...patch, updated_at: new Date().toISOString() })
@@ -82,7 +94,7 @@ export function useProductEdits(item: ProductDetailsItem & { id: string; locatio
       if (problem) throw new Error(problem)
       if (locationId) {
         const { data, error } = await supabase.rpc('update_store_product', { p_item_id: item.id, p_location_id: locationId, p_patch: patch })
-        if (error || !data?.ok) throw new Error(data?.reason === 'invalid_name' ? 'Enter a name.' : data?.reason === 'forbidden' ? 'You can only edit products your store carries.' : data?.reason === 'invalid_value' ? 'A price is missing for what this product offers.' : 'Couldn’t save. Please try again.')
+        if (error || !data?.ok) throw new Error(data?.reason === 'invalid_name' ? 'Enter a name.' : data?.reason === 'forbidden' ? 'You can only edit products your store carries.' : data?.reason === 'locked' ? 'Products are locked at this store. Ask the owner to open “Change products”.' : data?.reason === 'invalid_value' ? 'A price is missing for what this product offers.' : 'Couldn’t save. Please try again.')
       } else {
         const { data: changed, error } = await supabase.from('equipment_items').update(patch).eq('id', item.id).select('id')
         if (error) throw error

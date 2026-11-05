@@ -51,7 +51,8 @@ export function useSetDueDate(onMessage: (msg: string) => void) {
     mutationFn: async ({ chargeId, dueOn }: { chargeId: string; dueOn: string | null; today: string; status: string }) => {
       // The database decides the status flip (120); billing rows are no longer written directly.
       const { data, error } = await supabase.rpc('set_charge_due_date', { p_charge_id: chargeId, p_due_on: dueOn })
-      if (error || !(data as { ok?: boolean } | null)?.ok) throw new Error('Couldn’t save the due date. Please try again.')
+      const result = data as { ok?: boolean; reason?: string } | null
+      if (error || !result?.ok) throw new Error(result?.reason === 'forbidden' ? 'Billing is locked at this store.' : 'Couldn’t save the due date. Please try again.')
     },
     onMutate: () => onMessage(''),
     onSuccess: () => { invalidate(qc); onMessage('Due date saved.') },

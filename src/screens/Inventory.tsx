@@ -9,6 +9,7 @@ import { productFormProblems, startingStockProblems } from '../lib/formChecks/in
 import { useLocationScope } from '../contexts/LocationContext'
 import { canSwitchStores } from '../lib/roles'
 import { useCatalogManager } from '../lib/useCatalogManager'
+import { useStaffModuleAccess } from '../lib/useStaffModuleAccess'
 import { refreshWebsite } from '../lib/websiteRefresh'
 import { canManageStore, parseAssetTags, removeProductMessage } from '../lib/storeProducts'
 import { useAuth } from '../contexts/AuthContext'
@@ -52,6 +53,7 @@ export default function Inventory() {
   const [q, setQ] = useState('')
   const [editing, setEditing] = useState<Partial<InventoryItem> | null>(null) // null=closed, {} = new
   const catalogManager = useCatalogManager()
+  const access = useStaffModuleAccess()
   const [expandedId, setExpandedId] = useState<string | null>(null)
   // The row pencil opens the row with its first field ready to edit.
   const [editTarget, setEditTarget] = useState<{ id: string; n: number } | null>(null)
@@ -153,7 +155,7 @@ export default function Inventory() {
     <div>
       <div className="mb-1 flex flex-col items-start gap-3 sm:flex-row sm:justify-between">
         <h1 className="text-2xl font-semibold">Inventory Management</h1>
-        {(catalogManager || profile?.role === 'staff') && (
+        {(catalogManager || (profile?.role === 'staff' && access.canAccess('edit_products'))) && (
           <button
             onClick={() => setEditing({})}
             className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 sm:w-auto"

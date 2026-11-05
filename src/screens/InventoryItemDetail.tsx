@@ -16,6 +16,7 @@ import { statusLabel } from '../lib/status'
 import { fulfillmentLabel } from '../lib/fulfillment'
 import { useLocationScope } from '../contexts/LocationContext'
 import { useCatalogManager } from '../lib/useCatalogManager'
+import { useStaffModuleAccess } from '../lib/useStaffModuleAccess'
 import { refreshWebsite } from '../lib/websiteRefresh'
 import { removeProductMessage } from '../lib/storeProducts'
 import { bulkCounts } from '../lib/bulkStock'
@@ -115,9 +116,10 @@ export default function InventoryItemDetail({ itemId }: { itemId: string }) {
   const [tab, setTab] = useState<Tab>('overview')
   const [editing, setEditing] = useState(false)
   const catalogManager = useCatalogManager()
-  // Owner/admin edit the owner's products; store staff edit only their own store's products (100).
+  const access = useStaffModuleAccess()
+  // Owner/admin edit the owner's products; store staff edit only their own store's products, and only when the store's "Change products" switch is on (121).
   const canEditProduct = (product: { location_id?: string | null } | null | undefined) =>
-    catalogManager || Boolean(product?.location_id && product.location_id === profile?.location_id)
+    catalogManager || Boolean(product?.location_id && product.location_id === profile?.location_id && access.canAccess('edit_products'))
   const [note, setNote] = useState('')
 
   const item = useQuery({
