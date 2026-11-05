@@ -56,9 +56,9 @@ INSERT INTO public.deliveries (id, order_id, leg_type, status, location_id, driv
   'a1000000-0000-0000-0000-0000000000a1', 'a3000000-0000-0000-0000-000000000001', CURRENT_DATE + 1);
 
 -- Owner-wide products for each owner, one single-pharmacy product at A1.
-INSERT INTO public.equipment_items (id, name, category, business_id, is_rentable, is_purchasable) VALUES
- ('a7000000-0000-0000-0000-00000000000a', 'Wheelchair A', 'mobility', 'a0000000-0000-0000-0000-00000000000a', false, false),
- ('a7000000-0000-0000-0000-00000000000b', 'Wheelchair B', 'mobility', 'a0000000-0000-0000-0000-00000000000b', false, false);
+INSERT INTO public.equipment_items (id, name, category, business_id, is_rentable, is_purchasable, is_serialized) VALUES
+ ('a7000000-0000-0000-0000-00000000000a', 'Wheelchair A', 'mobility', 'a0000000-0000-0000-0000-00000000000a', false, false, false),
+ ('a7000000-0000-0000-0000-00000000000b', 'Wheelchair B', 'mobility', 'a0000000-0000-0000-0000-00000000000b', false, false, false);
 INSERT INTO public.equipment_items (id, name, category, business_id, location_id, is_rentable, is_purchasable) VALUES
  ('a7000000-0000-0000-0000-0000000000a1', 'Knee walker A1', 'mobility', 'a0000000-0000-0000-0000-00000000000a',
   'a1000000-0000-0000-0000-0000000000a1', false, false);
@@ -294,6 +294,93 @@ RESET ROLE;
 SELECT test_as('a2000000-0000-0000-0000-000000000001'); SET ROLE authenticated;
 DELETE FROM customers WHERE id = 'a4000000-0000-0000-0000-0000000000a9';
 SELECT test_assert((SELECT count(*) = 0 FROM customers WHERE id = 'a4000000-0000-0000-0000-0000000000a9'), 'admin can delete a customer');
+RESET ROLE;
+
+
+-- ── Trust (121): prices and products are locked until the owner opens them ─
+INSERT INTO public.equipment_location_inventory (equipment_item_id, location_id, quantity_on_hand, pickup_enabled, pickup_rental_price)
+VALUES ('a7000000-0000-0000-0000-00000000000a', 'a1000000-0000-0000-0000-0000000000a1', 3, true, 40)
+ON CONFLICT DO NOTHING;
+SELECT test_assert((SELECT count(*) = 2 FROM staff_module_access WHERE location_id = 'a1000000-0000-0000-0000-0000000000a1'
+                      AND module_key IN ('edit_prices', 'edit_products') AND NOT enabled),
+  'a new pharmacy starts with prices and products locked');
+
+SELECT test_as('a2000000-0000-0000-0000-000000000003'); SET ROLE authenticated;
+SELECT test_assert(NOT staff_may('a1000000-0000-0000-0000-0000000000a1', 'edit_prices'), 'base staff may not edit prices');
+UPDATE equipment_location_inventory SET quantity_on_hand = 7
+ WHERE equipment_item_id = 'a7000000-0000-0000-0000-00000000000a' AND location_id = 'a1000000-0000-0000-0000-0000000000a1';
+SELECT test_assert((SELECT quantity_on_hand = 7 FROM equipment_location_inventory
+                     WHERE equipment_item_id = 'a7000000-0000-0000-0000-00000000000a' AND location_id = 'a1000000-0000-0000-0000-0000000000a1'),
+  'base staff adjust the stock count');
+DO $$ BEGIN
+  BEGIN
+    UPDATE equipment_location_inventory SET pickup_rental_price = 99
+     WHERE equipment_item_id = 'a7000000-0000-0000-0000-00000000000a' AND location_id = 'a1000000-0000-0000-0000-0000000000a1';
+    RAISE EXCEPTION 'FAILED: base staff changed a price';
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+  BEGIN
+    INSERT INTO equipment_items (name, category, business_id, location_id, is_rentable, is_purchasable)
+    VALUES ('Rogue product', 'mobility', 'a0000000-0000-0000-0000-00000000000a', 'a1000000-0000-0000-0000-0000000000a1', false, false);
+    RAISE EXCEPTION 'FAILED: base staff added a product';
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+  BEGIN
+    INSERT INTO equipment_location_inventory (equipment_item_id, location_id, quantity_on_hand)
+    VALUES ('a7000000-0000-0000-0000-0000000000a1', 'a1000000-0000-0000-0000-0000000000a1', 1);
+    RAISE EXCEPTION 'FAILED: base staff put a product on the shelf';
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+END $$;
+SELECT test_assert((update_store_product('a7000000-0000-0000-0000-00000000000a', 'a1000000-0000-0000-0000-0000000000a1', '{"name":"Hacked"}'))->>'reason' = 'locked',
+  'base staff cannot rename a product');
+SELECT test_assert((remove_product_from_store('a7000000-0000-0000-0000-00000000000a', 'a1000000-0000-0000-0000-0000000000a1'))->>'reason' = 'locked',
+  'base staff cannot drop a product');
+SELECT test_assert(NOT can_manage_online_retail('a1000000-0000-0000-0000-0000000000a1'), 'base staff cannot flip online sales');
+UPDATE staff_module_access SET enabled = true WHERE location_id = 'a1000000-0000-0000-0000-0000000000a1' AND module_key = 'edit_prices';
+SELECT test_assert((SELECT NOT enabled FROM staff_module_access WHERE location_id = 'a1000000-0000-0000-0000-0000000000a1' AND module_key = 'edit_prices'),
+  'staff cannot open their own switches');
+RESET ROLE;
+
+-- The owner opens prices at A1 only.
+SELECT test_as('a2000000-0000-0000-0000-000000000002'); SET ROLE authenticated;
+UPDATE staff_module_access SET enabled = true WHERE location_id = 'a1000000-0000-0000-0000-0000000000a1' AND module_key IN ('edit_prices', 'edit_products');
+SELECT test_assert((SELECT count(*) = 2 FROM staff_module_access WHERE location_id = 'a1000000-0000-0000-0000-0000000000a1'
+                      AND module_key IN ('edit_prices', 'edit_products') AND enabled), 'the owner opens prices and products at A1');
+RESET ROLE;
+
+SELECT test_as('a2000000-0000-0000-0000-000000000003'); SET ROLE authenticated;
+UPDATE equipment_location_inventory SET pickup_rental_price = 45
+ WHERE equipment_item_id = 'a7000000-0000-0000-0000-00000000000a' AND location_id = 'a1000000-0000-0000-0000-0000000000a1';
+SELECT test_assert((SELECT pickup_rental_price = 45 FROM equipment_location_inventory
+                     WHERE equipment_item_id = 'a7000000-0000-0000-0000-00000000000a' AND location_id = 'a1000000-0000-0000-0000-0000000000a1'),
+  'trusted staff change their pharmacy price');
+SELECT test_assert((update_store_product('a7000000-0000-0000-0000-00000000000a', 'a1000000-0000-0000-0000-0000000000a1', '{"name":"Hacked"}'))->>'reason' = 'locked',
+  'trusted staff still cannot rename an owner-wide product');
+SELECT test_assert((SELECT name = 'Wheelchair A' FROM equipment_items WHERE id = 'a7000000-0000-0000-0000-00000000000a'),
+  'the owner-wide product is untouched');
+SELECT test_assert((update_store_product('a7000000-0000-0000-0000-0000000000a1', 'a1000000-0000-0000-0000-0000000000a1', '{"name":"Knee walker A1 deluxe"}'))->>'ok' = 'true',
+  'trusted staff rename their own pharmacy product');
+INSERT INTO equipment_items (id, name, category, business_id, location_id, is_rentable, is_purchasable)
+VALUES ('a7000000-0000-0000-0000-0000000000a2', 'Commode A1', 'mobility', 'a0000000-0000-0000-0000-00000000000a', 'a1000000-0000-0000-0000-0000000000a1', false, false);
+SELECT test_assert((SELECT count(*) = 1 FROM equipment_items WHERE id = 'a7000000-0000-0000-0000-0000000000a2'), 'trusted staff add a product at their pharmacy');
+RESET ROLE;
+
+-- Staff at A2 are still base staff: the switch is per pharmacy.
+SELECT test_as('a2000000-0000-0000-0000-000000000005'); SET ROLE authenticated;
+SELECT test_assert(NOT staff_may('a1000000-0000-0000-0000-0000000000a2', 'edit_prices'), 'A2 staff stay locked when A1 opens');
+RESET ROLE;
+
+-- Billing section: locked means the billing functions refuse.
+SELECT test_as('a2000000-0000-0000-0000-000000000002'); SET ROLE authenticated;
+UPDATE staff_module_access SET enabled = false WHERE location_id = 'a1000000-0000-0000-0000-0000000000a1' AND module_key = 'billing';
+RESET ROLE;
+SELECT test_as('a2000000-0000-0000-0000-000000000003'); SET ROLE authenticated;
+SELECT test_assert((set_charge_due_date('a8000000-0000-0000-0000-0000000000a1', CURRENT_DATE + 31))->>'reason' = 'forbidden',
+  'staff with Billing locked cannot set a due date');
+SELECT test_assert((record_rental_payment('a8000000-0000-0000-0000-0000000000a1', CURRENT_DATE, CURRENT_DATE + 30))->>'reason' = 'forbidden',
+  'staff with Billing locked cannot record a payment');
+RESET ROLE;
+SELECT test_as('a2000000-0000-0000-0000-000000000002'); SET ROLE authenticated;
+SELECT test_assert((set_charge_due_date('a8000000-0000-0000-0000-0000000000a1', CURRENT_DATE + 31))->>'ok' = 'true',
+  'the owner is never locked by a section switch');
 RESET ROLE;
 
 SELECT test_as('');

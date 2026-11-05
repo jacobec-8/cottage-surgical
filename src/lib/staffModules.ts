@@ -8,6 +8,8 @@ export const STAFF_MODULES = [
   { key: 'billing', label: 'Billing', description: 'View billing and record offline payments.' },
   { key: 'delivery', label: 'Delivery & Pickup', description: 'Schedule, assign, and override delivery stops.' },
   { key: 'drivers', label: 'Drivers', description: 'Manage the driver roster and login links.' },
+  { key: 'edit_prices', label: 'Change prices', description: 'Change this store’s rental and sale prices. Locked for new stores.' },
+  { key: 'edit_products', label: 'Change products', description: 'Add, edit, carry, hide or remove this store’s products and switch online sales. Locked for new stores.' },
 ] as const
 
 export type StaffModule = (typeof STAFF_MODULES)[number]['key']

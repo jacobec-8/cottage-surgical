@@ -52,7 +52,8 @@ export default function ProductDetailsList({ item, edits, openField }: { item: P
   const salePrice = store?.sale_price ?? item.sale_price
   const storeEdit = Boolean(edits?.canEditStore && store)
   const productEdit = Boolean(edits?.canEditProduct)
-  const priceEdit = storeEdit || (!store && productEdit)
+  const priceEdit = Boolean(edits?.canEditPrices && store) || (!store && productEdit)
+  const retailEdit = Boolean(edits?.canSetRetail && store)
   const noStore = 'Choose a store in the header'
 
   // Prices typed while turning something on become the store's prices too, so
@@ -86,7 +87,7 @@ export default function ProductDetailsList({ item, edits, openField }: { item: P
           ? <TextEditor label="Asset tag of the new unit" action="Add unit" required="Enter an asset tag." done={done} save={(tag) => edits!.addUnit(tag)} />
           : <QuantityEditor initial={store!.quantity_on_hand} done={done} save={(qty) => edits!.saveStore({ quantity_on_hand: qty })} />) : undefined} />
       <Row label={`Online sales${where}`} value={!store ? noStore : edits?.retailOn == null ? '…' : edits.retailOn ? 'On' : 'Off: customers can’t buy online'}
-        editor={storeEdit && edits?.retailOn != null ? (done) => <YesNoEditor question="Sell online?" initial={edits.retailOn!} done={done} save={(v) => edits!.setRetail(v)} /> : undefined} />
+        editor={retailEdit && edits?.retailOn != null ? (done) => <YesNoEditor question="Sell online?" initial={edits.retailOn!} done={done} save={(v) => edits!.setRetail(v)} /> : undefined} />
 
       <Row label="Pickup rental" value={pickupOn && pickupPrice != null ? money(pickupPrice, '/mo')! : `Not offered${where}`}
         editor={priceEdit ? (done) => <PickupEditor where={where} initialOn={pickupOn} initialPrice={store ? store.pickup_rental_price : item.pickup_rental_price}
