@@ -477,5 +477,50 @@ SELECT test_assert((SELECT count(*) = 1 FROM rental_orders o JOIN customers c ON
                      WHERE c.full_name = 'Web Customer' AND o.location_id = 'a1000000-0000-0000-0000-0000000000a1' AND o.source = 'storefront'),
   'the request landed at the chosen pharmacy');
 
+
+-- ── The owner runs their pharmacies (124) ─────────────────────────────────
+SELECT test_as('a2000000-0000-0000-0000-000000000002'); SET ROLE authenticated;
+INSERT INTO pickup_locations (id, name, address_line1, address_city, address_state, address_zip)
+VALUES ('a1000000-0000-0000-0000-0000000000a3', 'Pharmacy A3', '3 A St', 'Woodbury', 'NY', '11797');
+SELECT test_assert((SELECT business_id = 'a0000000-0000-0000-0000-00000000000a' AND slug LIKE 'pharmacy-a3-%' AND partner_type = 'owned'
+                      FROM pickup_locations WHERE id = 'a1000000-0000-0000-0000-0000000000a3'),
+  'the owner adds a pharmacy: it lands in their business with a website address');
+SELECT test_assert((SELECT count(*) = 11 AND bool_and(CASE WHEN module_key IN ('edit_prices', 'edit_products') THEN NOT enabled ELSE enabled END)
+                      FROM staff_module_access WHERE location_id = 'a1000000-0000-0000-0000-0000000000a3'),
+  'the new pharmacy has its switches, trust locked');
+DO $$ BEGIN
+  BEGIN
+    INSERT INTO pickup_locations (name, business_id, address_line1, address_city, address_state, address_zip)
+    VALUES ('Intruder', 'a0000000-0000-0000-0000-00000000000b', '1 B St', 'Huntington', 'NY', '11743');
+    RAISE EXCEPTION 'FAILED: the owner added a pharmacy to another owner';
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+  BEGIN
+    UPDATE pickup_locations SET partner_type = 'partner', revenue_share_percent = 20 WHERE id = 'a1000000-0000-0000-0000-0000000000a3';
+    RAISE EXCEPTION 'FAILED: the owner changed business terms';
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+  BEGIN
+    UPDATE pickup_locations SET slug = 'cottage-surgical' WHERE id = 'a1000000-0000-0000-0000-0000000000a3';
+    RAISE EXCEPTION 'FAILED: the owner changed the website address';
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+END $$;
+UPDATE pickup_locations SET phone = '555-0199', delivery_zips = '{11797}', delivers_anywhere = false WHERE id = 'a1000000-0000-0000-0000-0000000000a3';
+SELECT test_assert((SELECT phone = '555-0199' AND delivery_zips = '{11797}' FROM pickup_locations WHERE id = 'a1000000-0000-0000-0000-0000000000a3'),
+  'the owner edits the pharmacy''s own settings');
+UPDATE pickup_locations SET is_active = false WHERE id = 'a1000000-0000-0000-0000-0000000000a2';
+SELECT test_assert((SELECT NOT is_active FROM pickup_locations WHERE id = 'a1000000-0000-0000-0000-0000000000a2'), 'the owner switches a pharmacy off');
+UPDATE pickup_locations SET name = 'Pharmacy B1 hacked' WHERE id = 'a1000000-0000-0000-0000-0000000000b1';
+RESET ROLE;
+SELECT test_assert((SELECT name = 'Pharmacy B1' FROM pickup_locations WHERE id = 'a1000000-0000-0000-0000-0000000000b1'),
+  'another owner''s pharmacy is untouched');
+SELECT test_as('a2000000-0000-0000-0000-000000000005'); SET ROLE authenticated;
+SELECT test_assert(NOT can_access_location('a1000000-0000-0000-0000-0000000000a2'), 'its staff are locked out at once');
+UPDATE pickup_locations SET phone = '000' WHERE id = 'a1000000-0000-0000-0000-0000000000a1';
+RESET ROLE;
+SELECT test_assert((SELECT phone IS DISTINCT FROM '000' FROM pickup_locations WHERE id = 'a1000000-0000-0000-0000-0000000000a1'),
+  'staff cannot edit a pharmacy');
+SELECT test_as('a2000000-0000-0000-0000-000000000002'); SET ROLE authenticated;
+UPDATE pickup_locations SET is_active = true WHERE id = 'a1000000-0000-0000-0000-0000000000a2';
+RESET ROLE;
+
 SELECT test_as('');
 SELECT 'roles assertions passed' AS result;

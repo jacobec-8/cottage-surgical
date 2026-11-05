@@ -1,9 +1,12 @@
 'use client'
 
 import Link from 'next/link'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Building2, ChevronRight, MapPin, Plus, Store, Users } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../contexts/AuthContext'
+import NewPharmacyForm from './locations/NewPharmacyForm'
 
 type LocationUser = {
   id: string
@@ -29,6 +32,8 @@ type Location = {
 }
 
 export default function Locations() {
+  const { profile } = useAuth()
+  const [adding, setAdding] = useState(false)
   const locations = useQuery({
     queryKey: ['locations_manager'],
     queryFn: async () => {
@@ -46,8 +51,12 @@ export default function Locations() {
     <div className="max-w-6xl">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div><h1 className="flex items-center gap-2 text-2xl font-semibold"><Building2 className="text-blue-600" /> Locations</h1><p className="mt-1 text-sm text-slate-500">Manage owned pharmacies, partner pickup stores, and their location-scoped users.</p></div>
-        <Link href="/locations/onboard" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700"><Plus size={16} /> Add businesses</Link>
+        <div className="flex gap-2">
+          <button type="button" onClick={() => setAdding((open) => !open)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700"><Plus size={16} /> New pharmacy</button>
+          {profile?.role === 'admin' && <Link href="/locations/onboard" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-blue-200 px-4 text-sm font-medium text-blue-700 hover:bg-blue-50">Onboard a business</Link>}
+        </div>
       </div>
+      {adding && <NewPharmacyForm onDone={() => { setAdding(false); void locations.refetch() }} />}
       {locations.isLoading && <div className="text-sm text-slate-500">Loading locations…</div>}
       {locations.error && <div className="text-sm text-red-600">Couldn’t load locations.</div>}
       <div className="grid gap-4 lg:grid-cols-2">
