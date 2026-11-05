@@ -20,6 +20,7 @@ async function openTile(page: Page, label: string) {
 
 /** A click before hydration does nothing; retry until a chip visibly takes effect. */
 async function openHydratedShop(page: Page) {
+  await page.emulateMedia({ reducedMotion: 'reduce' }) // keeps the category ring still
   await mockCatalogReads(page)
   await openPublicRoute(page, '/')
   await expect(card(page, WHEELCHAIR)).toBeVisible()

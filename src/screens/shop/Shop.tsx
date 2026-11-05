@@ -81,42 +81,31 @@ export default function Shop({ initialProducts }: { initialProducts?: Product[] 
     <div className="font-sans bg-white min-h-screen text-slate-800">
       <ShopHeader onSearch={searchFromLink} onHeaderSearch={searchFromHeader} />
 
-      {/* Hero */}
-      <section className="bg-gradient-to-b from-brand-50 to-white border-b border-slate-100">
-        <div className="max-w-6xl mx-auto px-4 pt-12 pb-10 text-center">
-          <span className="inline-flex items-center gap-2 text-xs font-semibold tracking-wide uppercase text-brand-700 bg-brand-100 rounded-full px-3.5 py-1.5">
+      {/* Hero: a navy band that runs behind the top half of the category ring. */}
+      <section className="bg-gradient-to-b from-navy to-navy-800 text-white pb-[196px] lg:pb-[230px]">
+        <div className="max-w-6xl mx-auto px-4 pt-12 text-center">
+          <span className="inline-flex items-center gap-2 text-xs font-bold tracking-wide uppercase text-navy bg-peach rounded-full px-3.5 py-1.5">
             <Truck size={14} /> Serving Nassau &amp; Suffolk County, NY
           </span>
-          <h1 className="font-heading font-extrabold tracking-tight text-slate-900 leading-[1.08] text-4xl sm:text-5xl mt-5">
-            Home medical equipment,<br className="hidden sm:block" /> delivered the same day.
+          <h1 className="font-heading font-extrabold tracking-tight leading-[1.06] text-4xl sm:text-5xl lg:text-[56px] mt-5">
+            Home medical equipment,<br className="hidden sm:block" /> <span className="text-peach">delivered the same day.</span>
           </h1>
-          <p className="text-slate-600 mt-4 max-w-2xl mx-auto text-lg">
+          <p className="text-blue-100/80 mt-4 max-w-2xl mx-auto text-lg">
             Rent hospital beds, wheelchairs, and walkers — delivered and set up in your home by licensed
             technicians, often the same day you order. No assembly, no shipping fees.
           </p>
-          <form onSubmit={(e) => { e.preventDefault(); goShop() }}
-            className="mt-7 flex items-center gap-2 bg-white rounded-xl p-1.5 max-w-xl mx-auto shadow-sm ring-1 ring-slate-200 focus-within:ring-2 focus-within:ring-brand-500">
-            <Search size={20} className="text-slate-400 ml-3 shrink-0" />
-            <input value={filter.query} onChange={(e) => setFilter((f) => typeSearch(f, e.target.value))}
-              placeholder="Search — wheelchair, hospital bed, walker…"
-              className="flex-1 min-w-0 text-slate-800 placeholder:text-slate-400 outline-none px-1 py-2" />
-            <button className="bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-lg px-5 sm:px-6 py-2.5 shrink-0">Search</button>
-          </form>
-          <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 mt-5 text-sm font-medium text-slate-600">
-            <span className="inline-flex items-center gap-1.5"><Check size={16} className="text-brand-600" /> Delivered same-day</span>
-            <span className="inline-flex items-center gap-1.5"><Check size={16} className="text-brand-600" /> Setup included</span>
-            <span className="inline-flex items-center gap-1.5"><Check size={16} className="text-brand-600" /> Free repairs while you rent</span>
-            <span className="inline-flex items-center gap-1.5"><Check size={16} className="text-brand-600" /> Month-to-month</span>
+          <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 mt-6 text-sm font-semibold">
+            <span className="inline-flex items-center gap-1.5"><Check size={16} strokeWidth={3} className="text-peach" /> Delivered same-day</span>
+            <span className="inline-flex items-center gap-1.5"><Check size={16} strokeWidth={3} className="text-peach" /> Setup included</span>
+            <span className="inline-flex items-center gap-1.5"><Check size={16} strokeWidth={3} className="text-peach" /> Free repairs while you rent</span>
+            <span className="inline-flex items-center gap-1.5"><Check size={16} strokeWidth={3} className="text-peach" /> Month-to-month</span>
           </div>
         </div>
       </section>
 
-      {/* Shop by category */}
-      <section className="py-14">
-        <div className="max-w-6xl mx-auto px-4 text-center mb-7">
-          <h2 className="font-heading font-extrabold tracking-tight text-navy text-2xl sm:text-3xl">Shop by category</h2>
-          <p className="text-slate-500 mt-1">Our most-requested home medical equipment.</p>
-        </div>
+      {/* Shop by category: pulled up so the tiles straddle the navy band's edge. */}
+      <section className="relative -mt-[188px] lg:-mt-[220px] pb-14">
+        <h2 className="sr-only">Shop by category</h2>
         <CategoryCarousel onPick={searchFromLink} />
         <div className="mt-4 text-center">
           <button onClick={goShop} className="text-brand-600 font-semibold text-sm inline-flex items-center gap-1 hover:gap-2 transition-all">

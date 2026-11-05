@@ -1,17 +1,19 @@
 'use client'
 
-import { useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
+import { useEffect, useRef, useState, type FocusEvent, type KeyboardEvent, type MouseEvent } from 'react'
 import Link from 'next/link'
-import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ArrowRight, ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react'
 import { SHOP_CATEGORIES } from './shopCategories'
-import { SHOWN_REACH, isShown, jumpsAcross, slotOf, swipeStep, wrapIndex } from './carouselSlots'
+import { AUTO_ADVANCE_MS, SHOWN_REACH, isShown, jumpsAcross, slotOf, swipeStep, wrapIndex } from './carouselSlots'
 
 // Scale and fade by distance from the middle: picked, beside it, at the edge, off stage.
+// Side tiles fade under a white veil rather than turning see-through, so they stay
+// light where they cross the hero's navy band.
 const SLOT_LOOK = [
-  { scale: 1, opacity: 1 },
-  { scale: 0.8, opacity: 0.75 },
-  { scale: 0.64, opacity: 0.4 },
-  { scale: 0.64, opacity: 0 },
+  { scale: 1, opacity: 1, veil: 0 },
+  { scale: 0.8, opacity: 1, veil: 0.3 },
+  { scale: 0.64, opacity: 1, veil: 0.55 },
+  { scale: 0.64, opacity: 0, veil: 0.55 },
 ]
 const COUNT = SHOP_CATEGORIES.length
 
@@ -27,11 +29,26 @@ function tileTransform(slot: number): string {
  * "Shop by category": the picked tile sits big in the middle, the rest shrink and
  * fade to either side, and the ring loops. Only the middle tile is a link; a side
  * tile is brought to the middle by a click, the arrows, the dots or a swipe.
+ * The ring turns on its own unless paused, hovered, focused, touched, or the
+ * visitor prefers reduced motion.
  */
 export default function CategoryCarousel({ onPick }: { onPick: (q: string) => void }) {
   // `from` is the previous pick, so the one tile wrapping around the back jumps instead of sliding across.
   const [nav, setNav] = useState({ active: 0, from: 0 })
+  const [playing, setPlaying] = useState(true)
+  const [held, setHeld] = useState(false)
   const touchX = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) setPlaying(false)
+  }, [])
+  // Restarts whenever the middle tile changes, so a manual move gets a full rest too.
+  useEffect(() => {
+    if (!playing || held) return
+    const timer = setTimeout(() => setNav((n) => ({ active: wrapIndex(n.active + 1, COUNT), from: n.active })), AUTO_ADVANCE_MS)
+    return () => clearTimeout(timer)
+  }, [nav.active, playing, held])
+  const onBlur = (e: FocusEvent) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setHeld(false) }
   const go = (index: number) => setNav((n) => ({ active: wrapIndex(index, COUNT), from: n.active }))
   const step = (by: number) => setNav((n) => ({ active: wrapIndex(n.active + by, COUNT), from: n.active }))
   const current = SHOP_CATEGORIES[nav.active]
@@ -47,12 +64,15 @@ export default function CategoryCarousel({ onPick }: { onPick: (q: string) => vo
   }
 
   return (
-    <div role="region" aria-roledescription="carousel" aria-label="Shop by category" onKeyDown={onKeyDown}>
-      <p className="sr-only" aria-live="polite">{`${current.label}, ${nav.active + 1} of ${COUNT}`}</p>
+    <div role="region" aria-roledescription="carousel" aria-label="Shop by category" onKeyDown={onKeyDown}
+      onMouseEnter={() => setHeld(true)} onMouseLeave={() => setHeld(false)} onFocus={() => setHeld(true)} onBlur={onBlur}>
+      {/* Announce only moves the visitor made; a turning ring would talk over everything. */}
+      <p className="sr-only" aria-live={playing && !held ? 'off' : 'polite'}>{`${current.label}, ${nav.active + 1} of ${COUNT}`}</p>
       <div
-        className="relative h-[400px] lg:h-[460px] overflow-hidden touch-pan-y [--cc-shift-1:236px] [--cc-shift-2:440px] lg:[--cc-shift-1:330px] lg:[--cc-shift-2:580px]"
-        onTouchStart={(e) => { touchX.current = e.touches[0].clientX }}
+        className="relative h-[424px] lg:h-[500px] overflow-hidden touch-pan-y [--cc-shift-1:236px] [--cc-shift-2:440px] lg:[--cc-shift-1:330px] lg:[--cc-shift-2:580px]"
+        onTouchStart={(e) => { touchX.current = e.touches[0].clientX; setHeld(true) }}
         onTouchEnd={(e) => {
+          setHeld(false)
           if (touchX.current === null) return
           const by = swipeStep(e.changedTouches[0].clientX - touchX.current)
           touchX.current = null
@@ -62,7 +82,7 @@ export default function CategoryCarousel({ onPick }: { onPick: (q: string) => vo
         {SHOP_CATEGORIES.map((c, i) => {
           const slot = slotOf(i, nav.active, COUNT)
           const middle = slot === 0
-          const { opacity } = SLOT_LOOK[Math.min(Math.abs(slot), SHOWN_REACH + 1)]
+          const { opacity, veil } = SLOT_LOOK[Math.min(Math.abs(slot), SHOWN_REACH + 1)]
           return (
             <Link key={c.label} href={`/?q=${encodeURIComponent(c.q)}`} onClick={(e) => onTileClick(e, i, c.q)}
               tabIndex={middle ? 0 : -1} aria-hidden={!middle}
@@ -71,8 +91,8 @@ export default function CategoryCarousel({ onPick }: { onPick: (q: string) => vo
                 transition: jumpsAcross(i, nav.from, nav.active, COUNT) ? 'none' : undefined,
               }}
               className={`group absolute left-1/2 top-2 flex w-[270px] h-[384px] lg:w-[360px] lg:h-[440px] flex-col overflow-hidden rounded-[22px] lg:rounded-3xl p-[22px] lg:p-7 text-left
-                transition-[transform,opacity,box-shadow] duration-500 ease-[cubic-bezier(.22,.61,.36,1)] motion-reduce:transition-none
-                ${middle ? 'shadow-[0_28px_56px_-20px_rgba(22,41,77,.35)]' : 'cursor-pointer'} ${isShown(slot) ? '' : 'pointer-events-none'}`}>
+                transition-[transform,opacity,box-shadow] duration-700 ease-[cubic-bezier(.22,.61,.36,1)] motion-reduce:transition-none
+                ${middle ? 'shadow-[0_30px_60px_-20px_rgba(0,0,0,.45)]' : 'cursor-pointer shadow-[0_16px_32px_-20px_rgba(0,0,0,.35)]'} ${isShown(slot) ? '' : 'pointer-events-none'}`}>
               <div className="h-[170px] lg:h-[210px] shrink-0 overflow-hidden">
                 <img src={c.img} alt="" className="h-full w-full object-contain mix-blend-multiply transition-transform duration-300 group-hover:scale-[1.04]" />
               </div>
@@ -81,6 +101,8 @@ export default function CategoryCarousel({ onPick }: { onPick: (q: string) => vo
               <span className={`mt-auto self-start inline-flex items-center gap-2 h-11 px-5 rounded-full bg-brand-600 group-hover:bg-brand-700 text-white text-[15px] font-bold transition-opacity duration-300 ${middle ? 'opacity-100' : 'opacity-0'}`}>
                 {c.cta} <ArrowRight size={16} strokeWidth={2.25} />
               </span>
+              <span aria-hidden="true" style={{ opacity: veil }}
+                className="pointer-events-none absolute inset-0 bg-white transition-opacity duration-700 motion-reduce:transition-none" />
             </Link>
           )
         })}
@@ -102,6 +124,10 @@ export default function CategoryCarousel({ onPick }: { onPick: (q: string) => vo
         <button type="button" onClick={() => step(1)} aria-label="Next category"
           className="w-11 h-11 rounded-full bg-brand-50 text-brand-600 hover:bg-brand-600 hover:text-white grid place-items-center transition-colors">
           <ChevronRight size={20} strokeWidth={2.25} />
+        </button>
+        <button type="button" onClick={() => setPlaying((p) => !p)} aria-label={playing ? 'Pause carousel' : 'Play carousel'}
+          className="w-11 h-11 -ml-2 rounded-full text-slate-400 hover:text-brand-600 hover:bg-brand-50 grid place-items-center transition-colors">
+          {playing ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" />}
         </button>
       </div>
     </div>
