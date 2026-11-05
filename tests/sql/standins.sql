@@ -10,6 +10,9 @@ DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'supabase_admin') THEN CREATE ROLE supabase_admin; END IF;
 END $$;
 CREATE SCHEMA auth;
+-- Supabase keeps pgcrypto in `extensions`; login creation hashes passwords with it.
+CREATE SCHEMA extensions;
+CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions;
 CREATE SCHEMA vault;
 CREATE TABLE auth.users (
   instance_id uuid, id uuid PRIMARY KEY, aud text, role text, email text UNIQUE,

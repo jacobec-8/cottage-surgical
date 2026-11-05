@@ -558,5 +558,22 @@ DO $$ BEGIN
 END $$;
 RESET ROLE;
 
+
+-- ── Logins are created the real way (126) ────────────────────────────────
+SELECT test_as('a2000000-0000-0000-0000-000000000002'); SET ROLE authenticated;
+SELECT test_assert((add_branch_login('a1000000-0000-0000-0000-0000000000a1', 'staff', 'New Person', '', 'qa-new-person', 'password-12'))->>'ok' = 'true',
+  'the owner creates a staff login with a hashed password');
+SELECT test_assert((SELECT count(*) = 1 FROM memberships m JOIN profiles p ON p.id = m.user_id
+                     WHERE p.email = 'qa-new-person@staff-login.cottagesurgical.invalid'
+                       AND m.scope_type = 'location' AND m.scope_id = 'a1000000-0000-0000-0000-0000000000a1' AND m.role = 'staff'
+                       AND p.role = 'staff' AND p.is_active),
+  'the new login has its membership and cached columns');
+SELECT test_assert((reset_branch_login_password((SELECT id FROM profiles WHERE email = 'qa-new-person@staff-login.cottagesurgical.invalid'), 'password-34'))->>'ok' = 'true',
+  'the owner resets its password');
+SELECT test_assert((SELECT encrypted_password = extensions.crypt('password-34', encrypted_password) FROM auth.users
+                     WHERE email = 'qa-new-person@staff-login.cottagesurgical.invalid'),
+  'the new password is the one stored');
+RESET ROLE;
+
 SELECT test_as('');
 SELECT 'roles assertions passed' AS result;
