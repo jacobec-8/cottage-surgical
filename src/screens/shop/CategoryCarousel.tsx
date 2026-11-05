@@ -89,7 +89,7 @@ export default function CategoryCarousel({ onPick }: { onPick: (q: string) => vo
                 transition: jumpsAcross(i, nav.from, nav.active, COUNT) ? 'none' : undefined,
               }}
               className={`group absolute left-1/2 top-2 flex w-[270px] h-[384px] lg:w-[360px] lg:h-[440px] flex-col overflow-hidden rounded-[22px] lg:rounded-3xl p-[22px] lg:p-7 text-left
-                transition-[transform,opacity,box-shadow] duration-500 ease-[cubic-bezier(.22,.61,.36,1)] motion-reduce:transition-none
+                transition-[transform,opacity,box-shadow] duration-700 ease-[cubic-bezier(.22,.61,.36,1)] motion-reduce:transition-none
                 ${middle ? 'shadow-[0_28px_56px_-20px_rgba(22,41,77,.35)]' : 'cursor-pointer'} ${isShown(slot) ? '' : 'pointer-events-none'}`}>
               <div className="h-[170px] lg:h-[210px] shrink-0 overflow-hidden">
                 <img src={c.img} alt="" className="h-full w-full object-contain mix-blend-multiply transition-transform duration-300 group-hover:scale-[1.04]" />

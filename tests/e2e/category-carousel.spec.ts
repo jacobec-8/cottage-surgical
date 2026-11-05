@@ -69,7 +69,7 @@ test('the ring turns on its own, and holds when paused or hovered', async ({ pag
   const pause = carousel(page).getByRole('button', { name: 'Pause carousel' })
   await expect(pause).toBeVisible()
   await page.mouse.move(0, 0)
-  await page.clock.runFor(3600)
+  await page.clock.runFor(5100)
   await expect(middleLink(page)).toContainText('Hospital Beds')
 
   await pause.click()
@@ -83,7 +83,7 @@ test('the ring turns on its own, and holds when paused or hovered', async ({ pag
   await page.clock.runFor(10_000)
   await expect(middleLink(page)).toContainText('Hospital Beds')
   await page.mouse.move(0, 0)
-  await page.clock.runFor(3600)
+  await page.clock.runFor(5100)
   await expect(middleLink(page)).toContainText('Knee Walkers')
 })
 

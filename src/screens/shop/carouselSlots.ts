@@ -7,7 +7,7 @@ export const SHOWN_REACH = 2
 /** Horizontal drag, in px, that counts as a swipe rather than a tap. */
 export const SWIPE_MIN_PX = 40
 /** How long each tile rests in the middle before the ring turns on its own. */
-export const AUTO_ADVANCE_MS = 3500
+export const AUTO_ADVANCE_MS = 5000
 
 export function wrapIndex(index: number, count: number): number {
   return ((index % count) + count) % count
