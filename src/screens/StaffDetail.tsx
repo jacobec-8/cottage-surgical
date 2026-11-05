@@ -3,12 +3,12 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, History, MessageSquarePlus, Save, ShieldCheck, Truck, UserCog } from 'lucide-react'
+import { ArrowLeft, Building2, History, MessageSquarePlus, Save, ShieldCheck, Truck, UserCog } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { authEmailToUsername } from '../lib/staffLogin'
 import { roleLabel } from '../lib/roles'
 import { canOwnerManage } from '../lib/storeLogins'
-import { useLocationScope } from '../contexts/LocationContext'
+import { useLocationScope, type StaffLocation } from '../contexts/LocationContext'
 import { LoginAccessSettings, ResetPassword } from './staff/LoginAccess'
 import { supabase } from '../lib/supabase'
 import { Checked, SaveForm, SubmitButton } from '../components/SaveForm'
@@ -101,8 +101,9 @@ export default function StaffDetail({ profileId }: { profileId: string }) {
           {ownerManages
             ? <LoginAccessSettings key={profile.id}person={profile} locations={locations} onSaved={refresh} />
             : (viewerIsAdmin || isSelf)
-              ? <ProfileSettings profile={profile} currentUserId={currentProfile?.id ?? ''} driver={driver.data ?? null} onSaved={refresh} />
+              ? <ProfileSettings profile={profile} currentUserId={currentProfile?.id ?? ''} onSaved={refresh} />
               : <section className="bg-white border border-slate-200 rounded-2xl p-5 text-sm text-slate-500">Only an admin can change this account.</section>}
+          {(viewerIsAdmin || ownerManages) && (profile.role === 'staff' || profile.role === 'driver') && <WorksAt key={`works-${profile.id}`} profile={profile} locations={locations} onSaved={refresh} />}
           {canResetPassword && <ResetPassword profileId={profile.id} />}
           {(viewerIsAdmin || ownerManages) && (profile.role === 'driver' || driver.data) && <DriverSettings profile={profile} driver={driver.data ?? null} onSaved={() => qc.invalidateQueries({ queryKey: ['drivers'] })} />}
         </div>
@@ -120,33 +121,20 @@ export default function StaffDetail({ profileId }: { profileId: string }) {
   )
 }
 
-function ProfileSettings({ profile, currentUserId, driver, onSaved }: { profile: Profile; currentUserId: string; driver: Driver | null; onSaved: () => void }) {
+function ProfileSettings({ profile, currentUserId, onSaved }: { profile: Profile; currentUserId: string; onSaved: () => void }) {
   const isSelf = profile.id === currentUserId
   const [form, setForm] = useState({ fullName: profile.full_name ?? '', phone: profile.phone ?? '', role: profile.role, active: profile.is_active })
   const save = useMutation({
     mutationFn: async () => {
-      const role = isSelf ? profile.role : form.role
-      // An owner sees every location they own (migration 074).
-      let business_id: string | null = null
-      if (role === 'owner') {
-        if (!profile.location_id) throw new Error('Assign this user to a store before making them a business owner.')
-        const { data: location, error: locationError } = await supabase.from('pickup_locations').select('business_id').eq('id', profile.location_id).single()
-        if (locationError || !location) throw new Error('Couldn’t find this user’s store. Try again.')
-        business_id = location.business_id
-      }
-      const payload = { full_name: form.fullName.trim(), phone: form.phone.trim() || null, role, business_id, is_active: isSelf ? profile.is_active : form.active }
-      let insertedDriverId: string | null = null
-      if (payload.role === 'driver' && !driver) {
-        const parts = payload.full_name.split(/\s+/); const first_name = parts.shift() || payload.full_name; const last_name = parts.join(' ') || 'Driver'
-        const { data: createdDriver, error: driverError } = await supabase.from('drivers').insert({ user_id: profile.id, first_name, last_name, phone: payload.phone, status: 'active', location_id: profile.location_id }).select('id').single()
-        if (driverError) throw driverError
-        insertedDriverId = createdDriver.id
-      }
-      const { data: changed, error } = await supabase.from('profiles').update(payload).eq('id', profile.id).select('id')
-      if (error || !changed?.length) {
-        if (insertedDriverId) await supabase.from('drivers').delete().eq('id', insertedDriverId)
-        if (error) throw error
-        ensureChanged(changed)
+      // Name and phone are the profile's own; role and activation go through the login function (123),
+      // which writes memberships and never lets anyone change their own role.
+      const { data: changed, error } = await supabase.from('profiles').update({ full_name: form.fullName.trim(), phone: form.phone.trim() || null }).eq('id', profile.id).select('id')
+      if (error) throw error
+      ensureChanged(changed)
+      if (!isSelf && (form.role !== profile.role || form.active !== profile.is_active)) {
+        const { data, error: accessError } = await supabase.rpc('update_login_access', { p_profile_id: profile.id, p_role: form.role, p_active: form.active })
+        const result = data as { ok?: boolean; reason?: string } | null
+        if (accessError || !result?.ok) throw new Error(result?.reason === 'no_business' ? 'Give this user a store before making them an owner.' : result?.reason === 'driver_one_home' ? 'A driver has one home store. Reduce “Works at” to one store first.' : 'Couldn’t change this login’s access.')
       }
     },
     onSuccess: onSaved,
@@ -163,6 +151,42 @@ function DriverSettings({ profile, driver, onSaved }: { profile: Profile; driver
   const save = useMutation({ mutationFn: async () => { const payload = { user_id: profile.id, first_name: form.firstName.trim(), last_name: form.lastName.trim(), phone: form.phone.trim() || null, license_number: form.license.trim() || null, license_expiry: form.expiry || null, hire_date: form.hireDate || null, status: form.status, location_id: profile.location_id }; const result = driver ? await supabase.from('drivers').update(payload).eq('id', driver.id).select('id') : await supabase.from('drivers').insert(payload).select('id'); if (result.error) throw result.error; ensureChanged(result.data) }, onSuccess: onSaved })
   const input = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
   return <SaveForm aria-label="Driver settings" onSave={() => save.mutateAsync()} validate={() => driverSettingsProblems({ first: form.firstName, last: form.lastName, phone: form.phone })} savedMessage="Driver settings saved." errorClassName="mt-3" className="bg-white border border-slate-200 rounded-2xl p-5"><div className="flex items-center gap-2 mb-5"><Truck size={18} className="text-emerald-600" /><h2 className="font-semibold text-lg">Driver settings</h2></div><div className="grid sm:grid-cols-2 gap-4"><Field label="First name"><Checked name="first"><input className={input} value={form.firstName} onChange={(e) => set('firstName', e.target.value)} /></Checked></Field><Field label="Last name"><Checked name="last"><input className={input} value={form.lastName} onChange={(e) => set('lastName', e.target.value)} /></Checked></Field><Field label="Driver phone"><Checked name="phone"><input className={input} value={form.phone} onChange={(e) => set('phone', e.target.value)} /></Checked></Field><Field label="Dispatch status"><select className={input} value={form.status} onChange={(e) => set('status', e.target.value)}><option value="active">Active</option><option value="on_leave">On leave</option><option value="inactive">Inactive</option></select></Field><Field label="License number"><input className={input} value={form.license} onChange={(e) => set('license', e.target.value)} /></Field><Field label="License expiry"><input type="date" className={input} value={form.expiry} onChange={(e) => set('expiry', e.target.value)} /></Field><Field label="Hire date"><input type="date" className={input} value={form.hireDate} onChange={(e) => set('hireDate', e.target.value)} /></Field></div><div className="flex justify-end mt-5"><SubmitButton className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 text-sm disabled:opacity-50">{(pending) => <><Save size={15} /> {pending ? 'Saving…' : 'Save driver settings'}</>}</SubmitButton></div></SaveForm>
+}
+
+/** The pharmacies a login works at: several for staff, exactly one home for a driver. Written through set_login_pharmacies (123). */
+function WorksAt({ profile, locations, onSaved }: { profile: Profile; locations: StaffLocation[]; onSaved: () => void }) {
+  const qc = useQueryClient()
+  const memberships = useQuery({
+    queryKey: ['memberships', profile.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('memberships').select('scope_id').eq('user_id', profile.id).eq('scope_type', 'location')
+      if (error) throw error
+      return (data ?? []).map((row) => row.scope_id as string)
+    },
+  })
+  const [chosen, setChosen] = useState<string[] | null>(null)
+  const current = chosen ?? memberships.data ?? []
+  const isDriver = profile.role === 'driver'
+  const toggle = (id: string) => setChosen(isDriver ? [id] : current.includes(id) ? current.filter((x) => x !== id) : [...current, id])
+  const save = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.rpc('set_login_pharmacies', { p_profile_id: profile.id, p_location_ids: current })
+      const result = data as { ok?: boolean; reason?: string } | null
+      if (error || !result?.ok) throw new Error(result?.reason === 'no_pharmacy' ? 'Choose at least one store.' : result?.reason === 'driver_one_home' ? 'A driver has one home store.' : result?.reason === 'other_business' ? 'Those stores belong to another owner.' : 'Couldn’t save where this login works.')
+    },
+    onSuccess: () => { setChosen(null); qc.invalidateQueries({ queryKey: ['memberships', profile.id] }); onSaved() },
+  })
+  return <SaveForm aria-label="Works at" onSave={() => save.mutateAsync()} savedMessage="Stores saved." errorClassName="mt-3" className="bg-white border border-slate-200 rounded-2xl p-5">
+    <div className="flex items-center gap-2 mb-2"><Building2 size={18} className="text-blue-600" /><h2 className="font-semibold text-lg">Works at</h2></div>
+    <p className="text-sm text-slate-500 mb-4">{isDriver ? 'A driver has one home store. Extra stores they cover are set on the Drivers page.' : 'Tick every store this person works at. With more than one, they pick a store in the header.'}</p>
+    {memberships.isLoading ? <div className="text-sm text-slate-500">Loading…</div> : <div className="grid sm:grid-cols-2 gap-2">
+      {locations.map((location) => <label key={location.id} className="flex items-center gap-2 text-sm rounded-lg border border-slate-200 px-3 py-2">
+        <input type={isDriver ? 'radio' : 'checkbox'} name="works-at" checked={current.includes(location.id)} onChange={() => toggle(location.id)} />
+        <span>{location.name}{location.is_active ? '' : ' (not open)'}</span>
+      </label>)}
+    </div>}
+    <div className="flex justify-end mt-4"><SubmitButton disabled={chosen == null} className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 text-sm disabled:opacity-50">{(pending) => <><Save size={15} /> {pending ? 'Saving…' : 'Save stores'}</>}</SubmitButton></div>
+  </SaveForm>
 }
 
 function NoteComposer({ note, setNote, submit }: { note: string; setNote: (value: string) => void; submit: () => Promise<unknown> }) {

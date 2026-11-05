@@ -253,7 +253,7 @@ export default function Layout({ children }: { children: ReactNode }) {
             {contactEmail && <span className="flex items-center gap-1.5 whitespace-nowrap"><Mail size={13} className="shrink-0" /> {contactEmail}</span>}
           </div>
           <div className="min-w-0 flex-1 sm:max-w-xs lg:flex-none">
-            {canSwitchStores(profile?.role) ? (
+            {canSwitchStores(profile) ? (
               <label className="block">
                 <span className="sr-only">Store selector</span>
                 <select
@@ -262,7 +262,7 @@ export default function Layout({ children }: { children: ReactNode }) {
                   onChange={(event) => locationScope.setSelectedLocationId(event.target.value === 'all' ? null : event.target.value)}
                   className="min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="all">{profile?.role === 'owner' ? 'All my stores' : 'All stores'}</option>
+                  {profile?.role !== 'staff' && <option value="all">{profile?.role === 'owner' ? 'All my stores' : 'All stores'}</option>}
                   {locationScope.locations.map((location) => <option key={location.id} value={location.id}>{location.name} · {location.address_city}{location.is_active ? '' : ' (not open)'}</option>)}
                 </select>
               </label>

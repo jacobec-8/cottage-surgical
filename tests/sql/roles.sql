@@ -29,16 +29,17 @@ INSERT INTO auth.users (id, email) VALUES
  ('a2000000-0000-0000-0000-000000000008', 'roles-customer@example.invalid');
 SELECT set_config('cottage.login_create', '', false);
 
+-- Admin is a flag on the login; everyone else gets their role from memberships (123).
+SELECT set_config('cottage.membership_sync', '1', false);
 UPDATE public.profiles SET role = 'admin' WHERE id = 'a2000000-0000-0000-0000-000000000001';
--- The owner is handed a home pharmacy on purpose; the database must drop it.
-UPDATE public.profiles SET role = 'owner', business_id = 'a0000000-0000-0000-0000-00000000000a',
-       location_id = 'a1000000-0000-0000-0000-0000000000a1'
- WHERE id = 'a2000000-0000-0000-0000-000000000002';
-UPDATE public.profiles SET role = 'staff',  location_id = 'a1000000-0000-0000-0000-0000000000a1' WHERE id = 'a2000000-0000-0000-0000-000000000003';
-UPDATE public.profiles SET role = 'driver', location_id = 'a1000000-0000-0000-0000-0000000000a1' WHERE id = 'a2000000-0000-0000-0000-000000000004';
-UPDATE public.profiles SET role = 'staff',  location_id = 'a1000000-0000-0000-0000-0000000000a2' WHERE id = 'a2000000-0000-0000-0000-000000000005';
-UPDATE public.profiles SET role = 'owner',  business_id = 'a0000000-0000-0000-0000-00000000000b' WHERE id = 'a2000000-0000-0000-0000-000000000006';
-UPDATE public.profiles SET role = 'staff',  location_id = 'a1000000-0000-0000-0000-0000000000b1' WHERE id = 'a2000000-0000-0000-0000-000000000007';
+SELECT set_config('cottage.membership_sync', '', false);
+INSERT INTO public.memberships (user_id, scope_type, scope_id, role) VALUES
+ ('a2000000-0000-0000-0000-000000000002', 'business', 'a0000000-0000-0000-0000-00000000000a', 'owner'),
+ ('a2000000-0000-0000-0000-000000000003', 'location', 'a1000000-0000-0000-0000-0000000000a1', 'staff'),
+ ('a2000000-0000-0000-0000-000000000004', 'location', 'a1000000-0000-0000-0000-0000000000a1', 'driver'),
+ ('a2000000-0000-0000-0000-000000000005', 'location', 'a1000000-0000-0000-0000-0000000000a2', 'staff'),
+ ('a2000000-0000-0000-0000-000000000006', 'business', 'a0000000-0000-0000-0000-00000000000b', 'owner'),
+ ('a2000000-0000-0000-0000-000000000007', 'location', 'a1000000-0000-0000-0000-0000000000b1', 'staff');
 
 INSERT INTO public.drivers (id, user_id, location_id, first_name, last_name) VALUES
  ('a3000000-0000-0000-0000-000000000001', 'a2000000-0000-0000-0000-000000000004', 'a1000000-0000-0000-0000-0000000000a1', 'Dee', 'Driver');
@@ -64,8 +65,12 @@ INSERT INTO public.equipment_items (id, name, category, business_id, location_id
   'a1000000-0000-0000-0000-0000000000a1', false, false);
 
 -- ── Identity: the mirror and the owner's missing home ─────────────────────
-SELECT test_assert((SELECT location_id IS NULL FROM profiles WHERE id = 'a2000000-0000-0000-0000-000000000002'),
-  'an owner login has no home pharmacy');
+SELECT test_assert((SELECT location_id IS NULL AND role = 'owner' AND business_id = 'a0000000-0000-0000-0000-00000000000a'
+                      FROM profiles WHERE id = 'a2000000-0000-0000-0000-000000000002'),
+  'an owner login has no home pharmacy; its cached columns come from the membership');
+SELECT test_assert((SELECT role = 'staff' AND location_id = 'a1000000-0000-0000-0000-0000000000a1'
+                      FROM profiles WHERE id = 'a2000000-0000-0000-0000-000000000003'),
+  'a staff login''s cached columns come from the membership');
 SELECT test_assert((SELECT count(*) = 1 AND bool_and(scope_type = 'business' AND role = 'owner'
                                                       AND scope_id = 'a0000000-0000-0000-0000-00000000000a')
                       FROM memberships WHERE user_id = 'a2000000-0000-0000-0000-000000000002'),
@@ -193,16 +198,61 @@ SELECT test_assert((SELECT count(*) = 0 FROM rental_orders) AND app_role() IS NU
 RESET ROLE; SELECT test_as('');
 UPDATE profiles SET is_active = true WHERE id = 'a2000000-0000-0000-0000-000000000003';
 
--- ── The mirror follows a legacy profile write ─────────────────────────────
-UPDATE profiles SET location_id = 'a1000000-0000-0000-0000-0000000000a2' WHERE id = 'a2000000-0000-0000-0000-000000000003';
-SELECT test_assert((SELECT count(*) = 1 AND bool_and(scope_id = 'a1000000-0000-0000-0000-0000000000a2')
-                      FROM memberships WHERE user_id = 'a2000000-0000-0000-0000-000000000003'),
-  'moving a login on the profile moves its membership');
+-- ── Logins are written through memberships (123) ─────────────────────────
+DO $$ BEGIN
+  BEGIN
+    UPDATE profiles SET location_id = 'a1000000-0000-0000-0000-0000000000a2' WHERE id = 'a2000000-0000-0000-0000-000000000003';
+    RAISE EXCEPTION 'FAILED: a profile column was written directly';
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+END $$;
+SELECT test_as('a2000000-0000-0000-0000-000000000002'); SET ROLE authenticated;
+SELECT test_assert((set_login_pharmacies('a2000000-0000-0000-0000-000000000003',
+   ARRAY['a1000000-0000-0000-0000-0000000000a1', 'a1000000-0000-0000-0000-0000000000a2']::uuid[]))->>'ok' = 'true',
+  'the owner gives a staff login a second pharmacy');
+SELECT test_assert((set_login_pharmacies('a2000000-0000-0000-0000-000000000003', ARRAY['a1000000-0000-0000-0000-0000000000b1']::uuid[]))->>'reason' = 'other_business',
+  'the owner cannot place a login at another owner''s pharmacy');
+SELECT test_assert((set_login_pharmacies('a2000000-0000-0000-0000-000000000004',
+   ARRAY['a1000000-0000-0000-0000-0000000000a1', 'a1000000-0000-0000-0000-0000000000a2']::uuid[]))->>'reason' = 'driver_one_home',
+  'a driver has one home');
+SELECT test_assert((update_login_access('a2000000-0000-0000-0000-000000000003', 'owner', true))->>'reason' = 'forbidden',
+  'the owner cannot make an owner');
+RESET ROLE;
+SELECT test_as('a2000000-0000-0000-0000-000000000006'); SET ROLE authenticated;
+SELECT test_assert((set_login_pharmacies('a2000000-0000-0000-0000-000000000003', ARRAY['a1000000-0000-0000-0000-0000000000a1']::uuid[]))->>'reason' = 'forbidden',
+  'another owner cannot touch the login');
+RESET ROLE;
+SELECT test_assert((SELECT location_id IS NULL FROM profiles WHERE id = 'a2000000-0000-0000-0000-000000000003'),
+  'a login with two pharmacies has no single cached pharmacy');
 SELECT test_as('a2000000-0000-0000-0000-000000000003'); SET ROLE authenticated;
-SELECT test_assert((SELECT count(*) = 1 AND bool_and(location_id = 'a1000000-0000-0000-0000-0000000000a2') FROM rental_orders),
-  'the moved login now sees A2 and not A1');
+SELECT test_assert((SELECT count(*) = 2 FROM rental_orders), 'the login now sees both pharmacies');
+SELECT test_assert(current_location_id() IS NULL, 'and has no one pharmacy to inherit');
+RESET ROLE;
+SELECT test_as('a2000000-0000-0000-0000-000000000005'); SET ROLE authenticated;
+SELECT test_assert((SELECT count(*) = 1 FROM profiles WHERE id = 'a2000000-0000-0000-0000-000000000003'),
+  'A2 staff see the colleague who also works at A2');
+RESET ROLE;
+SELECT test_as('a2000000-0000-0000-0000-000000000001'); SET ROLE authenticated;
+SELECT test_assert((set_login_pharmacies('a2000000-0000-0000-0000-000000000003', ARRAY['a1000000-0000-0000-0000-0000000000a1']::uuid[]))->>'ok' = 'true',
+  'admin sets the login back to one pharmacy');
+SELECT test_assert((update_login_access('a2000000-0000-0000-0000-000000000005', 'driver', true))->>'ok' = 'true',
+  'admin turns A2 staff into a driver');
+SELECT test_assert((SELECT count(*) = 1 FROM drivers d WHERE d.user_id = 'a2000000-0000-0000-0000-000000000005'
+                      AND d.location_id = 'a1000000-0000-0000-0000-0000000000a2' AND d.status = 'active'),
+  'the driver record appears at the home pharmacy');
+SELECT test_assert((update_login_access('a2000000-0000-0000-0000-000000000005', 'staff', true))->>'ok' = 'true',
+  'and back to staff');
+SELECT test_assert((SELECT role = 'staff' AND location_id = 'a1000000-0000-0000-0000-0000000000a2'
+                      FROM profiles WHERE id = 'a2000000-0000-0000-0000-000000000005'), 'the cached columns followed');
+SELECT test_assert((update_login_access('a2000000-0000-0000-0000-000000000001', 'staff', true))->>'reason' = 'self',
+  'nobody changes their own access');
+SELECT test_assert((update_login_access('a2000000-0000-0000-0000-000000000005', 'staff', false))->>'ok' = 'true', 'admin switches a login off');
+RESET ROLE;
+SELECT test_as('a2000000-0000-0000-0000-000000000005'); SET ROLE authenticated;
+SELECT test_assert(app_role() IS NULL, 'a switched-off login has no role');
+RESET ROLE;
+SELECT test_as('a2000000-0000-0000-0000-000000000001'); SET ROLE authenticated;
+SELECT test_assert((update_login_access('a2000000-0000-0000-0000-000000000005', 'staff', true))->>'ok' = 'true', 'and on again');
 RESET ROLE; SELECT test_as('');
-UPDATE profiles SET location_id = 'a1000000-0000-0000-0000-0000000000a1' WHERE id = 'a2000000-0000-0000-0000-000000000003';
 
 -- ── Who may read memberships ──────────────────────────────────────────────
 SELECT test_as('a2000000-0000-0000-0000-000000000003'); SET ROLE authenticated;

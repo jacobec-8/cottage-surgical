@@ -170,7 +170,7 @@ export default function Inventory() {
         {!catalogManager && ' The business owner maintains the product list; add your own store-only products with Add Item, and set your store’s stock and prices on each item.'}
       </p>
 
-      <div className={`mb-4 grid gap-3 ${canSwitchStores(profile?.role) ? 'sm:grid-cols-[minmax(0,1fr)_auto_minmax(15rem,20rem)]' : 'sm:grid-cols-[minmax(0,1fr)_auto]'}`}>
+      <div className={`mb-4 grid gap-3 ${canSwitchStores(profile) ? 'sm:grid-cols-[minmax(0,1fr)_auto_minmax(15rem,20rem)]' : 'sm:grid-cols-[minmax(0,1fr)_auto]'}`}>
         <div className="relative">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
@@ -185,7 +185,7 @@ export default function Inventory() {
           <option value="all">All categories</option>
           {usedCategories.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
-        {canSwitchStores(profile?.role) && (
+        {canSwitchStores(profile) && (
           <label className="relative block">
             <span className="sr-only">Filter inventory by store</span>
             <Building2 size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
