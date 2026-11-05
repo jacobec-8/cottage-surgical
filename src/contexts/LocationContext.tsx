@@ -38,7 +38,9 @@ export function LocationProvider({ children }: { children: ReactNode }) {
   const { profile } = useAuth()
   const queryClient = useQueryClient()
   // Admins switch across every store; owners across every location they own.
-  const canSwitch = canSwitchStores(profile?.role)
+  const canSwitch = canSwitchStores(profile)
+  // Staff with several pharmacies pick one of theirs; they never see all stores at once.
+  const staffChoice = profile?.role === 'staff' ? profile.location_ids ?? [] : null
   const ownerBusinessId = profile?.role === 'owner' ? profile.business_id : null
   const [adminSelection, setAdminSelection] = useState<string | null>(null)
 
@@ -71,13 +73,16 @@ export function LocationProvider({ children }: { children: ReactNode }) {
   const ownSelection = adminSelection && (!query.data || query.data.some((location) => location.id === adminSelection))
     ? adminSelection
     : null
-  const selectedLocationId = canSwitch ? ownSelection : profile?.location_id ?? null
+  const selectedLocationId = canSwitch
+    ? (ownSelection && (!staffChoice || staffChoice.includes(ownSelection)) ? ownSelection : staffChoice?.[0] ?? null)
+    : profile?.location_id ?? null
   const selectedLocation = useMemo(
     () => query.data?.find((location) => location.id === selectedLocationId) ?? null,
     [query.data, selectedLocationId],
   )
   const setSelectedLocationId = (id: string | null) => {
     if (!canSwitch) return
+    if (staffChoice && (id == null || !staffChoice.includes(id))) return
     setAdminSelection(id)
     try { window.localStorage.setItem(STORAGE_KEY, id ?? 'all') } catch { /* storage unavailable */ }
     void queryClient.invalidateQueries()

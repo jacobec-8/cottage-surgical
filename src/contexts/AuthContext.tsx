@@ -14,6 +14,8 @@ export type Profile = {
   is_active: boolean
   location_id: string | null
   business_id: string | null
+  /** Every pharmacy this login works at (memberships); one for most staff, several for some. */
+  location_ids?: string[]
 }
 
 function profileAccessKey(profile: Profile | null | undefined) {
@@ -115,7 +117,11 @@ export function AuthProvider({ children, initialUserId, initialProfile }: AuthPr
         .single()
       if (!active) return
       if (error) console.error('profile load failed:', error.message)
-      setProfile((data as Profile) ?? null)
+      const { data: memberships } = data
+        ? await supabase.from('memberships').select('scope_type,scope_id').eq('user_id', userId).eq('scope_type', 'location')
+        : { data: null }
+      if (!active) return
+      setProfile(data ? { ...(data as Profile), location_ids: (memberships ?? []).map((m) => m.scope_id as string) } : null)
       setProfileLoaded(true)
     }
 

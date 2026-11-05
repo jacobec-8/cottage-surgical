@@ -10,10 +10,14 @@ INSERT INTO public.businesses(id,name,slug) VALUES ('90000000-0000-0000-0000-000
 INSERT INTO public.pickup_locations(id,name,business_id,slug,address_line1,address_city,address_zip) VALUES
  ('10000000-0000-0000-0000-000000000001','Test A','90000000-0000-0000-0000-000000000001','test-a','1 A St','Woodbury','11797'),
  ('10000000-0000-0000-0000-000000000002','Test B','90000000-0000-0000-0000-000000000001','test-b','2 B St','Woodbury','11797');
-UPDATE public.profiles SET role=CASE WHEN id='00000000-0000-0000-0000-000000000001' THEN 'admin'
- WHEN id='00000000-0000-0000-0000-000000000004' THEN 'driver' ELSE 'staff' END,
- location_id=CASE WHEN id='00000000-0000-0000-0000-000000000003'
- THEN '10000000-0000-0000-0000-000000000002'::uuid ELSE '10000000-0000-0000-0000-000000000001'::uuid END;
+-- Admin is a flag on the login; store staff and the driver get their roles from memberships (123).
+SELECT set_config('cottage.membership_sync','1',false);
+UPDATE public.profiles SET role='admin' WHERE id='00000000-0000-0000-0000-000000000001';
+SELECT set_config('cottage.membership_sync','',false);
+INSERT INTO public.memberships (user_id, scope_type, scope_id, role) VALUES
+ ('00000000-0000-0000-0000-000000000002','location','10000000-0000-0000-0000-000000000001','staff'),
+ ('00000000-0000-0000-0000-000000000003','location','10000000-0000-0000-0000-000000000002','staff'),
+ ('00000000-0000-0000-0000-000000000004','location','10000000-0000-0000-0000-000000000001','driver');
 INSERT INTO customers(id,full_name,email,location_id) VALUES
  ('20000000-0000-0000-0000-000000000001','Test customer A','a@example.invalid','10000000-0000-0000-0000-000000000001'),
  ('20000000-0000-0000-0000-000000000002','Test customer B','b@example.invalid','10000000-0000-0000-0000-000000000002');

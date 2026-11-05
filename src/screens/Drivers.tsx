@@ -172,8 +172,8 @@ export default function Drivers() {
             unlinkedLogins={unlinkedLogins}
             linking={link.isPending}
             openSettings={profile?.role === 'admin'}
-            canEdit={canSwitchStores(profile?.role) || d.location_id === profile?.location_id}
-            coverage={<DriverLocations driver={d} locations={locations} canEdit={canSwitchStores(profile?.role)} />}
+            canEdit={canSwitchStores(profile) || (profile?.location_ids ?? [profile?.location_id]).includes(d.location_id)}
+            coverage={<DriverLocations driver={d} locations={locations} canEdit={canSwitchStores(profile)} />}
             onLink={(profileId) => link.mutate({ driverId: d.id, profileId })}
             onSave={(values) => update.mutateAsync({ driverId: d.id, values })}
           />

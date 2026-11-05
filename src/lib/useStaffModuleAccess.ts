@@ -9,8 +9,8 @@ import { useLocationScope } from '../contexts/LocationContext'
 export function useStaffModuleAccess() {
   const { profile } = useAuth()
   const { selectedLocationId } = useLocationScope()
-  // Switches are per store (100): staff read their store's; admins and owners the selected store's.
-  const storeId = profile?.role === 'staff' ? profile.location_id : selectedLocationId
+  // Switches are per store (100): the one in the header, which for staff is their own pharmacy (or the one they picked, if they work at several).
+  const storeId = profile?.role === 'staff' ? profile.location_id ?? selectedLocationId : selectedLocationId
   const needsSettings = Boolean(storeId) && (profile?.role === 'admin' || profile?.role === 'owner' || profile?.role === 'staff')
   const query = useQuery({
     queryKey: ['staff_module_access', storeId],
