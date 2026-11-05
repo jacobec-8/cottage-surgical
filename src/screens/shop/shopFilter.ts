@@ -23,6 +23,11 @@ export function applyLinkedSearch(f: ShopFilter, query: string): ShopFilter {
   return { ...f, query, cat: ALL_CATEGORIES, linked: true }
 }
 
+/** The top bar search: typed words inside the picked category ('' = every category). */
+export function headerSearch(f: ShopFilter, query: string, cat: string): ShopFilter {
+  return { ...f, query, cat: cat || ALL_CATEGORIES, linked: false }
+}
+
 /** The visitor typed in a search box. */
 export function typeSearch(f: ShopFilter, query: string): ShopFilter {
   return { ...f, query, linked: false }

@@ -10,36 +10,47 @@ import ShopHeader from '../../components/shop/ShopHeader'
 import ShopFooter from '../../components/shop/ShopFooter'
 import ProductCard from '../../components/shop/ProductCard'
 import CategoryCarousel from './CategoryCarousel'
-import { EMPTY_FILTER, applyLinkedSearch, clearSearch, matchesFilter, pickCategory, pickMode, typeSearch, type ShopFilter } from './shopFilter'
+import { EMPTY_FILTER, applyLinkedSearch, clearSearch, headerSearch, matchesFilter, pickCategory, pickMode, typeSearch, type ShopFilter } from './shopFilter'
 import { CategoryChips, NoMatches } from './ShopFilterBar'
 
 const EMPTY_PRODUCTS: Product[] = []
+/** One applied search, ?q= words plus ?cat= category ('' when absent). */
+const searchKey = (q: string, cat: string) => `${q}|${cat}`
 
 export default function Shop({ initialProducts }: { initialProducts?: Product[] }) {
   const sp = useSearchParams()
   // The homepage is statically rendered, so its first server/client render
   // must not depend on request-only search params. The effect below applies
-  // `?q=` immediately after hydration without changing the visible behavior.
+  // `?q=` / `?cat=` immediately after hydration without changing the visible behavior.
   const [filter, setFilter] = useState<ShopFilter>(EMPTY_FILTER)
   const searchRef = useRef<HTMLInputElement>(null)
-  // The last ?q= already applied, so a link's late-arriving navigation never re-applies
-  // words the visitor has since cleared or replaced.
-  const appliedQ = useRef<string | null>(null)
+  // The last ?q= / ?cat= already applied, so a link's late-arriving navigation never
+  // re-applies words the visitor has since cleared or replaced.
+  const appliedKey = useRef<string | null>(null)
   const goShop = () => document.getElementById('favorites')?.scrollIntoView({ behavior: 'smooth' })
   // A category tile or header link: search its words across every category right away,
   // even when the URL does not change.
-  const searchFromLink = (q: string) => { appliedQ.current = q; setFilter((f) => applyLinkedSearch(f, q)); goShop() }
+  const searchFromLink = (q: string) => { appliedKey.current = searchKey(q, ''); setFilter((f) => applyLinkedSearch(f, q)); goShop() }
+  // The top bar search box: typed words inside the picked category.
+  const searchFromHeader = (words: string, cat: string) => {
+    appliedKey.current = searchKey(words, cat)
+    setFilter((f) => headerSearch(f, words, cat))
+    goShop()
+  }
   const pick = (cat: string) => setFilter((f) => pickCategory(f, cat))
   const clear = () => setFilter(clearSearch)
 
-  // React to header/category links: ?q= filters, ?focus=search jumps to the grid.
+  // React to header/category links: ?q= filters, ?cat= picks a category (the top bar
+  // search from another page), ?focus=search jumps to the grid.
   useEffect(() => {
     const q = sp.get('q')
-    if (q !== null && q !== appliedQ.current) {
-      appliedQ.current = q
-      setFilter((f) => applyLinkedSearch(f, q))
+    const cat = sp.get('cat')
+    const key = searchKey(q ?? '', cat ?? '')
+    if ((q !== null || cat !== null) && key !== appliedKey.current) {
+      appliedKey.current = key
+      setFilter((f) => (cat !== null ? headerSearch(f, q ?? '', cat) : applyLinkedSearch(f, q ?? '')))
     }
-    if (q !== null || sp.get('focus') === 'search') {
+    if (q !== null || cat !== null || sp.get('focus') === 'search') {
       document.getElementById('favorites')?.scrollIntoView({ behavior: 'smooth' })
       if (sp.get('focus') === 'search') setTimeout(() => searchRef.current?.focus(), 400)
     }
@@ -68,7 +79,7 @@ export default function Shop({ initialProducts }: { initialProducts?: Product[] 
 
   return (
     <div className="font-sans bg-white min-h-screen text-slate-800">
-      <ShopHeader onSearch={searchFromLink} />
+      <ShopHeader onSearch={searchFromLink} onHeaderSearch={searchFromHeader} />
 
       {/* Hero */}
       <section className="bg-gradient-to-b from-brand-50 to-white border-b border-slate-100">

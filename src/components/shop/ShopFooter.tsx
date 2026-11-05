@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { MapPin, Phone, Mail } from 'lucide-react'
+import { MapPin, Phone, Mail, Clock } from 'lucide-react'
 
 // Labels match the boss's design; the query maps to a root term that actually
 // substring-matches the catalog (e.g. "Wheelchairs" → filter "wheelchair").
@@ -37,6 +37,7 @@ export default function ShopFooter() {
             </p>
             <div className="mt-5 space-y-2 text-sm text-blue-100/80">
               <div className="flex items-center gap-2.5"><MapPin size={15} className="text-terracotta shrink-0" /> 8285 Jericho Tpke, Woodbury, NY 11797</div>
+              <div className="flex items-center gap-2.5"><Clock size={15} className="text-terracotta shrink-0" /> Mon–Fri 9–6 · Sat 10–5 · Sun 9–12</div>
               <a href="tel:+15163679030" className="flex items-center gap-2.5 hover:text-white"><Phone size={15} className="text-terracotta shrink-0" /> 516-367-9030 ext 4</a>
               <a href="mailto:info@cottagesurgical.com" className="flex items-center gap-2.5 hover:text-white"><Mail size={15} className="text-terracotta shrink-0" /> info@cottagesurgical.com</a>
             </div>
