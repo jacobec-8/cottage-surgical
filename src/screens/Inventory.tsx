@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Search, Pencil, Trash2, X, ImagePlus, Building2 } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, X, ImagePlus, Building2, Lock } from 'lucide-react'
+
+const LOCKED_PRODUCTS = 'Locked by the owner (Staff Access → Change products)'
 import { supabase } from '../lib/supabase'
 import { Checked, SaveForm, SubmitButton } from '../components/SaveForm'
 import { productFormProblems, startingStockProblems } from '../lib/formChecks/inventoryChecks'
@@ -96,6 +98,9 @@ export default function Inventory() {
     onError: (e) => alert(`Couldn’t remove it: ${(e as Error).message}`),
   })
   const canRemoveHere = Boolean(selectedLocationId) && canManageStore(profile, selectedLocation)
+  // Trusted powers show greyed out, not hidden, so staff can see what the owner has locked (BUSINESS-SHAPE.md).
+  const staffHere = profile?.role === 'staff' && Boolean(selectedLocationId)
+  const productsLocked = staffHere && !access.canAccess('edit_products')
 
   const inStore = (it: InventoryItem) => Boolean(selectedLocationId && it.location_inventory?.some((entry) => entry.location_id === selectedLocationId))
   // A scanner types a unit's asset tag or serial number: find the product that unit belongs to.
@@ -127,17 +132,17 @@ export default function Inventory() {
     </button>
     {selectedLocationId ? canRemoveHere && <button
       aria-label={it.location_id ? `Delete ${it.name}` : `Remove ${it.name} from ${storeName}`}
-      title={it.location_id ? 'Delete product' : `Remove from ${storeName}`}
-      disabled={removeFromStore.isPending}
+      title={productsLocked ? LOCKED_PRODUCTS : it.location_id ? 'Delete product' : `Remove from ${storeName}`}
+      disabled={removeFromStore.isPending || productsLocked}
       onClick={() => {
         const question = it.location_id
           ? `Delete "${it.name}"? It is removed from ${storeName} and from the website.`
           : `Remove "${it.name}" from ${storeName}? It stays in the catalog, and the website stops showing it unless another store carries it.`
         if (confirm(question)) removeFromStore.mutate(it.id)
       }}
-      className="grid h-10 w-10 place-items-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+      className="grid h-10 w-10 place-items-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-slate-400 disabled:cursor-not-allowed"
     >
-      <Trash2 size={16} />
+      {productsLocked ? <Lock size={16} /> : <Trash2 size={16} />}
     </button> : catalogManager && <button
       aria-label={`Remove ${it.name} from the catalog`}
       title="Remove from the catalog"
@@ -155,10 +160,12 @@ export default function Inventory() {
     <div>
       <div className="mb-1 flex flex-col items-start gap-3 sm:flex-row sm:justify-between">
         <h1 className="text-2xl font-semibold">Inventory Management</h1>
-        {(catalogManager || (profile?.role === 'staff' && access.canAccess('edit_products'))) && (
+        {(catalogManager || profile?.role === 'staff') && (
           <button
             onClick={() => setEditing({})}
-            className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 sm:w-auto"
+            disabled={productsLocked}
+            title={productsLocked ? LOCKED_PRODUCTS : undefined}
+            className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 sm:w-auto disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600"
           >
             <Plus size={16} /> Add Item
           </button>
@@ -216,7 +223,7 @@ export default function Inventory() {
       {isLoading && <div className="text-slate-500">Loading…</div>}
       {error && <div className="text-red-600 text-sm">{(error as Error).message}</div>}
 
-      {showCatalog && selectedLocation && <CatalogPicker items={addable} locationId={selectedLocation.id} locationName={selectedLocation.name} added={justAdded.filter((key) => key.startsWith(`${selectedLocation.id}:`)).map((key) => key.split(':')[1])} onAdded={(id) => setJustAdded((prev) => [...prev, `${selectedLocation.id}:${id}`])} />}
+      {showCatalog && selectedLocation && <CatalogPicker items={addable} locationId={selectedLocation.id} locationName={selectedLocation.name} locked={productsLocked} added={justAdded.filter((key) => key.startsWith(`${selectedLocation.id}:`)).map((key) => key.split(':')[1])} onAdded={(id) => setJustAdded((prev) => [...prev, `${selectedLocation.id}:${id}`])} />}
 
       {filtered.length > 0 && (
         <div className={showCatalog ? 'hidden' : ''}>
@@ -228,7 +235,7 @@ export default function Inventory() {
       {!showCatalog && !isLoading && !error && filtered.length === 0 && (
         <div className="rounded-xl border border-slate-200 bg-white py-10 text-center text-sm text-slate-500">
           {selectedLocation && !q && category === 'all'
-            ? <>Nothing is stocked at {selectedLocation.name} yet. <button type="button" onClick={() => setView('catalog')} className="font-medium text-blue-600 hover:underline">Add products from the catalog</button>.</>
+            ? <>Nothing is stocked at {selectedLocation.name} yet. {productsLocked ? <span className="text-slate-400" title={LOCKED_PRODUCTS}>Add products from the catalog (locked by the owner)</span> : <button type="button" onClick={() => setView('catalog')} className="font-medium text-blue-600 hover:underline">Add products from the catalog</button>}.</>
             : 'No inventory matches this store and search.'}
         </div>
       )}

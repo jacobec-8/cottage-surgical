@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, type ReactNode } from 'react'
-import { Pencil } from 'lucide-react'
+import { Lock, Pencil } from 'lucide-react'
 import { fulfillmentLabel } from '../lib/fulfillment'
 import {
   fulfillmentEditProblem, parsePrice, pickupEditProblem, purchaseEditProblem, rentalEditProblem,
@@ -54,6 +54,9 @@ export default function ProductDetailsList({ item, edits, openField }: { item: P
   const productEdit = Boolean(edits?.canEditProduct)
   const priceEdit = Boolean(edits?.canEditPrices && store) || (!store && productEdit)
   const retailEdit = Boolean(edits?.canSetRetail && store)
+  // Greyed, not hidden: staff see which fields the owner has locked.
+  const productLocked = Boolean(edits?.lockedProducts && store) && !productEdit
+  const priceLocked = Boolean(edits?.lockedPrices && store) && !priceEdit
   const noStore = 'Choose a store in the header'
 
   // Prices typed while turning something on become the store's prices too, so
@@ -69,16 +72,16 @@ export default function ProductDetailsList({ item, edits, openField }: { item: P
 
   return (
     <dl className="grid sm:grid-cols-2 gap-x-8 gap-y-4 text-sm">
-      <Row open={openField === 'name'} label="Name" value={item.name ?? '—'}
+      <Row locked={productLocked} open={openField === 'name'} label="Name" value={item.name ?? '—'}
         editor={productEdit && item.name != null ? (done) => <TextEditor label="Name" action="Save" required="Enter a name." initial={item.name} done={done}
           save={(v) => { if (!v.trim()) throw new Error('Enter a name.'); return edits!.saveProduct({ name: v.trim() }) }} /> : undefined} />
-      <Row label="Category" value={item.category ? item.category.charAt(0).toUpperCase() + item.category.slice(1) : '—'}
+      <Row locked={productLocked} label="Category" value={item.category ? item.category.charAt(0).toUpperCase() + item.category.slice(1) : '—'}
         editor={productEdit && item.category != null ? (done) => <CategoryEditor initial={item.category!} done={done} save={(v) => edits!.saveProduct({ category: v })} /> : undefined} />
-      <Row label={`SN (scan code)${store && !productEdit ? where : ''}`} value={(store?.scan_code ?? item.sku) || 'Not set'}
+      <Row locked={productLocked} label={`SN (scan code)${store && !productEdit ? where : ''}`} value={(store?.scan_code ?? item.sku) || 'Not set'}
         editor={productEdit
           ? (done) => <TextEditor label="SN" action="Save" initial={item.sku ?? ''} done={done} save={(v) => edits!.saveProduct({ sku: v.trim() || null })} />
           : storeEdit ? (done) => <TextEditor label="SN" action="Save" initial={store!.scan_code ?? item.sku ?? ''} done={done} save={(v) => edits!.saveStore({ scan_code: v.trim() || null })} /> : undefined} />
-      <div className="sm:col-span-2"><Row label="Description" value={item.description || 'No description yet'}
+      <div className="sm:col-span-2"><Row locked={productLocked} label="Description" value={item.description || 'No description yet'}
         editor={productEdit ? (done) => <TextEditor label="Description" action="Save" multiline initial={item.description ?? ''} done={done} save={(v) => edits!.saveProduct({ description: v.trim() || null })} /> : undefined} /></div>
 
       <Row open={openField === 'stock'} label={`Stock${where}`}
@@ -89,19 +92,19 @@ export default function ProductDetailsList({ item, edits, openField }: { item: P
       <Row label={`Online sales${where}`} value={!store ? noStore : edits?.retailOn == null ? '…' : edits.retailOn ? 'On' : 'Off: customers can’t buy online'}
         editor={retailEdit && edits?.retailOn != null ? (done) => <YesNoEditor question="Sell online?" initial={edits.retailOn!} done={done} save={(v) => edits!.setRetail(v)} /> : undefined} />
 
-      <Row label="Pickup rental" value={pickupOn && pickupPrice != null ? money(pickupPrice, '/mo')! : `Not offered${where}`}
+      <Row locked={priceLocked} label="Pickup rental" value={pickupOn && pickupPrice != null ? money(pickupPrice, '/mo')! : `Not offered${where}`}
         editor={priceEdit ? (done) => <PickupEditor where={where} initialOn={pickupOn} initialPrice={store ? store.pickup_rental_price : item.pickup_rental_price}
           catalogPrice={store ? item.pickup_rental_price : null} done={done}
           save={(on, price) => (store ? edits!.saveStore({ pickup_enabled: on, pickup_rental_price: price }) : edits!.saveProduct({ pickup_enabled: on, pickup_rental_price: price }))} /> : undefined} />
-      <Row label="Delivery + return pickup" value={item.delivery_enabled && deliveryPrice != null ? money(deliveryPrice, '/mo')! : 'Not offered'}
+      <Row locked={priceLocked} label="Delivery + return pickup" value={item.delivery_enabled && deliveryPrice != null ? money(deliveryPrice, '/mo')! : 'Not offered'}
         editor={priceEdit ? (done) => <PriceEditor initial={store ? store.delivery_rental_price : item.delivery_rental_price}
           placeholder={store ? money(item.delivery_rental_price, ' catalog') ?? 'Price' : 'Price'} done={done}
           save={(price) => (store ? edits!.saveStore({ delivery_rental_price: price }) : edits!.saveProduct({ delivery_rental_price: price }))} /> : undefined} />
-      <Row open={openField === 'sale'} label={`Sale price${store ? where : ''}`} value={Number(salePrice) > 0 ? money(salePrice)! : 'Not set'}
+      <Row locked={priceLocked} open={openField === 'sale'} label={`Sale price${store ? where : ''}`} value={Number(salePrice) > 0 ? money(salePrice)! : 'Not set'}
         editor={priceEdit ? (done) => <PriceEditor initial={store ? store.sale_price : item.sale_price} placeholder={store && Number(item.sale_price) > 0 ? money(item.sale_price, ' catalog')! : 'Price'} done={done}
           save={(price) => (store ? edits!.saveStore({ sale_price: price }) : edits!.saveProduct({ sale_price: price }))} /> : undefined} />
 
-      <Row label="Rental enabled" value={item.is_rentable ? 'Yes' : 'No'}
+      <Row locked={productLocked} label="Rental enabled" value={item.is_rentable ? 'Yes' : 'No'}
         editor={productEdit ? (done) => <RentalEditor initialOn={item.is_rentable} pickupOffered={item.pickup_enabled || pickupOn} deliveryOffered={item.delivery_enabled}
           pickupPrice={text(pickupPrice)} deliveryPrice={text(deliveryPrice)} done={done}
           save={async (on, pickup, delivery) => {
@@ -109,14 +112,14 @@ export default function ProductDetailsList({ item, edits, openField }: { item: P
             await edits!.saveProduct({ is_rentable: true, pickup_rental_price: pickup, delivery_rental_price: delivery })
             await savePrices({ pickup, delivery })
           }} /> : undefined} />
-      <Row label="Purchase enabled" value={item.is_purchasable ? 'Yes' : 'No'}
+      <Row locked={productLocked} label="Purchase enabled" value={item.is_purchasable ? 'Yes' : 'No'}
         editor={productEdit ? (done) => <PurchaseEditor initialOn={item.is_purchasable} price={Number(salePrice) > 0 ? text(salePrice) : ''} done={done}
           save={async (on, price) => {
             if (!on) { await edits!.saveProduct({ is_purchasable: false }); return }
             await edits!.saveProduct({ is_purchasable: true, sale_price: price })
             await savePrices({ sale: price })
           }} /> : undefined} />
-      <Row label="Fulfillment" value={fulfillmentLabel({ pickup_enabled: pickupOn, delivery_enabled: item.delivery_enabled })}
+      <Row locked={productLocked} label="Fulfillment" value={fulfillmentLabel({ pickup_enabled: pickupOn, delivery_enabled: item.delivery_enabled })}
         editor={productEdit ? (done) => <FulfillmentEditor pickup={pickupOn} delivery={item.delivery_enabled} rentable={item.is_rentable}
           pickupPrice={text(pickupPrice)} deliveryPrice={text(deliveryPrice)} done={done}
           save={async (pickup, delivery, pickupP, deliveryP) => {
@@ -124,9 +127,9 @@ export default function ProductDetailsList({ item, edits, openField }: { item: P
             await edits!.saveProduct({ pickup_enabled: pickup, delivery_enabled: delivery, ...prices })
             if (store) await edits!.saveStore({ pickup_enabled: pickup, ...(item.is_rentable ? { pickup_rental_price: pickup ? pickupP : null, delivery_rental_price: delivery ? deliveryP : null } : {}) })
           }} /> : undefined} />
-      <Row label="Same-day pickup" value={pickupOn && item.same_day_pickup ? 'May be available' : 'No'}
+      <Row locked={productLocked} label="Same-day pickup" value={pickupOn && item.same_day_pickup ? 'May be available' : 'No'}
         editor={productEdit ? (done) => <YesNoEditor initial={item.same_day_pickup} done={done} save={(v) => edits!.saveProduct({ same_day_pickup: v })} /> : undefined} />
-      <Row label="Installation required" value={item.installation_required ? 'Yes' : 'No'}
+      <Row locked={productLocked} label="Installation required" value={item.installation_required ? 'Yes' : 'No'}
         editor={productEdit ? (done) => <YesNoEditor initial={item.installation_required} done={done} save={(v) => edits!.saveProduct({ installation_required: v })} /> : undefined} />
 
       <Row label="Created" value={new Date(item.created_at).toLocaleDateString()} />
@@ -135,7 +138,7 @@ export default function ProductDetailsList({ item, edits, openField }: { item: P
   )
 }
 
-function Row({ label, value, editor, open: startOpen = false }: { label: string; value: string; editor?: (done: () => void) => ReactNode; open?: boolean }) {
+function Row({ label, value, editor, open: startOpen = false, locked = false }: { label: string; value: string; editor?: (done: () => void) => ReactNode; open?: boolean; locked?: boolean }) {
   const [open, setOpen] = useState(startOpen)
   return (
     <div>
@@ -146,7 +149,9 @@ function Row({ label, value, editor, open: startOpen = false }: { label: string;
             ? <button type="button" aria-label={`Edit ${label}`} onClick={() => setOpen(true)} className="group -mx-1 inline-flex items-center gap-2 rounded-lg px-1 py-0.5 text-left hover:bg-blue-50">
                 <span>{value}</span><Pencil size={14} className="shrink-0 text-slate-400 group-hover:text-blue-600" />
               </button>
-            : <span>{value}</span>
+            : locked
+              ? <span className="inline-flex items-center gap-2 text-slate-500" title="Locked by the owner (Staff Access)"><span>{value}</span><Lock size={14} className="shrink-0 text-slate-300" aria-label="Locked by the owner" /></span>
+              : <span>{value}</span>
         )}
       </dd>
     </div>
