@@ -29,7 +29,9 @@ test('the arrows loop the ring and only the middle tile is a link', async ({ pag
 
 test('clicking a side tile brings it to the middle instead of opening it', async ({ page }) => {
   await openHydratedCarousel(page)
-  const box = await carousel(page).locator('a[aria-hidden="true"]', { hasText: 'Knee Walkers' }).boundingBox()
+  const sideTile = carousel(page).locator('a[aria-hidden="true"]', { hasText: 'Knee Walkers' })
+  await sideTile.scrollIntoViewIfNeeded()
+  const box = await sideTile.boundingBox()
   expect(box).not.toBeNull()
   await page.mouse.click(box!.x + box!.width / 2, box!.y + box!.height / 2)
   await expect(middleLink(page)).toContainText('Knee Walkers')
