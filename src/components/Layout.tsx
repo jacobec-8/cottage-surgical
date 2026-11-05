@@ -38,7 +38,7 @@ const NAV = [
   { to: '/delivery', label: 'Delivery & Pickup', icon: Truck, roles: ALL, workspace: 'delivery' },
   { to: '/reports', label: 'Reports', icon: BarChart3, roles: STAFF },
   { to: '/staff', label: 'Staff', icon: UsersRound, roles: ['admin', 'owner'], workspace: 'staff' },
-  { to: '/locations', label: 'Locations', icon: Building2, roles: ['admin'], adminOnly: true },
+  { to: '/locations', label: 'Locations', icon: Building2, roles: ['admin', 'owner'], adminOnly: false },
 ]
 
 export default function Layout({ children }: { children: ReactNode }) {

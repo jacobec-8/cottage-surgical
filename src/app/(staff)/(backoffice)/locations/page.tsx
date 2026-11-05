@@ -1,7 +1,7 @@
 import Locations from '../../../../screens/Locations'
-import { requireAdmin } from '../../../../lib/staffAccessServer'
+import { requireTeamManager } from '../../../../lib/staffAccessServer'
 
 export default async function LocationsPage() {
-  await requireAdmin()
+  await requireTeamManager()
   return <Locations />
 }
