@@ -10,6 +10,7 @@ import ShopHeader from '../../components/shop/ShopHeader'
 import ShopFooter from '../../components/shop/ShopFooter'
 import ProductCard from '../../components/shop/ProductCard'
 import CategoryCarousel from './CategoryCarousel'
+import HeroVideo from './HeroVideo'
 import { EMPTY_FILTER, applyLinkedSearch, clearSearch, headerSearch, matchesFilter, pickCategory, pickMode, typeSearch, type ShopFilter } from './shopFilter'
 import { CategoryChips, NoMatches } from './ShopFilterBar'
 
@@ -81,29 +82,32 @@ export default function Shop({ initialProducts }: { initialProducts?: Product[] 
     <div className="font-sans bg-white min-h-screen text-slate-800">
       <ShopHeader onSearch={searchFromLink} onHeaderSearch={searchFromHeader} />
 
-      {/* Hero: a sunset band (peach to coral) that runs behind the top half of the category ring. */}
-      <section className="bg-[linear-gradient(135deg,#ffc79f_0%,#f79b7a_60%,#f08a7e_100%)] text-navy pb-[196px] lg:pb-[230px]">
-        <div className="max-w-6xl mx-auto px-4 pt-12 text-center">
-          <span className="inline-flex items-center gap-2 text-xs font-bold tracking-wide uppercase text-white bg-navy rounded-full px-3.5 py-1.5">
-            <Truck size={14} /> Serving Nassau &amp; Suffolk County, NY
-          </span>
-          <h1 className="font-heading font-extrabold tracking-tight leading-[1.06] text-4xl sm:text-5xl lg:text-[56px] mt-5">
-            Home medical equipment,<br className="hidden sm:block" /> delivered the same day.
-          </h1>
-          <p className="text-slate-700 mt-4 max-w-2xl mx-auto text-lg">
-            Rent hospital beds, wheelchairs, and walkers — delivered and set up in your home by licensed
-            technicians, often the same day you order. No assembly, no shipping fees.
-          </p>
-          <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 mt-6 text-sm font-semibold">
-            <span className="inline-flex items-center gap-1.5"><Check size={16} strokeWidth={3} /> Delivered same-day</span>
-            <span className="inline-flex items-center gap-1.5"><Check size={16} strokeWidth={3} /> Setup included</span>
-            <span className="inline-flex items-center gap-1.5"><Check size={16} strokeWidth={3} /> Free repairs while you rent</span>
-            <span className="inline-flex items-center gap-1.5"><Check size={16} strokeWidth={3} /> Month-to-month</span>
+      {/* Hero: a cream band, the delivery van's own background, behind the top half of the category ring. */}
+      <section className="bg-[#fefeef] text-navy pb-[196px] lg:pb-[230px]">
+        <div className="max-w-7xl mx-auto px-4 lg:px-8 pt-12 lg:pt-10 text-center lg:text-left lg:grid lg:grid-cols-[minmax(0,1fr)_440px] lg:items-center lg:gap-10">
+          <div>
+            <span className="inline-flex items-center gap-2 text-xs font-bold tracking-wide uppercase text-white bg-navy rounded-full px-3.5 py-1.5">
+              <Truck size={14} /> Serving Nassau &amp; Suffolk County, NY
+            </span>
+            <h1 className="font-heading font-extrabold tracking-tight leading-[1.06] text-4xl sm:text-5xl lg:text-[52px] mt-5">
+              Home medical equipment,<br className="hidden sm:block" /> delivered the same day.
+            </h1>
+            <p className="text-slate-700 mt-4 max-w-2xl mx-auto lg:mx-0 text-lg">
+              Rent hospital beds, wheelchairs, and walkers — delivered and set up in your home by licensed
+              technicians, often the same day you order. No assembly, no shipping fees.
+            </p>
+            <div className="flex flex-wrap justify-center lg:justify-start gap-x-6 gap-y-2 mt-6 text-sm font-semibold">
+              <span className="inline-flex items-center gap-1.5"><Check size={16} strokeWidth={3} /> Delivered same-day</span>
+              <span className="inline-flex items-center gap-1.5"><Check size={16} strokeWidth={3} /> Setup included</span>
+              <span className="inline-flex items-center gap-1.5"><Check size={16} strokeWidth={3} /> Free repairs while you rent</span>
+              <span className="inline-flex items-center gap-1.5"><Check size={16} strokeWidth={3} /> Month-to-month</span>
+            </div>
           </div>
+          <HeroVideo className="hidden lg:block w-[440px] aspect-[13/8]" />
         </div>
       </section>
 
-      {/* Shop by category: pulled up so the tiles straddle the navy band's edge. */}
+      {/* Shop by category: pulled up so the tiles straddle the hero band's edge. */}
       <section className="relative -mt-[188px] lg:-mt-[220px] pb-14">
         <h2 className="sr-only">Shop by category</h2>
         <CategoryCarousel onPick={searchFromLink} />
