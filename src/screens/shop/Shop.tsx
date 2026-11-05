@@ -84,7 +84,7 @@ export default function Shop({ initialProducts }: { initialProducts?: Product[] 
 
       {/* Hero: a cream band, the delivery van's own background, with the van playing under the text. */}
       <section className="bg-[#fefeef] text-navy">
-        <div className="max-w-6xl mx-auto px-4 pt-12 lg:pt-14 pb-6 text-center">
+        <div className="max-w-6xl mx-auto px-4 pt-10 lg:pt-10 pb-2 text-center">
           <span className="inline-flex items-center gap-2 text-xs font-bold tracking-wide uppercase text-white bg-navy rounded-full px-3.5 py-1.5">
             <Truck size={14} /> Serving Nassau &amp; Suffolk County, NY
           </span>
@@ -101,12 +101,12 @@ export default function Shop({ initialProducts }: { initialProducts?: Product[] 
             <span className="inline-flex items-center gap-1.5"><Check size={16} strokeWidth={3} /> Free repairs while you rent</span>
             <span className="inline-flex items-center gap-1.5"><Check size={16} strokeWidth={3} /> Month-to-month</span>
           </div>
-          <HeroVideo className="mx-auto mt-4 w-full max-w-[340px] sm:max-w-[460px] lg:max-w-[520px] aspect-[13/8]" />
+          <HeroVideo className="mx-auto mt-1 w-full max-w-[300px] sm:max-w-[340px] lg:max-w-[380px] aspect-[13/8]" />
         </div>
       </section>
 
       {/* Shop by category, on white below the hero. */}
-      <section className="pt-10 lg:pt-12 pb-14">
+      <section className="pt-8 pb-14">
         <h2 className="sr-only">Shop by category</h2>
         <CategoryCarousel onPick={searchFromLink} />
         <div className="mt-4 text-center">
