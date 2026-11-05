@@ -9,6 +9,13 @@ const ENTER = [{ transform: 'translateX(100%)' }, { transform: 'translateX(0)' }
 const PUSH_EASE = 'cubic-bezier(.65,0,.35,1)'
 const SPEED_OUT_EASE = 'cubic-bezier(.55,0,1,.45)'
 
+// Centred in the space between the bottom of the hero text and the bottom of the band.
+// The text ends 449px down the band on a phone, 308px from sm, 324px from lg.
+const UNDER_TEXT = 'top-[calc(449px+(100%-449px)/2)] sm:top-[calc(308px+(100%-308px)/2)] lg:top-[calc(324px+(100%-324px)/2)]'
+// That space's height when the band fills the screen: the screen less the header (200px, then
+// 102px from md, 114px from lg) and the text, with the floor the band's own minimum height sets.
+const STAGE = '[--stage:max(100svh-649px,201px)] sm:[--stage:max(100svh-508px,312px)] md:[--stage:max(100svh-410px,312px)] lg:[--stage:max(100svh-438px,376px)]'
+
 const show = (el: HTMLElement) => { el.style.visibility = 'visible' }
 const hide = (el: HTMLElement) => { el.style.visibility = 'hidden' }
 
@@ -73,10 +80,10 @@ export default function HeroReel() {
 
   return (
     <>
-      <div aria-hidden="true" className="absolute inset-0 z-0 overflow-hidden">
+      <div aria-hidden="true" className={`absolute inset-0 z-0 overflow-hidden ${STAGE}`}>
         {REEL.map((clip, i) => (
           <div key={clip.src} ref={(el) => { layers.current[i] = el }} className={`absolute inset-0 overflow-hidden ${i === 0 ? '' : 'invisible'}`}>
-            <div className={`absolute left-1/2 -translate-x-1/2 ${clip.box}`}>
+            <div className={`absolute left-1/2 -translate-x-1/2 ${UNDER_TEXT} ${clip.box}`}>
               <video ref={(el) => { videos.current[i] = el }} muted playsInline preload="none"
                 poster={`${clip.src}.jpg`} onEnded={() => handOff(i)}
                 className="pointer-events-none select-none absolute -left-1/2 -top-[125%] w-[200%] h-[275%] max-w-none object-cover">

@@ -82,9 +82,9 @@ export default function Shop({ initialProducts }: { initialProducts?: Product[] 
     <div className="font-sans bg-white min-h-screen text-slate-800">
       <ShopHeader onSearch={searchFromLink} onHeaderSearch={searchFromHeader} />
 
-      {/* Hero: three delivery animations play in turn as the band's background, behind the text
-          and the top half of the category ring. */}
-      <section className="relative isolate overflow-hidden bg-[#fefeef] text-navy pb-[320px] sm:pb-[380px] lg:pb-[465px]">
+      {/* Hero: fills the first screen under the header (200px tall on a phone and up to md, 102px
+          at md, 114px from lg), with three delivery animations playing in turn behind the text. */}
+      <section className="relative isolate overflow-hidden bg-[#fefeef] text-navy min-h-[max(calc(100svh-200px),650px)] sm:min-h-[max(calc(100svh-200px),620px)] md:min-h-[max(calc(100svh-102px),620px)] lg:min-h-[max(calc(100svh-114px),700px)]">
         <HeroReel />
         <div className="relative max-w-6xl mx-auto px-4 pt-12 text-center">
           <span className="inline-flex items-center gap-2 text-xs font-bold tracking-wide uppercase text-white bg-navy rounded-full px-3.5 py-1.5">
@@ -106,8 +106,8 @@ export default function Shop({ initialProducts }: { initialProducts?: Product[] 
         </div>
       </section>
 
-      {/* Shop by category: pulled up so the tiles straddle the hero band's edge. */}
-      <section className="relative -mt-[156px] lg:-mt-[180px] pb-14">
+      {/* Shop by category, the first thing after the hero. */}
+      <section className="pt-12 pb-14">
         <h2 className="sr-only">Shop by category</h2>
         <CategoryCarousel onPick={searchFromLink} />
         <div className="mt-4 text-center">
