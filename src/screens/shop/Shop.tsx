@@ -84,7 +84,7 @@ export default function Shop({ initialProducts }: { initialProducts?: Product[] 
 
       {/* Hero: the delivery van animation is the band's background, behind the text and the top half of the category ring. */}
       <section className="relative isolate overflow-hidden bg-[#fefeef] text-navy pb-[196px] lg:pb-[230px]">
-        <HeroVideo className="absolute inset-0 h-full w-full object-cover" />
+        <HeroVideo className="absolute inset-0 h-full w-full object-cover object-top" />
         <div className="relative max-w-6xl mx-auto px-4 pt-12 text-center">
           <span className="inline-flex items-center gap-2 text-xs font-bold tracking-wide uppercase text-white bg-navy rounded-full px-3.5 py-1.5">
             <Truck size={14} /> Serving Nassau &amp; Suffolk County, NY
@@ -106,7 +106,7 @@ export default function Shop({ initialProducts }: { initialProducts?: Product[] 
       </section>
 
       {/* Shop by category: pulled up so the tiles straddle the hero band's edge. */}
-      <section className="relative -mt-[188px] lg:-mt-[220px] pb-14">
+      <section className="relative -mt-[156px] lg:-mt-[180px] pb-14">
         <h2 className="sr-only">Shop by category</h2>
         <CategoryCarousel onPick={searchFromLink} />
         <div className="mt-4 text-center">
