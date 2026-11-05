@@ -7,11 +7,13 @@ import { SHOP_CATEGORIES } from './shopCategories'
 import { AUTO_ADVANCE_MS, SHOWN_REACH, isShown, jumpsAcross, slotOf, swipeStep, wrapIndex } from './carouselSlots'
 
 // Scale and fade by distance from the middle: picked, beside it, at the edge, off stage.
+// Side tiles fade under a white veil rather than turning see-through, so they stay
+// light where they cross the hero's navy band.
 const SLOT_LOOK = [
-  { scale: 1, opacity: 1 },
-  { scale: 0.8, opacity: 0.75 },
-  { scale: 0.64, opacity: 0.4 },
-  { scale: 0.64, opacity: 0 },
+  { scale: 1, opacity: 1, veil: 0 },
+  { scale: 0.8, opacity: 1, veil: 0.3 },
+  { scale: 0.64, opacity: 1, veil: 0.55 },
+  { scale: 0.64, opacity: 0, veil: 0.55 },
 ]
 const COUNT = SHOP_CATEGORIES.length
 
@@ -67,7 +69,7 @@ export default function CategoryCarousel({ onPick }: { onPick: (q: string) => vo
       {/* Announce only moves the visitor made; a turning ring would talk over everything. */}
       <p className="sr-only" aria-live={playing && !held ? 'off' : 'polite'}>{`${current.label}, ${nav.active + 1} of ${COUNT}`}</p>
       <div
-        className="relative h-[400px] lg:h-[460px] overflow-hidden touch-pan-y [--cc-shift-1:236px] [--cc-shift-2:440px] lg:[--cc-shift-1:330px] lg:[--cc-shift-2:580px]"
+        className="relative h-[424px] lg:h-[500px] overflow-hidden touch-pan-y [--cc-shift-1:236px] [--cc-shift-2:440px] lg:[--cc-shift-1:330px] lg:[--cc-shift-2:580px]"
         onTouchStart={(e) => { touchX.current = e.touches[0].clientX; setHeld(true) }}
         onTouchEnd={(e) => {
           setHeld(false)
@@ -80,7 +82,7 @@ export default function CategoryCarousel({ onPick }: { onPick: (q: string) => vo
         {SHOP_CATEGORIES.map((c, i) => {
           const slot = slotOf(i, nav.active, COUNT)
           const middle = slot === 0
-          const { opacity } = SLOT_LOOK[Math.min(Math.abs(slot), SHOWN_REACH + 1)]
+          const { opacity, veil } = SLOT_LOOK[Math.min(Math.abs(slot), SHOWN_REACH + 1)]
           return (
             <Link key={c.label} href={`/?q=${encodeURIComponent(c.q)}`} onClick={(e) => onTileClick(e, i, c.q)}
               tabIndex={middle ? 0 : -1} aria-hidden={!middle}
@@ -90,7 +92,7 @@ export default function CategoryCarousel({ onPick }: { onPick: (q: string) => vo
               }}
               className={`group absolute left-1/2 top-2 flex w-[270px] h-[384px] lg:w-[360px] lg:h-[440px] flex-col overflow-hidden rounded-[22px] lg:rounded-3xl p-[22px] lg:p-7 text-left
                 transition-[transform,opacity,box-shadow] duration-700 ease-[cubic-bezier(.22,.61,.36,1)] motion-reduce:transition-none
-                ${middle ? 'shadow-[0_28px_56px_-20px_rgba(22,41,77,.35)]' : 'cursor-pointer'} ${isShown(slot) ? '' : 'pointer-events-none'}`}>
+                ${middle ? 'shadow-[0_30px_60px_-20px_rgba(0,0,0,.45)]' : 'cursor-pointer shadow-[0_16px_32px_-20px_rgba(0,0,0,.35)]'} ${isShown(slot) ? '' : 'pointer-events-none'}`}>
               <div className="h-[170px] lg:h-[210px] shrink-0 overflow-hidden">
                 <img src={c.img} alt="" className="h-full w-full object-contain mix-blend-multiply transition-transform duration-300 group-hover:scale-[1.04]" />
               </div>
@@ -99,6 +101,8 @@ export default function CategoryCarousel({ onPick }: { onPick: (q: string) => vo
               <span className={`mt-auto self-start inline-flex items-center gap-2 h-11 px-5 rounded-full bg-brand-600 group-hover:bg-brand-700 text-white text-[15px] font-bold transition-opacity duration-300 ${middle ? 'opacity-100' : 'opacity-0'}`}>
                 {c.cta} <ArrowRight size={16} strokeWidth={2.25} />
               </span>
+              <span aria-hidden="true" style={{ opacity: veil }}
+                className="pointer-events-none absolute inset-0 bg-white transition-opacity duration-700 motion-reduce:transition-none" />
             </Link>
           )
         })}
