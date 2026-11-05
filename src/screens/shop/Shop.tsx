@@ -10,7 +10,7 @@ import ShopHeader from '../../components/shop/ShopHeader'
 import ShopFooter from '../../components/shop/ShopFooter'
 import ProductCard from '../../components/shop/ProductCard'
 import CategoryCarousel from './CategoryCarousel'
-import HeroVideo from './HeroVideo'
+import HeroReel from './HeroReel'
 import { EMPTY_FILTER, applyLinkedSearch, clearSearch, headerSearch, matchesFilter, pickCategory, pickMode, typeSearch, type ShopFilter } from './shopFilter'
 import { CategoryChips, NoMatches } from './ShopFilterBar'
 
@@ -82,9 +82,10 @@ export default function Shop({ initialProducts }: { initialProducts?: Product[] 
     <div className="font-sans bg-white min-h-screen text-slate-800">
       <ShopHeader onSearch={searchFromLink} onHeaderSearch={searchFromHeader} />
 
-      {/* Hero: the delivery van animation is the band's background, behind the text and the top half of the category ring. */}
-      <section className="relative isolate overflow-hidden bg-[#fefeef] text-navy pb-[196px] lg:pb-[230px]">
-        <HeroVideo className="absolute inset-0 h-full w-full object-cover object-top" />
+      {/* Hero: three delivery animations play in turn as the band's background, behind the text
+          and the top half of the category ring. */}
+      <section className="relative isolate overflow-hidden bg-[#fefeef] text-navy pb-[320px] sm:pb-[380px] lg:pb-[465px]">
+        <HeroReel />
         <div className="relative max-w-6xl mx-auto px-4 pt-12 text-center">
           <span className="inline-flex items-center gap-2 text-xs font-bold tracking-wide uppercase text-white bg-navy rounded-full px-3.5 py-1.5">
             <Truck size={14} /> Serving Nassau &amp; Suffolk County, NY
