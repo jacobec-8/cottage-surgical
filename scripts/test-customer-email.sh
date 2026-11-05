@@ -21,6 +21,8 @@ trap cleanup EXIT
 "$qa_pg/createdb" -h "$qa_cluster/socket" -p 55451 email_tests
 python3 tests/sql/email-bootstrap.py > "$qa_cluster/schema.sql"
 psql_test() { "$qa_pg/psql" -X -h "$qa_cluster/socket" -p 55451 -d email_tests -v ON_ERROR_STOP=1 "$@"; }
+# Email fixtures insert logins directly; sign-ups are closed (119), so raise the login flag for that database.
+psql_test -c "ALTER DATABASE email_tests SET cottage.login_create = '1'" > /dev/null
 if ! psql_test -f "$qa_cluster/schema.sql" > "$qa_cluster/bootstrap.log" 2>&1; then cat "$qa_cluster/bootstrap.log"; exit 1; fi
 for qa_test in customer-email-access customer-email-lifecycle customer-email-reminders; do
   if ! psql_test -f "tests/sql/$qa_test.sql" > "$qa_cluster/result.log" 2>&1; then cat "$qa_cluster/result.log"; exit 1; fi
@@ -30,4 +32,11 @@ python3 tests/sql/customer-email-concurrency.py "$qa_cluster/socket"
 
 if ! psql_test -f tests/sql/customer-email-provider.sql > "$qa_cluster/provider.log" 2>&1; then cat "$qa_cluster/provider.log"; exit 1; fi
 echo "PASS customer-email-provider (real sender, fake HTTP)"
+
+# Roles run in their own database so their fixtures never meet the email ones.
+"$qa_pg/createdb" -h "$qa_cluster/socket" -p 55451 roles_tests
+psql_roles() { "$qa_pg/psql" -X -h "$qa_cluster/socket" -p 55451 -d roles_tests -v ON_ERROR_STOP=1 "$@"; }
+if ! psql_roles -f "$qa_cluster/schema.sql" > "$qa_cluster/roles-bootstrap.log" 2>&1; then cat "$qa_cluster/roles-bootstrap.log"; exit 1; fi
+if ! psql_roles -f tests/sql/roles.sql > "$qa_cluster/roles.log" 2>&1; then cat "$qa_cluster/roles.log"; exit 1; fi
+echo "PASS roles (one assertion per cell of the role contract)"
 

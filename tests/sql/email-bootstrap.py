@@ -15,6 +15,10 @@ def read(path: str) -> str:
 
 print(read("tests/sql/standins.sql"))
 print(read("supabase/migrations/000_baseline.sql"))
+# Every migration after the baseline, in order: the schema the live database has.
+for path in sorted((ROOT / "supabase/migrations").glob("[0-9][0-9][0-9]_*.sql")):
+    if path.name != "000_baseline.sql":
+        print(path.read_text())
 print(
     """
 CREATE TABLE public.test_email_sends (email_id uuid);
