@@ -24,6 +24,9 @@ export type ProductEdits = {
   canEditProduct: boolean
   /** Online sales at the store: a product decision, same switch as canEditProduct for staff. */
   canSetRetail: boolean
+  /** Staff at this store whose owner has not opened the switch: show the control greyed, not hidden. */
+  lockedProducts: boolean
+  lockedPrices: boolean
   saveStore: (patch: StorePatch) => Promise<void>
   saveProduct: (patch: ProductPatch) => Promise<void>
   /** Online sales at the store in the header (null while loading or with no store). */
@@ -75,6 +78,8 @@ export function useProductEdits(item: ProductDetailsItem & { id: string; locatio
     // Owner-wide products are the owner's and admins'; staff edit their own store's product when the switch is on (121).
     canEditProduct: isAdmin || (isOwner && Boolean(store.data)) || (mayProducts && ownProduct && Boolean(store.data)),
     canSetRetail: Boolean(store.data) && (isAdmin || isOwner || mayProducts),
+    lockedProducts: staffHere && !mayProducts,
+    lockedPrices: staffHere && !mayPrices,
     saveStore: async (patch) => {
       const { data: changed, error } = await supabase.from('equipment_location_inventory')
         .update({ ...patch, updated_at: new Date().toISOString() })

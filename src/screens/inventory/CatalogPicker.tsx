@@ -20,10 +20,10 @@ export type CatalogItem = {
   location_inventory: { location_id: string }[]
 }
 
-type Props = { items: CatalogItem[]; locationId: string; locationName: string; added: readonly string[]; onAdded: (id: string) => void }
+type Props = { items: CatalogItem[]; locationId: string; locationName: string; added: readonly string[]; onAdded: (id: string) => void; locked?: boolean }
 
 /** Catalog products this store doesn't carry yet, each with an Add button. */
-export default function CatalogPicker({ items, locationId, locationName, added, onAdded }: Props) {
+export default function CatalogPicker({ items, locationId, locationName, added, onAdded, locked = false }: Props) {
   const qc = useQueryClient()
   const add = useMutation({
     mutationFn: async (item: CatalogItem) => {
@@ -69,10 +69,10 @@ export default function CatalogPicker({ items, locationId, locationName, added, 
               <button
                 type="button"
                 onClick={() => add.mutate(item)}
-                disabled={add.isPending}
+                disabled={add.isPending || locked}
                 aria-label={`Add ${item.name} to ${locationName}`}
-                title={`Add to ${locationName}`}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                title={locked ? 'Locked by the owner (Staff Access → Change products)' : `Add to ${locationName}`}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Plus size={15} /> Add
               </button>

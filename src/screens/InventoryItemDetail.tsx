@@ -118,6 +118,8 @@ export default function InventoryItemDetail({ itemId }: { itemId: string }) {
   const catalogManager = useCatalogManager()
   const access = useStaffModuleAccess()
   // Owner/admin edit the owner's products; store staff edit only their own store's products, and only when the store's "Change products" switch is on (121).
+  // Greyed, not hidden: staff at their own store see the edit button locked when the owner hasn't opened it.
+  const productsLockedHere = profile?.role === 'staff' && !access.canAccess('edit_products')
   const canEditProduct = (product: { location_id?: string | null } | null | undefined) =>
     catalogManager || Boolean(product?.location_id && product.location_id === profile?.location_id && access.canAccess('edit_products'))
   const [note, setNote] = useState('')
@@ -264,8 +266,8 @@ export default function InventoryItemDetail({ itemId }: { itemId: string }) {
             </div>
           </div>
         </div>
-        {canEditProduct(product) && (
-          <button onClick={() => setEditing((value) => !value)} className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm shrink-0">
+        {(canEditProduct(product) || productsLockedHere) && (
+          <button onClick={() => setEditing((value) => !value)} disabled={!canEditProduct(product)} title={!canEditProduct(product) ? 'Locked by the owner (Staff Access → Change products)' : undefined} className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm shrink-0 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600">
             {editing ? <X size={16} /> : <Pencil size={16} />} {editing ? 'Cancel edit' : 'Edit item'}
           </button>
         )}
