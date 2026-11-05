@@ -48,13 +48,10 @@ export function useRecordPayment(onMessage: (msg: string) => void) {
 export function useSetDueDate(onMessage: (msg: string) => void) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ chargeId, dueOn, today, status }: { chargeId: string; dueOn: string | null; today: string; status: string }) => {
-      const nextStatus = status === 'overdue' && dueOn && dueOn >= today ? 'current' : status
-      const { error } = await supabase
-        .from('recurring_charges')
-        .update({ next_due_date: dueOn, status: nextStatus })
-        .eq('id', chargeId)
-      if (error) throw new Error('Couldn’t save the due date. Please try again.')
+    mutationFn: async ({ chargeId, dueOn }: { chargeId: string; dueOn: string | null; today: string; status: string }) => {
+      // The database decides the status flip (120); billing rows are no longer written directly.
+      const { data, error } = await supabase.rpc('set_charge_due_date', { p_charge_id: chargeId, p_due_on: dueOn })
+      if (error || !(data as { ok?: boolean } | null)?.ok) throw new Error('Couldn’t save the due date. Please try again.')
     },
     onMutate: () => onMessage(''),
     onSuccess: () => { invalidate(qc); onMessage('Due date saved.') },

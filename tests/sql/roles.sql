@@ -240,5 +240,61 @@ DO $$ BEGIN
 END $$;
 RESET ROLE;
 
+
+-- ── Staff base (120): orders and billing are read-only through the table ─
+INSERT INTO public.recurring_charges (id, order_id, customer_id, amount, status, next_due_date) VALUES
+ ('a8000000-0000-0000-0000-0000000000a1', 'a5000000-0000-0000-0000-0000000000a1', 'a4000000-0000-0000-0000-0000000000a1', 50, 'overdue', CURRENT_DATE - 10);
+
+SELECT test_as('a2000000-0000-0000-0000-000000000003'); SET ROLE authenticated;
+DELETE FROM rental_orders WHERE id = 'a5000000-0000-0000-0000-0000000000a1';
+SELECT test_assert((SELECT count(*) = 1 FROM rental_orders), 'staff cannot delete an order');
+UPDATE rental_orders SET special_notes = 'tampered' WHERE id = 'a5000000-0000-0000-0000-0000000000a1';
+SELECT test_assert((SELECT special_notes IS NULL FROM rental_orders WHERE id = 'a5000000-0000-0000-0000-0000000000a1'),
+  'staff cannot update an order through the table');
+DO $$ BEGIN
+  BEGIN
+    INSERT INTO rental_orders (customer_id, location_id, status, source)
+    VALUES ('a4000000-0000-0000-0000-0000000000a1', 'a1000000-0000-0000-0000-0000000000a1', 'open', 'staff');
+    RAISE EXCEPTION 'FAILED: staff inserted an order through the table';
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+END $$;
+UPDATE recurring_charges SET next_due_date = CURRENT_DATE + 30 WHERE id = 'a8000000-0000-0000-0000-0000000000a1';
+SELECT test_assert((SELECT next_due_date = CURRENT_DATE - 10 FROM recurring_charges WHERE id = 'a8000000-0000-0000-0000-0000000000a1'),
+  'staff cannot write a billing row through the table');
+SELECT test_assert((set_charge_due_date('a8000000-0000-0000-0000-0000000000a1', CURRENT_DATE + 30))->>'ok' = 'true',
+  'staff set the due date through the function at their own pharmacy');
+SELECT test_assert((SELECT next_due_date = CURRENT_DATE + 30 AND status = 'current' FROM recurring_charges
+                     WHERE id = 'a8000000-0000-0000-0000-0000000000a1'),
+  'the function moved the date and cleared overdue');
+RESET ROLE;
+
+SELECT test_as('a2000000-0000-0000-0000-000000000005'); SET ROLE authenticated;
+SELECT test_assert((set_charge_due_date('a8000000-0000-0000-0000-0000000000a1', CURRENT_DATE + 1))->>'reason' = 'forbidden',
+  'staff at another pharmacy are refused by the function');
+RESET ROLE;
+
+-- ── Staff base (120): operational rows have insert and update, no delete ─
+SELECT test_as('a2000000-0000-0000-0000-000000000003'); SET ROLE authenticated;
+INSERT INTO customers (id, full_name, location_id) VALUES ('a4000000-0000-0000-0000-0000000000a9', 'Walk-in', 'a1000000-0000-0000-0000-0000000000a1');
+UPDATE customers SET phone = '5551234' WHERE id = 'a4000000-0000-0000-0000-0000000000a9';
+SELECT test_assert((SELECT phone = '5551234' FROM customers WHERE id = 'a4000000-0000-0000-0000-0000000000a9'),
+  'staff add and edit a customer at their own pharmacy');
+DO $$ BEGIN
+  BEGIN
+    INSERT INTO customers (full_name, location_id) VALUES ('Stranger', 'a1000000-0000-0000-0000-0000000000a2');
+    RAISE EXCEPTION 'FAILED: staff added a customer at another pharmacy';
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+END $$;
+DELETE FROM customers WHERE id = 'a4000000-0000-0000-0000-0000000000a9';
+SELECT test_assert((SELECT count(*) = 1 FROM customers WHERE id = 'a4000000-0000-0000-0000-0000000000a9'), 'staff cannot delete a customer');
+DELETE FROM drivers WHERE id = 'a3000000-0000-0000-0000-000000000001';
+SELECT test_assert((SELECT count(*) = 1 FROM drivers), 'staff cannot delete a driver record');
+RESET ROLE;
+
+SELECT test_as('a2000000-0000-0000-0000-000000000001'); SET ROLE authenticated;
+DELETE FROM customers WHERE id = 'a4000000-0000-0000-0000-0000000000a9';
+SELECT test_assert((SELECT count(*) = 0 FROM customers WHERE id = 'a4000000-0000-0000-0000-0000000000a9'), 'admin can delete a customer');
+RESET ROLE;
+
 SELECT test_as('');
 SELECT 'roles assertions passed' AS result;
