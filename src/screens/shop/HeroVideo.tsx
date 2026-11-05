@@ -4,11 +4,9 @@ import { useEffect, useRef } from 'react'
 
 /** The van drives in over the first seconds; after that only the idle part repeats. */
 const LOOP_FROM_S = 3.5
-/** Fades the clip's edges into the band, so a browser that draws its cream a shade off shows no box. */
-const EDGE_FADE = '[mask-image:linear-gradient(to_right,transparent,#000_4%,#000_96%,transparent),linear-gradient(to_bottom,transparent,#000_4%,#000_96%,transparent)] [mask-composite:intersect]'
 
 /**
- * The delivery van animation behind the hero text. Decorative, muted, and left on
+ * The delivery van animation that fills the hero band behind the text. Decorative, muted, and left on
  * its still poster when the visitor prefers reduced motion or the browser blocks autoplay.
  */
 export default function HeroVideo({ className = '' }: { className?: string }) {
@@ -30,7 +28,7 @@ export default function HeroVideo({ className = '' }: { className?: string }) {
 
   return (
     <video ref={video} aria-hidden="true" muted playsInline preload="none" poster="/hero/delivery-van.jpg" onEnded={replayIdle}
-      className={`pointer-events-none select-none ${EDGE_FADE} ${className}`}>
+      className={`pointer-events-none select-none ${className}`}>
       <source src="/hero/delivery-van.webm" type="video/webm" />
       <source src="/hero/delivery-van.mp4" type="video/mp4" />
     </video>
