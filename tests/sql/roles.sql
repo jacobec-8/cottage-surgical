@@ -383,5 +383,49 @@ SELECT test_assert((set_charge_due_date('a8000000-0000-0000-0000-0000000000a1', 
   'the owner is never locked by a section switch');
 RESET ROLE;
 
+
+-- ── The website wall (122): the public sees one owner, and only that owner ─
+INSERT INTO public.storefronts (business_id, slug, is_default) VALUES ('a0000000-0000-0000-0000-00000000000a', 'owner-a-site', true);
+UPDATE equipment_items SET is_rentable = true, pickup_enabled = true, delivery_enabled = true, pickup_rental_price = 40, delivery_rental_price = 50
+ WHERE id IN ('a7000000-0000-0000-0000-00000000000a', 'a7000000-0000-0000-0000-00000000000b');
+INSERT INTO public.equipment_location_inventory (equipment_item_id, location_id, quantity_on_hand, pickup_enabled, pickup_rental_price)
+VALUES ('a7000000-0000-0000-0000-00000000000b', 'a1000000-0000-0000-0000-0000000000b1', 2, true, 40) ON CONFLICT DO NOTHING;
+UPDATE pickup_locations SET delivery_zips = '{11743}' WHERE id = 'a1000000-0000-0000-0000-0000000000b1';
+UPDATE pickup_locations SET delivers_anywhere = true WHERE id = 'a1000000-0000-0000-0000-0000000000a1';
+SELECT test_assert((SELECT storefront_listed(i) FROM equipment_items i WHERE i.id = 'a7000000-0000-0000-0000-00000000000a'),
+  'the website lists the owner''s product');
+SELECT test_assert((SELECT NOT storefront_listed(i) FROM equipment_items i WHERE i.id = 'a7000000-0000-0000-0000-00000000000b'),
+  'the website never lists another owner''s product, however active');
+
+SELECT test_as(''); SET ROLE anon;
+SELECT test_assert((SELECT count(*) > 0 AND bool_and(business_id = 'a0000000-0000-0000-0000-00000000000a') FROM equipment_items),
+  'the public reads only the website owner''s products');
+SELECT test_assert((SELECT count(*) = 2 AND bool_and(business_id = 'a0000000-0000-0000-0000-00000000000a') FROM pickup_locations),
+  'the public reads only the website owner''s pharmacies');
+SELECT test_assert((validate_storefront_fulfillment('[{"item_id":"a7000000-0000-0000-0000-00000000000a","quantity":1}]',
+                                                    '{"method":"delivery","delivery_zip":"11743"}'))->>'pickup_location_id'
+                   = 'a1000000-0000-0000-0000-0000000000a1',
+  'a ZIP listed only by another owner''s pharmacy neither captures nor blocks the order');
+DO $$ BEGIN
+  BEGIN
+    INSERT INTO customers (full_name, location_id) VALUES ('Public', 'a1000000-0000-0000-0000-0000000000a1');
+    RAISE EXCEPTION 'FAILED: the public key wrote a table';
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+  BEGIN
+    UPDATE equipment_items SET name = 'Defaced' WHERE id = 'a7000000-0000-0000-0000-00000000000a';
+    RAISE EXCEPTION 'FAILED: the public key updated a table';
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+END $$;
+SELECT test_assert((submit_rental_request_once(gen_random_uuid(), 'rental',
+    '[{"item_id":"a7000000-0000-0000-0000-00000000000a","quantity":1}]',
+    '{"full_name":"Web Customer","phone":"5550100","email":"web@example.invalid"}',
+    '{"line1":"1 Web St","city":"Woodbury","state":"NY","zip":"11797"}', NULL,
+    '{"method":"pickup","pickup_location_id":"a1000000-0000-0000-0000-0000000000a1"}'))->>'ok' = 'true',
+  'the public still places a request through the function');
+RESET ROLE;
+SELECT test_assert((SELECT count(*) = 1 FROM rental_orders o JOIN customers c ON c.id = o.customer_id
+                     WHERE c.full_name = 'Web Customer' AND o.location_id = 'a1000000-0000-0000-0000-0000000000a1' AND o.source = 'storefront'),
+  'the request landed at the chosen pharmacy');
+
 SELECT test_as('');
 SELECT 'roles assertions passed' AS result;
