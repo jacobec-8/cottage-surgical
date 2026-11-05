@@ -81,24 +81,24 @@ export default function Shop({ initialProducts }: { initialProducts?: Product[] 
     <div className="font-sans bg-white min-h-screen text-slate-800">
       <ShopHeader onSearch={searchFromLink} onHeaderSearch={searchFromHeader} />
 
-      {/* Hero: a navy band that runs behind the top half of the category ring. */}
-      <section className="bg-gradient-to-b from-navy to-navy-800 text-white pb-[196px] lg:pb-[230px]">
+      {/* Hero: a sunset band (peach to coral) that runs behind the top half of the category ring. */}
+      <section className="bg-[linear-gradient(135deg,#ffc79f_0%,#f79b7a_60%,#f08a7e_100%)] text-navy pb-[196px] lg:pb-[230px]">
         <div className="max-w-6xl mx-auto px-4 pt-12 text-center">
-          <span className="inline-flex items-center gap-2 text-xs font-bold tracking-wide uppercase text-navy bg-peach rounded-full px-3.5 py-1.5">
+          <span className="inline-flex items-center gap-2 text-xs font-bold tracking-wide uppercase text-white bg-navy rounded-full px-3.5 py-1.5">
             <Truck size={14} /> Serving Nassau &amp; Suffolk County, NY
           </span>
           <h1 className="font-heading font-extrabold tracking-tight leading-[1.06] text-4xl sm:text-5xl lg:text-[56px] mt-5">
-            Home medical equipment,<br className="hidden sm:block" /> <span className="text-peach">delivered the same day.</span>
+            Home medical equipment,<br className="hidden sm:block" /> delivered the same day.
           </h1>
-          <p className="text-blue-100/80 mt-4 max-w-2xl mx-auto text-lg">
+          <p className="text-slate-700 mt-4 max-w-2xl mx-auto text-lg">
             Rent hospital beds, wheelchairs, and walkers — delivered and set up in your home by licensed
             technicians, often the same day you order. No assembly, no shipping fees.
           </p>
           <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 mt-6 text-sm font-semibold">
-            <span className="inline-flex items-center gap-1.5"><Check size={16} strokeWidth={3} className="text-peach" /> Delivered same-day</span>
-            <span className="inline-flex items-center gap-1.5"><Check size={16} strokeWidth={3} className="text-peach" /> Setup included</span>
-            <span className="inline-flex items-center gap-1.5"><Check size={16} strokeWidth={3} className="text-peach" /> Free repairs while you rent</span>
-            <span className="inline-flex items-center gap-1.5"><Check size={16} strokeWidth={3} className="text-peach" /> Month-to-month</span>
+            <span className="inline-flex items-center gap-1.5"><Check size={16} strokeWidth={3} /> Delivered same-day</span>
+            <span className="inline-flex items-center gap-1.5"><Check size={16} strokeWidth={3} /> Setup included</span>
+            <span className="inline-flex items-center gap-1.5"><Check size={16} strokeWidth={3} /> Free repairs while you rent</span>
+            <span className="inline-flex items-center gap-1.5"><Check size={16} strokeWidth={3} /> Month-to-month</span>
           </div>
         </div>
       </section>
