@@ -5,6 +5,8 @@ const carousel = (page: Page) => page.getByRole('region', { name: 'Shop by categ
 const middleLink = (page: Page) => carousel(page).getByRole('link')
 
 async function openHydratedCarousel(page: Page) {
+  // Reduced motion keeps the ring still, so these tests drive every move themselves.
+  await page.emulateMedia({ reducedMotion: 'reduce' })
   await mockCatalogReads(page)
   await openPublicRoute(page, '/')
   await expect(middleLink(page)).toHaveCount(1)
@@ -58,4 +60,39 @@ test('each photo stays inside its box, above the tile’s name', async ({ page }
     expect(photo && name).toBeTruthy()
     expect(photo!.y + photo!.height).toBeLessThanOrEqual(name!.y)
   }
+})
+
+test('the ring turns on its own, and holds when paused or hovered', async ({ page }) => {
+  await page.clock.install()
+  await mockCatalogReads(page)
+  await openPublicRoute(page, '/')
+  const pause = carousel(page).getByRole('button', { name: 'Pause carousel' })
+  await expect(pause).toBeVisible()
+  await page.mouse.move(0, 0)
+  await page.clock.runFor(3600)
+  await expect(middleLink(page)).toContainText('Hospital Beds')
+
+  await pause.click()
+  await page.mouse.move(0, 0)
+  await expect(carousel(page).getByRole('button', { name: 'Play carousel' })).toBeVisible()
+  await page.clock.runFor(10_000)
+  await expect(middleLink(page)).toContainText('Hospital Beds')
+
+  await carousel(page).getByRole('button', { name: 'Play carousel' }).click()
+  await middleLink(page).hover()
+  await page.clock.runFor(10_000)
+  await expect(middleLink(page)).toContainText('Hospital Beds')
+  await page.mouse.move(0, 0)
+  await page.clock.runFor(3600)
+  await expect(middleLink(page)).toContainText('Knee Walkers')
+})
+
+test('with reduced motion the ring stays still and offers play', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await page.clock.install()
+  await mockCatalogReads(page)
+  await openPublicRoute(page, '/')
+  await expect(carousel(page).getByRole('button', { name: 'Play carousel' })).toBeVisible()
+  await page.clock.runFor(10_000)
+  await expect(middleLink(page)).toContainText('Wheelchairs')
 })

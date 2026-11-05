@@ -82,8 +82,8 @@ export default function Shop({ initialProducts }: { initialProducts?: Product[] 
       <ShopHeader onSearch={searchFromLink} onHeaderSearch={searchFromHeader} />
 
       {/* Hero */}
-      <section className="bg-gradient-to-b from-brand-50 to-white border-b border-slate-100">
-        <div className="max-w-6xl mx-auto px-4 pt-12 pb-10 text-center">
+      <section className="bg-gradient-to-b from-brand-50 to-white">
+        <div className="max-w-6xl mx-auto px-4 pt-12 pb-6 text-center">
           <span className="inline-flex items-center gap-2 text-xs font-semibold tracking-wide uppercase text-brand-700 bg-brand-100 rounded-full px-3.5 py-1.5">
             <Truck size={14} /> Serving Nassau &amp; Suffolk County, NY
           </span>
@@ -94,15 +94,7 @@ export default function Shop({ initialProducts }: { initialProducts?: Product[] 
             Rent hospital beds, wheelchairs, and walkers — delivered and set up in your home by licensed
             technicians, often the same day you order. No assembly, no shipping fees.
           </p>
-          <form onSubmit={(e) => { e.preventDefault(); goShop() }}
-            className="mt-7 flex items-center gap-2 bg-white rounded-xl p-1.5 max-w-xl mx-auto shadow-sm ring-1 ring-slate-200 focus-within:ring-2 focus-within:ring-brand-500">
-            <Search size={20} className="text-slate-400 ml-3 shrink-0" />
-            <input value={filter.query} onChange={(e) => setFilter((f) => typeSearch(f, e.target.value))}
-              placeholder="Search — wheelchair, hospital bed, walker…"
-              className="flex-1 min-w-0 text-slate-800 placeholder:text-slate-400 outline-none px-1 py-2" />
-            <button className="bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-lg px-5 sm:px-6 py-2.5 shrink-0">Search</button>
-          </form>
-          <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 mt-5 text-sm font-medium text-slate-600">
+          <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 mt-6 text-sm font-medium text-slate-600">
             <span className="inline-flex items-center gap-1.5"><Check size={16} className="text-brand-600" /> Delivered same-day</span>
             <span className="inline-flex items-center gap-1.5"><Check size={16} className="text-brand-600" /> Setup included</span>
             <span className="inline-flex items-center gap-1.5"><Check size={16} className="text-brand-600" /> Free repairs while you rent</span>
@@ -112,7 +104,7 @@ export default function Shop({ initialProducts }: { initialProducts?: Product[] 
       </section>
 
       {/* Shop by category */}
-      <section className="py-14">
+      <section className="pt-8 pb-14">
         <div className="max-w-6xl mx-auto px-4 text-center mb-7">
           <h2 className="font-heading font-extrabold tracking-tight text-navy text-2xl sm:text-3xl">Shop by category</h2>
           <p className="text-slate-500 mt-1">Our most-requested home medical equipment.</p>

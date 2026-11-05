@@ -1,10 +1,10 @@
 'use client'
 
-import { useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
+import { useEffect, useRef, useState, type FocusEvent, type KeyboardEvent, type MouseEvent } from 'react'
 import Link from 'next/link'
-import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ArrowRight, ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react'
 import { SHOP_CATEGORIES } from './shopCategories'
-import { SHOWN_REACH, isShown, jumpsAcross, slotOf, swipeStep, wrapIndex } from './carouselSlots'
+import { AUTO_ADVANCE_MS, SHOWN_REACH, isShown, jumpsAcross, slotOf, swipeStep, wrapIndex } from './carouselSlots'
 
 // Scale and fade by distance from the middle: picked, beside it, at the edge, off stage.
 const SLOT_LOOK = [
@@ -27,11 +27,26 @@ function tileTransform(slot: number): string {
  * "Shop by category": the picked tile sits big in the middle, the rest shrink and
  * fade to either side, and the ring loops. Only the middle tile is a link; a side
  * tile is brought to the middle by a click, the arrows, the dots or a swipe.
+ * The ring turns on its own unless paused, hovered, focused, touched, or the
+ * visitor prefers reduced motion.
  */
 export default function CategoryCarousel({ onPick }: { onPick: (q: string) => void }) {
   // `from` is the previous pick, so the one tile wrapping around the back jumps instead of sliding across.
   const [nav, setNav] = useState({ active: 0, from: 0 })
+  const [playing, setPlaying] = useState(true)
+  const [held, setHeld] = useState(false)
   const touchX = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) setPlaying(false)
+  }, [])
+  // Restarts whenever the middle tile changes, so a manual move gets a full rest too.
+  useEffect(() => {
+    if (!playing || held) return
+    const timer = setTimeout(() => setNav((n) => ({ active: wrapIndex(n.active + 1, COUNT), from: n.active })), AUTO_ADVANCE_MS)
+    return () => clearTimeout(timer)
+  }, [nav.active, playing, held])
+  const onBlur = (e: FocusEvent) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setHeld(false) }
   const go = (index: number) => setNav((n) => ({ active: wrapIndex(index, COUNT), from: n.active }))
   const step = (by: number) => setNav((n) => ({ active: wrapIndex(n.active + by, COUNT), from: n.active }))
   const current = SHOP_CATEGORIES[nav.active]
@@ -47,12 +62,15 @@ export default function CategoryCarousel({ onPick }: { onPick: (q: string) => vo
   }
 
   return (
-    <div role="region" aria-roledescription="carousel" aria-label="Shop by category" onKeyDown={onKeyDown}>
-      <p className="sr-only" aria-live="polite">{`${current.label}, ${nav.active + 1} of ${COUNT}`}</p>
+    <div role="region" aria-roledescription="carousel" aria-label="Shop by category" onKeyDown={onKeyDown}
+      onMouseEnter={() => setHeld(true)} onMouseLeave={() => setHeld(false)} onFocus={() => setHeld(true)} onBlur={onBlur}>
+      {/* Announce only moves the visitor made; a turning ring would talk over everything. */}
+      <p className="sr-only" aria-live={playing && !held ? 'off' : 'polite'}>{`${current.label}, ${nav.active + 1} of ${COUNT}`}</p>
       <div
         className="relative h-[400px] lg:h-[460px] overflow-hidden touch-pan-y [--cc-shift-1:236px] [--cc-shift-2:440px] lg:[--cc-shift-1:330px] lg:[--cc-shift-2:580px]"
-        onTouchStart={(e) => { touchX.current = e.touches[0].clientX }}
+        onTouchStart={(e) => { touchX.current = e.touches[0].clientX; setHeld(true) }}
         onTouchEnd={(e) => {
+          setHeld(false)
           if (touchX.current === null) return
           const by = swipeStep(e.changedTouches[0].clientX - touchX.current)
           touchX.current = null
@@ -102,6 +120,10 @@ export default function CategoryCarousel({ onPick }: { onPick: (q: string) => vo
         <button type="button" onClick={() => step(1)} aria-label="Next category"
           className="w-11 h-11 rounded-full bg-brand-50 text-brand-600 hover:bg-brand-600 hover:text-white grid place-items-center transition-colors">
           <ChevronRight size={20} strokeWidth={2.25} />
+        </button>
+        <button type="button" onClick={() => setPlaying((p) => !p)} aria-label={playing ? 'Pause carousel' : 'Play carousel'}
+          className="w-11 h-11 -ml-2 rounded-full text-slate-400 hover:text-brand-600 hover:bg-brand-50 grid place-items-center transition-colors">
+          {playing ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" />}
         </button>
       </div>
     </div>
