@@ -19,7 +19,7 @@ export default function ProductCard({ p }: { p: Product }) {
 
   return (
     <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden flex flex-col hover:shadow-lg hover:border-slate-300 transition">
-      <Link href={to} className="relative block aspect-[4/3] bg-slate-50">
+      <Link href={to} className="relative block aspect-[4/3] overflow-hidden bg-slate-50">
         <div className="absolute top-3 left-3 flex flex-col gap-1.5 z-10">
           {rentable && <span className="text-[11px] font-semibold bg-navy text-white rounded-md px-2 py-0.5">Rent</span>}
           {purchasable && <span className="text-[11px] font-semibold bg-slate-200 text-slate-700 rounded-md px-2 py-0.5">Buy</span>}
