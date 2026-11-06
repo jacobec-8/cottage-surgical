@@ -87,13 +87,11 @@ export function DetailCards({ r }: { r: StoreReport }) {
             <Stat label="Deposits held" value={money(p.deposits_held ?? 0)} />
             <Stat label="In / out deposits" value={`${money(r.money.deposits_taken)} / ${money(r.money.deposits_returned)}`} />
           </Stats>
-          {overdue > 0 && (
-            <Split label="Overdue by age" format={(v) => money(v)} parts={[
-              { label: '1–30 d', value: Number(p.overdue_1_30 ?? 0), tone: 'bg-red-300', text: 'text-slate-900' },
-              { label: '31–60 d', value: Number(p.overdue_31_60 ?? 0), tone: 'bg-red-500', text: 'text-slate-900' },
-              { label: '60+ d', value: Number(p.overdue_61_plus ?? 0), tone: 'bg-red-800', text: 'text-slate-900' },
-            ]} />
-          )}
+          <Split label={overdue > 0 ? `Overdue by age · ${money(overdue)}` : 'Overdue by age · none'} format={(v) => money(v)} parts={[
+            { label: '1–30 d', value: Number(p.overdue_1_30 ?? 0), tone: 'bg-red-300', text: 'text-slate-900' },
+            { label: '31–60 d', value: Number(p.overdue_31_60 ?? 0), tone: 'bg-red-500', text: 'text-slate-900' },
+            { label: '60+ d', value: Number(p.overdue_61_plus ?? 0), tone: 'bg-red-800', text: 'text-slate-900' },
+          ]} />
         </Card>
       )}
       <Card title="Rentals & purchases">

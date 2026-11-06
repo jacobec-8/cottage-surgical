@@ -7,7 +7,7 @@ import { supabase } from '../../lib/supabase'
 import { TONE_EDGE, TONE_PILL } from '../../lib/status'
 import { businessToday } from '../delivery/stopStatus'
 import { useSchedulePickup } from '../orders/useSchedulePickup'
-import { nextStepChip, rentalNextStep, type ActiveRental } from './nextStep'
+import { nextStepChip, pickupBooked, rentalNextStep, rentalSortKey, type ActiveRental } from './nextStep'
 
 /** Out with a customer: the same set as the "Out with customers" tile. */
 export const ACTIVE_RENTAL_STATUSES = ['active', 'delivered', 'overdue', 'pickup_scheduled'] as const
@@ -49,14 +49,6 @@ function useActiveRentals(locationId: string | null) {
   })
 }
 
-/** Red first, then whatever comes soonest; open-ended rentals last. */
-function sortKey(r: Row, today: string): string {
-  const step = rentalNextStep(r, today)
-  const rank = nextStepChip(step)?.tone === 'red' ? 0 : { overdue: 0, pickup_due: 1, renews: 2, pickup_scheduled: 3, none: 4 }[step.kind]
-  const date = step.kind === 'none' ? '9999-12-31' : step.date ?? '9999-12-31'
-  return `${rank}:${date}`
-}
-
 /**
  * Rentals out with customers, each with its next step (renew or pickup), so
  * staff can book a pickup or open the rental to end it without leaving home.
@@ -66,7 +58,7 @@ export default function ActiveRentals({ locationId, onOpen }: { locationId: stri
   const [msg, setMsg] = useState('')
   const schedulePickup = useSchedulePickup(setMsg)
   const today = businessToday()
-  const rows = [...(rentals.data ?? [])].sort((a, b) => sortKey(a, today).localeCompare(sortKey(b, today)))
+  const rows = [...(rentals.data ?? [])].sort((a, b) => rentalSortKey(a, today).localeCompare(rentalSortKey(b, today)))
 
   return (
     <section aria-labelledby="active-rentals-heading" className="mb-8">
@@ -98,7 +90,7 @@ function RentalCard({ r, today, onOpen, onSchedulePickup, scheduling }: {
   const lines = r.rental_line_items ?? []
   const first = lines[0]?.equipment
   const units = lines.reduce((sum, l) => sum + Math.max(1, l.quantity), 0)
-  const canPickup = PICKUP_ELIGIBLE.has(r.status) && step.kind !== 'pickup_scheduled'
+  const canPickup = PICKUP_ELIGIBLE.has(r.status) && !pickupBooked(r)
   const name = r.customer?.full_name ?? 'Customer'
   return (
     <li className={`flex items-center gap-3 rounded-xl border border-slate-200 border-l-4 bg-white p-3 ${TONE_EDGE[chip?.tone ?? 'gray']}`}>
@@ -111,10 +103,10 @@ function RentalCard({ r, today, onOpen, onSchedulePickup, scheduling }: {
           <span className="block truncate text-xs text-slate-500">
             {first?.name ?? 'Equipment'}{units > 1 ? ` +${units - 1}` : ''}
           </span>
+          {chip && <span className={`mt-1 inline-block max-w-full truncate rounded-full px-2 py-0.5 text-xs font-semibold ${TONE_PILL[chip.tone]}`}>{chip.label}</span>}
         </span>
-        <span className="shrink-0 text-right">
-          <span className="block text-base font-bold tabular-nums text-slate-900">${Number(r.monthly_rate ?? 0).toFixed(0)}<span className="text-xs font-medium text-slate-400">/mo</span></span>
-          {chip && <span className={`mt-1 inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${TONE_PILL[chip.tone]}`}>{chip.label}</span>}
+        <span className="shrink-0 text-base font-bold tabular-nums text-slate-900">
+          ${Number(r.monthly_rate ?? 0).toFixed(0)}<span className="text-xs font-medium text-slate-400">/mo</span>
         </span>
       </button>
       {canPickup ? (

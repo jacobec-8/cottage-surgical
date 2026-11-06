@@ -28,21 +28,27 @@ function openPickup(legs: RentalLeg[]): RentalLeg | undefined {
   return legs.find((d) => isReturnLeg(d) && d.status !== 'cancelled' && d.status !== 'completed')
 }
 
+/** A return is already on the board, so there's no pickup to book. */
+export function pickupBooked(r: ActiveRental): boolean {
+  return r.status === 'pickup_scheduled' || Boolean(openPickup(r.deliveries ?? []))
+}
+
 /** The charge still billing; ended or paused charges don't renew. */
 function liveCharge(charges: RentalCharge[]): RentalCharge | undefined {
   return charges.find((c) => c.status === 'current' || c.status === 'overdue')
 }
 
 export function rentalNextStep(r: ActiveRental, today: string): NextStep {
-  const pickup = openPickup(r.deliveries ?? [])
-  if (pickup || r.status === 'pickup_scheduled') {
-    const date = pickup?.scheduled_date ?? null
-    return { kind: 'pickup_scheduled', date, days: date ? daysBetween(today, date) : null }
-  }
+  // Unpaid rent stays red even once a pickup is booked.
   const charge = liveCharge(r.recurring_charges ?? [])
   const due = charge?.next_due_date ?? null
   if (r.status === 'overdue' || charge?.status === 'overdue' || (due && daysBetween(today, due) < 0)) {
     return { kind: 'overdue', date: due, days: due ? Math.max(0, -daysBetween(today, due)) : 0 }
+  }
+  const pickup = openPickup(r.deliveries ?? [])
+  if (pickup || r.status === 'pickup_scheduled') {
+    const date = pickup?.scheduled_date ?? null
+    return { kind: 'pickup_scheduled', date, days: date ? daysBetween(today, date) : null }
   }
   // The rental ends before (or on) its next bill: it comes back instead of renewing.
   if (r.end_date && (!due || r.end_date <= due)) return { kind: 'pickup_due', date: r.end_date, days: daysBetween(today, r.end_date) }
@@ -70,4 +76,12 @@ export function nextStepChip(step: NextStep): { label: string; tone: Tone } | nu
     case 'renews': return { label: `Renews ${shortDate(step.date)}`, tone: step.days <= DUE_SOON_DAYS ? 'yellow' : 'green' }
     default: return null
   }
+}
+
+/** Red first, then whatever comes soonest; rentals with nothing due last. */
+export function rentalSortKey(r: ActiveRental, today: string): string {
+  const step = rentalNextStep(r, today)
+  const rank = nextStepChip(step)?.tone === 'red' ? 0 : step.kind === 'none' ? 2 : 1
+  const date = step.kind === 'none' ? null : step.date
+  return `${rank}:${date ?? '9999-12-31'}`
 }
