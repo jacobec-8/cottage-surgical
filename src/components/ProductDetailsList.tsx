@@ -136,9 +136,9 @@ export default function ProductDetailsList({ item, edits, openField }: { item: P
       <Row locked={productLocked} label="Installation required" value={item.installation_required ? 'Yes' : 'No'}
         editor={productEdit ? (done) => <YesNoEditor initial={item.installation_required} done={done} save={(v) => edits!.saveProduct({ installation_required: v })} /> : undefined} />
 
-      <Row locked={productLocked} label="Goes well with"
+      <div className="sm:col-span-2"><Row locked={productLocked} label="Goes well with"
         value={pairings.picks == null ? '…' : pairings.picks.length ? pairings.picks.map((p) => p.name).join(', ') : 'None picked'}
-        editor={productEdit && item.id && pairings.picks ? (done) => <PairingsEditor itemId={item.id!} initial={pairings.picks!} done={done} save={pairings.save} /> : undefined} />
+        editor={productEdit && item.id && pairings.picks ? (done) => <PairingsEditor itemId={item.id!} initial={pairings.picks!} done={done} save={pairings.save} /> : undefined} /></div>
 
       <Row label="Created" value={new Date(item.created_at).toLocaleDateString()} />
       <Row label="Last updated" value={new Date(item.updated_at).toLocaleString()} />
@@ -352,28 +352,42 @@ function TextEditor({ label, action, initial = '', multiline = false, required, 
   )
 }
 
-/** Up to four products shown with this one on the website, in the order picked. */
+/**
+ * Up to four products shown with this one on the website, in the order picked.
+ * The list only selects; Add adds it, so typing to find a product never adds
+ * every product it passes on the way.
+ */
 function PairingsEditor({ itemId, initial, save, done }: { itemId: string; initial: PairedProduct[]; save: (ids: string[]) => Promise<void>; done: () => void }) {
   const [picked, setPicked] = useState(initial)
+  const [choice, setChoice] = useState('')
   const candidates = usePairingCandidates(itemId)
   const options = (candidates ?? []).filter((c) => !picked.some((p) => p.id === c.id))
+  const add = () => {
+    const chosen = options.find((o) => o.id === choice)
+    if (chosen) { setPicked([...picked, chosen]); setChoice('') }
+  }
+  // A product chosen but not yet added still counts when Save is pressed.
+  const ids = () => [...picked.map((p) => p.id), ...(choice && picked.length < MAX_PAIRINGS ? [choice] : [])]
   return (
-    <EditorForm label="Goes well with" save={() => save(picked.map((p) => p.id))} done={done}
-      validate={() => onBox('pairings', pairingsProblem(itemId, picked.map((p) => p.id)))}>
-      {picked.map((p) => (
-        <span key={p.id} className="inline-flex items-center gap-1 rounded-full bg-blue-50 py-0.5 pl-2.5 pr-1 text-xs font-normal text-blue-800">
-          {p.name}
-          <button type="button" aria-label={`Remove ${p.name}`} onClick={() => setPicked(picked.filter((x) => x.id !== p.id))} className="rounded-full p-0.5 hover:bg-blue-100"><X size={12} /></button>
-        </span>
-      ))}
+    <EditorForm label="Goes well with" save={() => save(ids())} done={done}
+      validate={() => onBox('pairings', pairingsProblem(itemId, ids()))}>
+      {picked.length > 0 && <div className="flex w-full flex-wrap gap-2">
+        {picked.map((p) => (
+          <span key={p.id} className="inline-flex items-center gap-1 rounded-full bg-blue-50 py-0.5 pl-2.5 pr-1 text-xs font-normal text-blue-800">
+            {p.name}
+            <button type="button" aria-label={`Remove ${p.name}`} onClick={() => setPicked(picked.filter((x) => x.id !== p.id))} className="rounded-full p-0.5 hover:bg-blue-100"><X size={12} /></button>
+          </span>
+        ))}
+      </div>}
       {picked.length < MAX_PAIRINGS && <Checked name="pairings" message={false}>
-        <select autoFocus aria-label="Add a product" value="" disabled={candidates == null}
-          onChange={(e) => { const chosen = options.find((o) => o.id === e.target.value); if (chosen) setPicked([...picked, chosen]) }}
-          className={`${INPUT} w-56`}>
-          <option value="">{candidates == null ? 'Loading products…' : options.length ? 'Add a product…' : 'No other products'}</option>
+        <select autoFocus aria-label="Choose a product" value={choice} disabled={candidates == null}
+          onChange={(e) => setChoice(e.target.value)} className={`${INPUT} w-72`}>
+          <option value="">{candidates == null ? 'Loading products…' : options.length ? 'Choose a product…' : 'No other products'}</option>
           {options.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
         </select>
       </Checked>}
+      {picked.length < MAX_PAIRINGS && <button type="button" onClick={add} disabled={!choice}
+        className="rounded-lg border border-blue-600 px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-40">Add</button>}
       <Actions done={done} />
     </EditorForm>
   )
