@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useQueryClient } from '@tanstack/react-query'
-import { Search, Plus, Minus, Trash2, CheckCircle } from 'lucide-react'
+import { Search, Plus, Minus, Trash2, CheckCircle, CreditCard, Store } from 'lucide-react'
 import ItemThumb from '../components/ItemThumb'
 import { Checked, SaveForm, SubmitButton } from '../components/SaveForm'
 import { unconfirmedReply } from '../lib/saveErrors'
@@ -11,6 +11,7 @@ import { newOrderProblems } from '../lib/formChecks/operationsChecks'
 import { supabase } from '../lib/supabase'
 import { invalidateOrderWorkflow } from '../lib/workflowKeys'
 import { useLocationScope } from '../contexts/LocationContext'
+import { useStaffModuleAccess } from '../lib/useStaffModuleAccess'
 import { DRIVER_LOCATION_FIELDS, driversForLocation, type DriverWithLocations } from '../lib/driverLocations'
 import { DRIVER_BUSY_MSG, dispatchErrorMessage, windowProblem } from '../lib/dispatchErrors'
 import { customerMatches, fetchAllPages, MIN_SEARCH_LENGTH, type OrderCustomer } from './neworder/customerMatches'
@@ -56,6 +57,10 @@ const orderErrorMessage = (reason?: string) => {
     case 'invalid_driver': return 'That driver isn’t active or isn’t set up for this store. Choose another driver.'
     case 'driver_busy': return DRIVER_BUSY_MSG
     case 'invalid_time': return 'The end time must be after the start time.'
+    case 'invalid_deposit': return 'Enter a deposit between $0 and $100,000.'
+    case 'payment_required': return 'Take the payment first: delivery orders are paid before they’re saved.'
+    case 'invalid_amount': return 'Enter the amount taken, more than $0.'
+    case 'payment_forbidden': return 'You can’t take payments at this store. Ask the owner to turn on Billing for you, or choose in-store pickup.'
     default: return `Couldn’t create the order (${reason || 'unknown error'}).`
   }
 }
@@ -70,19 +75,26 @@ export default function NewOrder() {
   const [custMode, setCustMode] = useState<'existing' | 'new'>('existing')
   const [custSearch, setCustSearch] = useState('')
   const [cust, setCust] = useState<{ id: string; name: string } | null>(null)
-  const [nc, setNc] = useState({ full_name: '', phone: '', email: '', dob: '', coverage: '', line1: '', city: '', state: 'NY', zip: '' })
+  const [nc, setNc] = useState({ full_name: '', phone: '', email: '', dob: '', line1: '', city: '', state: 'NY', zip: '' })
 
   // cart + delivery
   const [cart, setCart] = useState<CartLine[]>([])
   const [itemSearch, setItemSearch] = useState('')
   const [deliv, setDeliv] = useState({ date: '', time: '', end: '', driver: '', notes: '', deposit: '' })
 
-  const [result, setResult] = useState<{ order_no: number; unallocated: number; method: Method } | null>(null)
+  // What staff took on the card machine (or in cash); blank means "the total".
+  const [paidInput, setPaidInput] = useState<string | null>(null)
+  // The Billing switch of the store this order is for; the server checks the same one (130).
+  const { canAccess, loadingAccess } = useStaffModuleAccess(selectedLocationId)
+  const canTakePayment = loadingAccess || canAccess('billing')
+
+  const [result, setResult] = useState<{ order_no: number; unallocated: number; method: Method; paid: number | null } | null>(null)
 
   useEffect(() => {
     setCart([])
     setCust(null)
     setCustSearch('')
+    setPaidInput(null)
     setDeliv((current) => ({ ...current, driver: '' }))
   }, [selectedLocationId])
 
@@ -145,6 +157,8 @@ export default function NewOrder() {
     [items.data, itemSearch, mode, method],
   )
   const total = cart.reduce((s, l) => s + (l.rate ?? 0) * l.qty, 0)
+  // A delivery is paid before it's saved (130): the first month or the purchase, unless staff typed what they took.
+  const paidAmount = paidInput ?? (total > 0 ? total.toFixed(2) : '')
   // Only what this pharmacy has can be ordered: out-of-stock items can't be
   // picked, and a line can't go above the store's count.
   const stockById = useMemo(
@@ -157,6 +171,7 @@ export default function NewOrder() {
 
   const addItem = (it: Item) => {
     const available = availableFor(it.id)
+    setPaidInput(null) // the total changes, so a typed amount no longer matches it
     setCart((c) => {
       // Checked against the latest cart, so a fast double click can't go over stock.
       const ex = c.find((l) => l.item_id === it.id)
@@ -166,8 +181,9 @@ export default function NewOrder() {
     })
   }
   // Clamp to 1..store stock (and the server's 20) so the cart and the order agree.
-  const setQty = (id: string, d: number) => setCart((c) => c.map((l) => (l.item_id === id ? { ...l, qty: nextQty(l.qty, d, availableFor(id)) } : l)))
-  const removeItem = (id: string) => setCart((c) => c.filter((l) => l.item_id !== id))
+  // A cart change changes the total, so a typed amount taken starts over from it.
+  const setQty = (id: string, d: number) => { setPaidInput(null); setCart((c) => c.map((l) => (l.item_id === id ? { ...l, qty: nextQty(l.qty, d, availableFor(id)) } : l))) }
+  const removeItem = (id: string) => { setPaidInput(null); setCart((c) => c.filter((l) => l.item_id !== id)) }
 
   // Throws the reason on any failure; SaveForm shows it as "Not saved." and nothing is created.
   const create = async (_submitter: HTMLElement | null, { saveKey }: { saveKey: string }) => {
@@ -182,7 +198,7 @@ export default function NewOrder() {
     } else {
       newCustomer = {
         full_name: nc.full_name.trim(), phone: nc.phone || null, email: nc.email || null,
-        dob: nc.dob || null, coverage: nc.coverage || null,
+        dob: nc.dob || null,
         line1: nc.line1 || null, city: nc.city || null, state: nc.state || 'NY', zip: nc.zip || null,
       }
     }
@@ -193,7 +209,8 @@ export default function NewOrder() {
       p_customer_id: customerId,
       p_order_type: mode,
       p_items: cart.map((l) => ({ item_id: l.item_id, quantity: l.qty })),
-      p_delivery: { location_id: selectedLocationId, method, scheduled_date: deliv.date || null, window_start: deliv.time || null, window_end: deliv.time ? deliv.end || null : null, driver_id: method === 'delivery' ? deliv.driver || null : null, notes: deliv.notes || null },
+      p_delivery: { location_id: selectedLocationId, method, scheduled_date: deliv.date || null, window_start: deliv.time || null, window_end: deliv.time ? deliv.end || null : null, driver_id: method === 'delivery' ? deliv.driver || null : null, notes: deliv.notes || null,
+        payment_amount: method === 'delivery' ? Number(paidAmount) : null },
       p_deposit: mode === 'rental' && deliv.deposit ? Math.max(0, Number(deliv.deposit)) : null,
       p_new_customer: newCustomer,
     })
@@ -206,8 +223,9 @@ export default function NewOrder() {
     const uncertain = unconfirmedReply(data?.reason)
     if (uncertain) throw uncertain
     if (!data?.ok) throw new Error(orderErrorMessage(data?.reason))
-    setResult({ order_no: data.order_no, unallocated: data.unallocated, method })
-    setCart([]); setCust(null); setNc({ full_name: '', phone: '', email: '', dob: '', coverage: '', line1: '', city: '', state: 'NY', zip: '' })
+    setResult({ order_no: data.order_no, unallocated: data.unallocated, method, paid: data.paid ?? null })
+    setPaidInput(null)
+    setCart([]); setCust(null); setNc({ full_name: '', phone: '', email: '', dob: '', line1: '', city: '', state: 'NY', zip: '' })
     setDeliv({ date: '', time: '', end: '', driver: '', notes: '', deposit: '' })
     // create_staff_order may create a customer, reserve stock, and queue a
     // delivery — refresh every board so the actor's screens match the toast.
@@ -223,6 +241,7 @@ export default function NewOrder() {
       <div className="max-w-lg">
         <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-6">
           <div className="flex items-center gap-2 text-emerald-800 font-semibold text-lg"><CheckCircle size={20} /> Order #{result.order_no} created</div>
+          {result.paid != null && <div className="mt-2 text-2xl font-bold text-emerald-900">Paid ${Number(result.paid).toFixed(2)} in store</div>}
           <p className="text-sm text-emerald-700 mt-2">
             {result.method === 'pickup' ? `The customer collects at ${selectedLocation?.name ?? 'the store'}; hand it over from Delivery & Pickup.` : 'A delivery has been queued.'}
             {result.unallocated > 0
@@ -242,10 +261,11 @@ export default function NewOrder() {
       storeChosen: Boolean(selectedLocationId), itemCount: cart.length, overStock: overStock.length > 0, start: deliv.time, end: deliv.end,
       customerMode: custMode, customerChosen: Boolean(cust?.id), newName: nc.full_name, newEmail: nc.email, newPhone: nc.phone, newZip: nc.zip,
       rental: mode === 'rental', deposit: deliv.deposit,
+      delivery: method === 'delivery', paymentAmount: paidAmount, canTakePayment,
     })} savedMessage={null} submitOnEnter={false} className="max-w-3xl space-y-4">
       <div>
         <h2 className="sr-only">New Order</h2>
-        <p className="text-slate-500 text-sm">Build a rental or purchase from {selectedLocation?.name ?? 'a selected store'}, reserve its equipment, and schedule a delivery or a counter pickup.</p>
+        <p className="text-slate-500 text-sm">Build a rental or purchase from {selectedLocation?.name ?? 'a selected store'}, reserve its equipment, take the payment for a delivery, and schedule a delivery or a counter pickup.</p>
       </div>
 
       {isAllLocations && (
@@ -261,13 +281,13 @@ export default function NewOrder() {
 
       <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1">
         {(['rental', 'purchase'] as const).map((m) => (
-          <button type="button" key={m} onClick={() => { setMode(m); setCart([]); setDeliv((dv) => ({ ...dv, deposit: '' })) }}
+          <button type="button" key={m} onClick={() => { setMode(m); setCart([]); setPaidInput(null); setDeliv((dv) => ({ ...dv, deposit: '' })) }}
             className={`px-4 py-1.5 text-sm rounded-md capitalize ${mode === m ? 'bg-slate-900 text-white' : 'text-slate-600'}`}>{m}</button>
         ))}
       </div>
       <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1 ml-3" role="group" aria-label="How the customer gets it">
         {([['delivery', 'Delivery'], ['pickup', 'In-store pickup']] as const).map(([m, text]) => (
-          <button type="button" key={m} onClick={() => { setMethod(m); setCart([]); setDeliv((dv) => ({ ...dv, driver: '' })) }}
+          <button type="button" key={m} onClick={() => { setMethod(m); setCart([]); setPaidInput(null); setDeliv((dv) => ({ ...dv, driver: '' })) }}
             className={`px-4 py-1.5 text-sm rounded-md ${method === m ? 'bg-blue-600 text-white' : 'text-slate-600'}`}>{text}</button>
         ))}
       </div>
@@ -317,14 +337,7 @@ export default function NewOrder() {
             <Checked name="customerName" message={false}><input placeholder="Full name" value={nc.full_name} onChange={(e) => setNc({ ...nc, full_name: e.target.value })} className={`col-span-2 ${inp}`} /></Checked>
             <Checked name="customerPhone" message={false}><input placeholder="Phone" value={nc.phone} onChange={(e) => setNc({ ...nc, phone: e.target.value })} className={inp} /></Checked>
             <Checked name="customerEmail" message={false}><input placeholder="Email" value={nc.email} onChange={(e) => setNc({ ...nc, email: e.target.value })} className={inp} /></Checked>
-            <input type="date" placeholder="DOB" value={nc.dob} onChange={(e) => setNc({ ...nc, dob: e.target.value })} className={inp} />
-            <select value={nc.coverage} onChange={(e) => setNc({ ...nc, coverage: e.target.value })} className={inp}>
-              <option value="">Coverage…</option>
-              <option value="medicare">Medicare</option>
-              <option value="medicaid">Medicaid</option>
-              <option value="private_pay">Private Pay</option>
-              <option value="commercial_insurance">Commercial Insurance</option>
-            </select>
+            <input type="date" aria-label="Date of birth" value={nc.dob} onChange={(e) => setNc({ ...nc, dob: e.target.value })} className={`col-span-2 ${inp}`} />
             <input placeholder="Address" value={nc.line1} onChange={(e) => setNc({ ...nc, line1: e.target.value })} className={`col-span-2 ${inp}`} />
             <input placeholder="City" value={nc.city} onChange={(e) => setNc({ ...nc, city: e.target.value })} className={inp} />
             <Checked name="customerZip" message={false}><input placeholder="ZIP" value={nc.zip} onChange={(e) => setNc({ ...nc, zip: e.target.value })} className={inp} /></Checked>
@@ -419,11 +432,70 @@ export default function NewOrder() {
         </div>
       </div>
 
+      <PaymentCard method={method} mode={mode} total={total} deposit={deliv.deposit} paidAmount={paidAmount}
+        canTakePayment={canTakePayment} onAmount={setPaidInput} inputClass={inp} />
+
       <div className="flex justify-end">
         <SubmitButton disabled={!selectedLocationId || overStock.length > 0} className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-6 py-2.5 text-sm font-medium disabled:opacity-50">
-          {(pending) => pending ? 'Creating…' : `Create ${mode} order${method === 'pickup' ? ' for pickup' : ''}`}
+          {(pending) => pending ? 'Creating…' : method === 'delivery' && Number(paidAmount) > 0
+            ? `Paid $${Number(paidAmount).toFixed(2)}: create ${mode} order`
+            : `Create ${mode} order${method === 'pickup' ? ' for pickup' : ''}`}
         </SubmitButton>
       </div>
     </SaveForm>
   )
 }
+
+type PaymentCardProps = {
+  method: Method
+  mode: 'rental' | 'purchase'
+  total: number
+  deposit: string
+  paidAmount: string
+  canTakePayment: boolean
+  onAmount: (value: string) => void
+  inputClass: string
+}
+
+/** Delivery: staff take the payment on the card machine and record it here. Pickup: paid at the counter. */
+function PaymentCard({ method, mode, total, deposit, paidAmount, canTakePayment, onAmount, inputClass }: PaymentCardProps) {
+  if (method === 'pickup') {
+    return (
+      <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-600"><Store size={18} /></span>
+        No payment now: the customer pays in store when they collect.
+      </div>
+    )
+  }
+  if (!canTakePayment) {
+    return (
+      <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+        Delivery orders are paid before they’re saved, and you can’t take payments at this store. Ask the owner to turn on Billing for you, or choose in-store pickup.
+      </div>
+    )
+  }
+  const depositTaken = mode === 'rental' && Number(deposit) > 0 ? Number(deposit) : 0
+  return (
+    <div className="rounded-xl border-2 border-blue-200 bg-blue-50/60 p-5">
+      <div className="mb-3 flex items-center gap-3">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-blue-600 text-white"><CreditCard size={18} /></span>
+        <div>
+          <div className="text-sm font-semibold text-slate-800">Payment</div>
+          <div className="text-xs text-slate-500">Run the card on the store’s machine (or take cash), then enter what you took.</div>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-end gap-4">
+        <label className="block">
+          <span className="text-xs text-slate-500">Amount taken ($)</span>
+          <Checked name="paymentAmount"><input name="paymentAmount" inputMode="decimal" value={paidAmount} onChange={(e) => onAmount(e.target.value)}
+            className={`block w-40 text-lg font-bold ${inputClass}`} /></Checked>
+        </label>
+        <div className="pb-2 text-sm text-slate-600">
+          {mode === 'rental' ? 'First month' : 'Purchase'}: <span className="font-semibold text-slate-900">${total.toFixed(2)}</span>
+          {depositTaken > 0 && <> · Deposit taken too: <span className="font-semibold text-slate-900">${depositTaken.toFixed(2)}</span></>}
+        </div>
+      </div>
+    </div>
+  )
+}
+

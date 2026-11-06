@@ -21,7 +21,7 @@ export default function Customers() {
     queryFn: () => fetchAllPages<CustomerRow>(async (from, to) => {
       let query = supabase
         .from('customers')
-        .select('id,full_name,phone,email,coverage_type,address_line1,address_city,address_state,address_zip,rental_orders(order_type,status)')
+        .select('id,full_name,phone,email,address_line1,address_city,address_state,address_zip,rental_orders(order_type,status)')
         .order('full_name')
         .order('id')
         .range(from, to)

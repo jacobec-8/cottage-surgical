@@ -46,6 +46,14 @@ if ! psql_pairings -f "$qa_cluster/schema.sql" > "$qa_cluster/pairings-bootstrap
 if ! psql_pairings -f tests/sql/product-pairings.sql > "$qa_cluster/pairings.log" 2>&1; then cat "$qa_cluster/pairings.log"; exit 1; fi
 echo "PASS product-pairings (goes well with: who picks, what, who reads)"
 
+# Staff New Order takes the payment (130): its own database; 130 re-applied first to prove it is safe to re-run.
+"$qa_pg/createdb" -h "$qa_cluster/socket" -p 55451 staff_order_tests
+psql_orders() { "$qa_pg/psql" -X -h "$qa_cluster/socket" -p 55451 -d staff_order_tests -v ON_ERROR_STOP=1 "$@"; }
+if ! psql_orders -f "$qa_cluster/schema.sql" > "$qa_cluster/orders-bootstrap.log" 2>&1; then cat "$qa_cluster/orders-bootstrap.log"; exit 1; fi
+if ! psql_orders -f supabase/migrations/130_staff_order_payment.sql > "$qa_cluster/orders-rerun.log" 2>&1; then cat "$qa_cluster/orders-rerun.log"; exit 1; fi
+if ! psql_orders -f tests/sql/staff-order-payment.sql > "$qa_cluster/orders.log" 2>&1; then cat "$qa_cluster/orders.log"; exit 1; fi
+echo "PASS staff-order-payment (a delivery is paid before it is saved; pickups pay at the counter)"
+
 # One payment for a rental and a purchase (128), against a fake Stripe, in its own database.
 "$qa_pg/createdb" -h "$qa_cluster/socket" -p 55451 checkout_tests
 psql_checkout() { "$qa_pg/psql" -X -h "$qa_cluster/socket" -p 55451 -d checkout_tests -v ON_ERROR_STOP=1 "$@"; }

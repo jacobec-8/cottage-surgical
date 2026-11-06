@@ -4,7 +4,7 @@ import FAQ from '../../../screens/shop/FAQ'
 export const metadata: Metadata = {
   title: 'Equipment Rental FAQ | Cottage Surgical',
   description:
-    'Answers about Cottage Surgical rental periods, delivery, setup, service, payment, and coverage across Nassau and Suffolk County.',
+    'Answers about Cottage Surgical rental periods, delivery, setup, service, payment, and service across Nassau and Suffolk County.',
 }
 
 export default function FAQPage() {

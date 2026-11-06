@@ -58,6 +58,7 @@ test('new order: store, items, stock, customer, contact formats, deposit and tim
   const ok = {
     storeChosen: true, itemCount: 1, overStock: false, start: '10:00', end: '11:00', customerMode: 'existing' as const,
     customerChosen: true, newName: '', newEmail: '', newPhone: '', newZip: '', rental: true, deposit: '50',
+    delivery: false, paymentAmount: '', canTakePayment: true,
   }
   assert.deepEqual(newOrderProblems(ok), [])
   assert.deepEqual(newOrderProblems({ ...ok, storeChosen: false, itemCount: 0 }).map((p) => p.message),
@@ -66,6 +67,21 @@ test('new order: store, items, stock, customer, contact formats, deposit and tim
   const fresh = newOrderProblems({ ...ok, customerMode: 'new', newName: '', newEmail: 'x@', newPhone: '123', newZip: '1', deposit: '-1', end: '09:00' })
   assert.deepEqual(fields(fresh), ['customerName', 'customerEmail', 'customerPhone', 'customerZip', 'deposit', 'end'])
   assert.equal(messageFor(fresh, 'customerName'), 'Enter the customer’s name.')
+})
+
+test('new order: a delivery is paid before it is saved; a pickup pays at the counter', () => {
+  const ok = {
+    storeChosen: true, itemCount: 1, overStock: false, start: '', end: '', customerMode: 'existing' as const,
+    customerChosen: true, newName: '', newEmail: '', newPhone: '', newZip: '', rental: true, deposit: '',
+    delivery: true, paymentAmount: '125', canTakePayment: true,
+  }
+  assert.deepEqual(newOrderProblems(ok), [])
+  assert.equal(messageFor(newOrderProblems({ ...ok, paymentAmount: '' }), 'paymentAmount'), 'Enter the amount taken. Delivery orders are paid before they’re saved.')
+  assert.equal(messageFor(newOrderProblems({ ...ok, paymentAmount: '0' }), 'paymentAmount'), 'Enter the amount taken, more than $0.')
+  assert.equal(messageFor(newOrderProblems({ ...ok, paymentAmount: '$12' }), 'paymentAmount'), 'Enter a valid price, like 45 or 45.50.')
+  assert.equal(messageFor(newOrderProblems({ ...ok, canTakePayment: false }), null),
+    'You can’t take payments at this store, so you can’t save a delivery order. Ask the owner to turn on Billing for you, or choose in-store pickup.')
+  assert.deepEqual(newOrderProblems({ ...ok, delivery: false, paymentAmount: '', canTakePayment: false }), [])
 })
 
 test('delivery times, schedule, new pickup and missed stop', () => {

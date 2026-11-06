@@ -8,8 +8,6 @@ export type CustomerRecord = {
   phone: string | null
   email: string | null
   date_of_birth: string | null
-  coverage_type: string | null
-  insurance_notes: string | null
   notes: string | null
   address_line1: string | null
   address_city: string | null
@@ -21,7 +19,7 @@ export type CustomerRecord = {
 export type CustomerDetail = { customer: CustomerRecord; orders: SummaryOrder[] }
 
 const CUSTOMER_SELECT =
-  'id,full_name,phone,email,date_of_birth,coverage_type,insurance_notes,notes,' +
+  'id,full_name,phone,email,date_of_birth,notes,' +
   'address_line1,address_city,address_state,address_zip,created_at'
 
 const ORDER_SELECT =

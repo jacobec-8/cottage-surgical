@@ -1,12 +1,5 @@
 /** What staff may type into a customer's contact fields, and how it is saved. */
 
-export const COVERAGE_OPTIONS = [
-  { value: 'medicare', label: 'Medicare' },
-  { value: 'medicaid', label: 'Medicaid' },
-  { value: 'commercial_insurance', label: 'Commercial insurance' },
-  { value: 'private_pay', label: 'Private pay' },
-] as const
-
 export type ContactAddress = { line1: string; city: string; state: string; zip: string }
 
 export type ContactPatch = Partial<{
@@ -14,8 +7,6 @@ export type ContactPatch = Partial<{
   phone: string | null
   email: string | null
   date_of_birth: string | null
-  coverage_type: string | null
-  insurance_notes: string | null
   notes: string | null
   address_line1: string | null
   address_city: string | null
@@ -28,10 +19,6 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/
 
 /** A cleared field saves as empty (null), never as blank text. */
 const orNull = (v: string) => (v.trim() ? v.trim() : null)
-
-export function coverageLabel(value: string | null): string | null {
-  return COVERAGE_OPTIONS.find((o) => o.value === value)?.label ?? null
-}
 
 /** The change to save, or an error message for staff. */
 export function nameChange(value: string): ContactPatch | string {
@@ -56,12 +43,7 @@ export function birthDateChange(value: string, today: string): ContactPatch | st
   return value > today ? 'Date of birth can’t be in the future.' : { date_of_birth: value }
 }
 
-export function coverageChange(value: string): ContactPatch | string {
-  if (!value) return { coverage_type: null }
-  return COVERAGE_OPTIONS.some((o) => o.value === value) ? { coverage_type: value } : 'Choose a coverage type.'
-}
-
-export function textChange(field: 'insurance_notes' | 'notes', value: string): ContactPatch {
+export function textChange(field: 'notes', value: string): ContactPatch {
   return { [field]: orNull(value) }
 }
 
