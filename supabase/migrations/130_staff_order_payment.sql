@@ -11,7 +11,8 @@
 --   * p_delivery.payment_amount: required for delivery ('payment_required'), more
 --     than $0 and at most $100,000 ('invalid_amount'), and only from someone who
 --     may take payments at the store, the Billing switch ('payment_forbidden').
---     All checked before anything is written.
+--     All checked before anything is written; a deposit over $100,000 is
+--     refused up front too ('invalid_deposit'), as recording would refuse it.
 --   * After the order is written, set_order_payment_state records the payment
 --     ("Paid in store", a money record, and the deposit as taken), in the same
 --     transaction: if that fails, the order is not saved either.
@@ -76,7 +77,7 @@ BEGIN
       RETURN jsonb_build_object('ok', false, 'reason', 'invalid_customer');
     END IF;
   END IF;
-  IF p_deposit IS NOT NULL AND p_deposit < 0 THEN
+  IF p_deposit IS NOT NULL AND (p_deposit < 0 OR p_deposit > 100000) THEN
     RETURN jsonb_build_object('ok', false, 'reason', 'invalid_deposit');
   END IF;
   -- A delivery is paid before it is saved; a pickup pays at the counter (130).

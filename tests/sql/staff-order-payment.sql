@@ -51,6 +51,11 @@ SELECT test_assert(:'r'::jsonb->>'reason' = 'payment_required' AND (test_order('
   'a delivery with no payment is refused and nothing is written');
 SELECT test_assert(:'z'::jsonb->>'reason' = 'invalid_amount' AND :'w'::jsonb->>'reason' = 'invalid_amount',
   'the amount taken must be a number above $0');
+SELECT test_as(:'staff'); SET ROLE authenticated;
+SELECT create_staff_order(NULL, 'rental', :'one', jsonb_build_object('location_id', :'loc', 'method', 'delivery', 'payment_amount', 125), 200000, test_new('Huge Deposit')) AS d \gset
+RESET ROLE; SELECT test_as(NULL);
+SELECT test_assert(:'d'::jsonb->>'reason' = 'invalid_deposit' AND (test_order('Huge Deposit')).id IS NULL,
+  'a deposit over $100,000 is refused before anything is written');
 
 SELECT test_as(:'staff'); SET ROLE authenticated;
 SELECT create_staff_order_once(gen_random_uuid(), NULL, 'rental', :'one',

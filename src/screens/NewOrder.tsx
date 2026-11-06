@@ -57,6 +57,7 @@ const orderErrorMessage = (reason?: string) => {
     case 'invalid_driver': return 'That driver isn’t active or isn’t set up for this store. Choose another driver.'
     case 'driver_busy': return DRIVER_BUSY_MSG
     case 'invalid_time': return 'The end time must be after the start time.'
+    case 'invalid_deposit': return 'Enter a deposit between $0 and $100,000.'
     case 'payment_required': return 'Take the payment first: delivery orders are paid before they’re saved.'
     case 'invalid_amount': return 'Enter the amount taken, more than $0.'
     case 'payment_forbidden': return 'You can’t take payments at this store. Ask the owner to turn on Billing for you, or choose in-store pickup.'
@@ -83,8 +84,9 @@ export default function NewOrder() {
 
   // What staff took on the card machine (or in cash); blank means "the total".
   const [paidInput, setPaidInput] = useState<string | null>(null)
-  const { canAccess } = useStaffModuleAccess()
-  const canTakePayment = canAccess('billing')
+  // The Billing switch of the store this order is for; the server checks the same one (130).
+  const { canAccess, loadingAccess } = useStaffModuleAccess(selectedLocationId)
+  const canTakePayment = loadingAccess || canAccess('billing')
 
   const [result, setResult] = useState<{ order_no: number; unallocated: number; method: Method; paid: number | null } | null>(null)
 
@@ -169,6 +171,7 @@ export default function NewOrder() {
 
   const addItem = (it: Item) => {
     const available = availableFor(it.id)
+    setPaidInput(null) // the total changes, so a typed amount no longer matches it
     setCart((c) => {
       // Checked against the latest cart, so a fast double click can't go over stock.
       const ex = c.find((l) => l.item_id === it.id)
@@ -178,8 +181,9 @@ export default function NewOrder() {
     })
   }
   // Clamp to 1..store stock (and the server's 20) so the cart and the order agree.
-  const setQty = (id: string, d: number) => setCart((c) => c.map((l) => (l.item_id === id ? { ...l, qty: nextQty(l.qty, d, availableFor(id)) } : l)))
-  const removeItem = (id: string) => setCart((c) => c.filter((l) => l.item_id !== id))
+  // A cart change changes the total, so a typed amount taken starts over from it.
+  const setQty = (id: string, d: number) => { setPaidInput(null); setCart((c) => c.map((l) => (l.item_id === id ? { ...l, qty: nextQty(l.qty, d, availableFor(id)) } : l))) }
+  const removeItem = (id: string) => { setPaidInput(null); setCart((c) => c.filter((l) => l.item_id !== id)) }
 
   // Throws the reason on any failure; SaveForm shows it as "Not saved." and nothing is created.
   const create = async (_submitter: HTMLElement | null, { saveKey }: { saveKey: string }) => {
