@@ -25,6 +25,8 @@ export default function StaffAccess() {
 
   const setOne = (module: StaffModule, enabled: boolean) => update.mutate({ modules: [module], enabled })
   const setAll = (enabled: boolean) => update.mutate({ modules: STAFF_MODULES.map(({ key }) => key), enabled })
+  // Switches belong to one store; with "All my stores" picked there is nothing to show or change.
+  const noStore = !access.storeId
 
   return (
     <div className="max-w-4xl">
@@ -35,7 +37,7 @@ export default function StaffAccess() {
             Choose which modules this store’s staff can use. Other stores are not affected; admin access and the driver app are unaffected.
           </p>
         </div>
-        <div className="grid w-full shrink-0 grid-cols-2 gap-2 sm:flex sm:w-auto">
+        {!noStore && <div className="grid w-full shrink-0 grid-cols-2 gap-2 sm:flex sm:w-auto">
           <button onClick={() => setAll(false)} disabled={update.isPending}
             className="min-h-11 rounded-lg border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50 disabled:opacity-50">
             Lock all
@@ -44,15 +46,15 @@ export default function StaffAccess() {
             className="min-h-11 rounded-lg bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50">
             Unlock all
           </button>
-        </div>
+        </div>}
       </div>
 
-      {!access.storeId && <div className="mb-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Choose a store in the header. Module switches are set per store.</div>}
+      {noStore && <div className="mb-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Choose a store in the header. Module switches are set per store.</div>}
       {access.isLoading && <div className="text-sm text-slate-500">Loading access controls…</div>}
       {access.error && <div className="text-sm text-red-600">Couldn’t load staff access controls.</div>}
       {update.error && <div className="text-sm text-red-600 mb-3">{(update.error as Error).message}</div>}
 
-      <div className="grid md:grid-cols-2 gap-3">
+      {!noStore && <div className="grid md:grid-cols-2 gap-3">
         {STAFF_MODULES.map((module) => {
           const enabled = access.settings[module.key]
           return (
@@ -78,7 +80,7 @@ export default function StaffAccess() {
             </div>
           )
         })}
-      </div>
+      </div>}
     </div>
   )
 }
