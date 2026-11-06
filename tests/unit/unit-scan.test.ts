@@ -1,8 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { canScanUnit, scanRefusal, scanSuccess } from '../../src/screens/orders/unitScan.ts'
+import { functionBody } from './schemaText.ts'
 
 const line = (over: object) => ({ is_active: true, equipment_unit_id: 'u1', equipment: { name: 'Knee Scooter', is_serialized: true }, ...over })
 
@@ -42,7 +41,8 @@ test('each refusal tells staff what to do next', () => {
 test('the RPC waits out a handoff, then a cancel or close-out, before it reads the order', () => {
   // Without these a concurrent cancel releases the old unit and strands the new one. A
   // single rolled-back transaction can't race itself, so the order of the locks is checked here.
-  const sql = readFileSync(join(import.meta.dirname, '../../supabase/migrations/117_scan_unit_on_order.sql'), 'utf8')
+  // set_line_unit came in 117 and now lives in the baseline; read its latest definition.
+  const sql = functionBody('set_line_unit')
   const stops = sql.indexOf('FROM public.deliveries WHERE order_id = v_order ORDER BY id FOR UPDATE')
   const order = sql.indexOf('FROM public.rental_orders WHERE id = v_order FOR UPDATE')
   const line = sql.indexOf('FOR UPDATE OF li')

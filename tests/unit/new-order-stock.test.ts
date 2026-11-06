@@ -61,21 +61,13 @@ test('stock coming back makes the item selectable again', () => {
   assert.equal(stockLabel(after), '1 in stock')
 })
 
-// ── create_staff_order (migration 116): the server refuses what the store lacks ─
-import { readdirSync, readFileSync } from 'node:fs'
+// ── create_staff_order (migration 116, now in the baseline): the server refuses what the store lacks ─
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-
-const DIR = join(import.meta.dirname, '../../supabase/migrations')
-function latestSql(name: string): string {
-  const files = readdirSync(DIR).filter((f) => f.endsWith('.sql') && !/^(seed_|catalog_import)/.test(f)).sort()
-  const fn = /CREATE OR REPLACE FUNCTION public\.(\w+)\s*\(([\s\S]*?)\n\$(\w*)\$;/g
-  let body = ''
-  for (const file of files) for (const m of readFileSync(join(DIR, file), 'utf8').matchAll(fn)) if (m[1] === name) body = m[2]
-  return body
-}
+import { functionBody, realtimeTables } from './schemaText.ts'
 
 test('the newest create_staff_order checks the store\'s stock before writing anything', () => {
-  const body = latestSql('create_staff_order')
+  const body = functionBody('create_staff_order')
   const check = body.indexOf("'out_of_stock'")
   assert.ok(check > 0, 'refuses with out_of_stock')
   assert.equal(body.split("'out_of_stock'").length, 2, 'one stock check')
@@ -90,8 +82,7 @@ test('the newest create_staff_order checks the store\'s stock before writing any
 })
 
 test('store stock changes reach open screens', () => {
-  const sql = readFileSync(join(DIR, '116_new_order_needs_stock.sql'), 'utf8')
-  assert.match(sql, /ARRAY\['equipment_location_inventory'\]/)
+  assert.ok(realtimeTables().has('equipment_location_inventory'), 'store stock is in the realtime publication')
   const sync = readFileSync(join(import.meta.dirname, '../../src/components/RealtimeSync.tsx'), 'utf8')
   assert.match(sync, /equipment_location_inventory: \[[^\]]*'neworder_items'/)
 })

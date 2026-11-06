@@ -1,13 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { latestFunctions, openTo } from './schemaText.ts'
 
 // 112: every way an order is created looks for the person's existing record at
 // the store first. A later migration that rebuilds one of these from an old copy
-// would quietly bring duplicate customers back.
-const DIR = join(import.meta.dirname, '../../supabase/migrations')
-const SEEDS = /^(seed_|catalog_import)/
+// would quietly bring duplicate customers back. Read from the schema baseline
+// plus every later migration, latest definition wins.
 const ORDER_FUNCTIONS = [
   'submit_rental_request',
   'create_stripe_checkout_with_fulfillment',
@@ -16,13 +14,7 @@ const ORDER_FUNCTIONS = [
 ]
 
 function latestBodies(): Map<string, string> {
-  const latest = new Map<string, string>()
-  const files = readdirSync(DIR).filter((f) => f.endsWith('.sql') && !SEEDS.test(f)).sort()
-  const fn = /CREATE OR REPLACE FUNCTION public\.(\w+)\s*\(([\s\S]*?)\n\$(\w*)\$;/g
-  for (const file of files) {
-    for (const m of readFileSync(join(DIR, file), 'utf8').matchAll(fn)) latest.set(m[1], m[2])
-  }
-  return latest
+  return new Map([...latestFunctions()].map(([name, { body }]) => [name, body]))
 }
 
 test('every order function reuses the store’s existing customer before creating one', () => {
@@ -46,6 +38,5 @@ test('the lookup matches on name plus email or phone, within one store', () => {
 })
 
 test('visitors cannot call the lookup directly', () => {
-  const sql = readFileSync(join(DIR, '112_one_customer_per_person.sql'), 'utf8')
-  assert.match(sql, /REVOKE ALL ON FUNCTION public\.find_store_customer\(uuid, text, text, text\) FROM PUBLIC, anon, authenticated/)
+  assert.deepEqual(openTo('find_store_customer', ['PUBLIC', 'anon', 'authenticated']), [])
 })
