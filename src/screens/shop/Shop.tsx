@@ -10,6 +10,7 @@ import ShopHeader from '../../components/shop/ShopHeader'
 import ShopFooter from '../../components/shop/ShopFooter'
 import ProductCard from '../../components/shop/ProductCard'
 import CategoryCarousel from './CategoryCarousel'
+import HeroReel from './HeroReel'
 import { EMPTY_FILTER, applyLinkedSearch, clearSearch, headerSearch, matchesFilter, pickCategory, pickMode, typeSearch, type ShopFilter } from './shopFilter'
 import { CategoryChips, NoMatches } from './ShopFilterBar'
 
@@ -81,9 +82,11 @@ export default function Shop({ initialProducts }: { initialProducts?: Product[] 
     <div className="font-sans bg-white min-h-screen text-slate-800">
       <ShopHeader onSearch={searchFromLink} onHeaderSearch={searchFromHeader} />
 
-      {/* Hero: a sunset band (peach to coral) that runs behind the top half of the category ring. */}
-      <section className="bg-[linear-gradient(135deg,#ffc79f_0%,#f79b7a_60%,#f08a7e_100%)] text-navy pb-[196px] lg:pb-[230px]">
-        <div className="max-w-6xl mx-auto px-4 pt-12 text-center">
+      {/* Hero: fills the first screen under the header (200px tall on a phone and up to md, 102px
+          at md, 114px from lg), with three delivery animations playing in turn behind the text. */}
+      <section className="relative isolate overflow-hidden bg-[#fefeef] text-navy min-h-[max(calc(100svh-200px),650px)] sm:min-h-[max(calc(100svh-200px),620px)] md:min-h-[max(calc(100svh-102px),620px)] lg:min-h-[max(calc(100svh-114px),700px)]">
+        <HeroReel />
+        <div className="relative max-w-6xl mx-auto px-4 pt-12 text-center">
           <span className="inline-flex items-center gap-2 text-xs font-bold tracking-wide uppercase text-white bg-navy rounded-full px-3.5 py-1.5">
             <Truck size={14} /> Serving Nassau &amp; Suffolk County, NY
           </span>
@@ -103,8 +106,8 @@ export default function Shop({ initialProducts }: { initialProducts?: Product[] 
         </div>
       </section>
 
-      {/* Shop by category: pulled up so the tiles straddle the navy band's edge. */}
-      <section className="relative -mt-[188px] lg:-mt-[220px] pb-14">
+      {/* Shop by category, the first thing after the hero. */}
+      <section className="pt-12 pb-14">
         <h2 className="sr-only">Shop by category</h2>
         <CategoryCarousel onPick={searchFromLink} />
         <div className="mt-4 text-center">

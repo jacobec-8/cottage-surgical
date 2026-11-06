@@ -359,10 +359,7 @@ test('double-clicking rental submit sends one request, with its save key and req
   })
 
   await openPublicRoute(page, '/')
-  const productDetails = page
-    .getByRole('link', { name: 'Playwright Wheelchair', exact: true })
-    .locator('..')
-  await productDetails.getByRole('button', { name: 'Rent Now' }).click()
+  await rentNow(page, 'Playwright Wheelchair')
 
   const drawer = page.getByRole('complementary')
   await drawer.getByRole('link', { name: 'Continue to checkout (1)' }).click()
