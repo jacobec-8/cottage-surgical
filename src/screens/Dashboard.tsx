@@ -1,38 +1,23 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
-import {
-  CheckCircle, AlertCircle, CalendarClock, DollarSign,
-  Users, ClipboardList, Package, CreditCard, Truck,
-} from 'lucide-react'
+import { CheckCircle, AlertCircle, CalendarClock, DollarSign } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { statusClass, statusLabel } from '../lib/status'
 import { useLocationScope } from '../contexts/LocationContext'
 import StoreOverview from './dashboard/StoreOverview'
 import RetailSalesSwitch from './dashboard/RetailSalesSwitch'
-import { useStaffModuleAccess } from '../lib/useStaffModuleAccess'
-import type { StaffModule } from '../lib/staffModules'
+import ActiveRentals, { ACTIVE_RENTAL_STATUSES } from './dashboard/ActiveRentals'
 import OrderDetailPanel from './orders/OrderDetailPanel'
 import { useSelectedOrder } from './orders/useSelectedOrder'
-
-const MODULES: { to: string; module: StaffModule; icon: typeof Users; title: string; desc: string }[] = [
-  { to: '/customers', module: 'customers', icon: Users, title: 'Customers', desc: 'Directory with rental history and payment methods on file' },
-  { to: '/orders', module: 'orders', icon: ClipboardList, title: 'Rentals', desc: 'Approved, open, scheduled, overdue, pickup, and closed rentals' },
-  { to: '/inventory', module: 'inventory', icon: Package, title: 'Inventory', desc: 'Wheelchairs, beds, oxygen, supplies, serial/asset tracking' },
-  { to: '/billing', module: 'billing', icon: CreditCard, title: 'Billing', desc: 'Invoices, deposits, recurring charges, failed payments, refunds' },
-  { to: '/delivery', module: 'delivery', icon: Truck, title: 'Routes', desc: 'Delivery and pickup schedule by driver' },
-]
 
 export default function Dashboard() {
   const { profile } = useAuth()
   const { selectedLocationId, selectedLocation } = useLocationScope()
   const router = useRouter()
-  // A module the owner locked for this store isn't offered as a tile either.
-  const { canAccess } = useStaffModuleAccess()
   const [tab, setTab] = useState<'overview' | 'rentals'>('overview')
   const [selected, setSelected] = useSelectedOrder()
 
@@ -68,7 +53,7 @@ export default function Dashboard() {
   // One definition for every view: the same counts whether one store or all are selected (100).
   const scoped = {
     // Same status sets as the owner's Stores table (store_overview), so tiles equal its column totals.
-    active_rentals: scopedRows.filter((row) => ['active', 'delivered', 'overdue', 'pickup_scheduled'].includes(row.status)).length,
+    active_rentals: scopedRows.filter((row) => (ACTIVE_RENTAL_STATUSES as readonly string[]).includes(row.status)).length,
     overdue_rentals: scopedRows.filter((row) => row.status === 'overdue').length,
     scheduled_rentals: scopedRows.filter((row) => ['open', 'scheduled'].includes(row.status)).length,
     active_monthly_rate: scopedRows.filter((row) => !['closed', 'cancelled'].includes(row.status)).reduce((sum, row) => sum + Number(row.monthly_rate ?? 0), 0),
@@ -104,9 +89,6 @@ export default function Dashboard() {
 
       {tab === 'overview' && (
         <>
-          <h2 className="text-lg font-semibold">Management Overview</h2>
-          <p className="text-slate-500 text-sm mb-5">Centralized control for rentals, inventory, billing, and delivery routes.</p>
-
           {!selectedLocationId && (profile?.role === 'owner' || profile?.role === 'admin') && <StoreOverview />}
           {selectedLocationId && (profile?.role === 'owner' || profile?.role === 'admin') && <RetailSalesSwitch locationId={selectedLocationId} />}
 
@@ -114,53 +96,20 @@ export default function Dashboard() {
             {tiles.map((t) => {
               const Icon = t.icon
               return (
-                <div key={t.label} className={`rounded-xl border p-5 ${t.alert || 'border-slate-200 bg-white'}`}>
-                  <div className={`w-9 h-9 rounded-lg grid place-items-center mb-3 ${t.color}`}>
-                    <Icon size={18} />
+                <div key={t.label} className={`flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-4 rounded-xl border p-4 ${t.alert || 'border-slate-200 bg-white'}`}>
+                  <div className={`w-12 h-12 rounded-xl grid place-items-center shrink-0 ${t.color}`}>
+                    <Icon size={24} />
                   </div>
-                  <div className="text-2xl font-semibold">{t.value}</div>
-                  <div className="text-sm text-slate-500">{t.label}</div>
+                  <div className="min-w-0">
+                    <div className="text-3xl font-bold tabular-nums leading-tight">{t.value}</div>
+                    <div className="text-sm text-slate-500">{t.label}</div>
+                  </div>
                 </div>
               )
             })}
           </div>
 
-          <h3 className="text-sm font-semibold text-slate-700 mb-3">Modules</h3>
-          <div className="grid md:grid-cols-2 gap-3 mb-8">
-            {MODULES.filter((m) => canAccess(m.module)).map((m) => {
-              const Icon = m.icon
-              return (
-                <Link
-                  key={m.title}
-                  href={m.to}
-                  className="text-left bg-white border border-slate-200 rounded-xl p-4 hover:border-blue-300 flex items-start gap-3"
-                >
-                  <div className="w-9 h-9 rounded-lg bg-slate-100 grid place-items-center text-slate-600 shrink-0">
-                    <Icon size={18} />
-                  </div>
-                  <div>
-                    <div className="font-medium">{m.title}</div>
-                    <div className="text-sm text-slate-500">{m.desc}</div>
-                  </div>
-                </Link>
-              )
-            })}
-          </div>
-
-          <h3 className="text-sm font-semibold text-slate-700 mb-3">Recent Rentals</h3>
-          <div className="space-y-2">
-            {rentals.data?.slice(0, 5).map((r) => (
-              <button type="button" key={r.id} onClick={() => setSelected(r.id)} aria-label={`Open order for ${r.customer?.full_name ?? 'Customer'}`}
-                className="w-full text-left bg-white border border-slate-200 rounded-xl p-4 flex items-center justify-between hover:border-blue-300 hover:bg-blue-50/30">
-                <div className="font-medium">{r.customer?.full_name ?? 'Customer'}</div>
-                <div className="flex items-center gap-4 text-sm text-slate-500">
-                  <span>{items(r)} items</span>
-                  <span className="text-slate-800 font-medium">${Number(r.monthly_rate ?? 0).toFixed(0)}/mo</span>
-                  <span className={`text-xs px-2 py-1 rounded-full capitalize ${statusClass(r.status)}`}>{statusLabel(r.status)}</span>
-                </div>
-              </button>
-            ))}
-          </div>
+          <ActiveRentals locationId={selectedLocationId} onOpen={setSelected} />
         </>
       )}
 

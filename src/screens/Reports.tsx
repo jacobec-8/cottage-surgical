@@ -9,7 +9,8 @@ import MoneyRecordsTable from './reports/MoneyRecordsTable'
 import PeriodPicker from './reports/PeriodPicker'
 import { periodRange, previousRange, rangeLabel, type DateRange, type PeriodKey } from './reports/period'
 import { combine, money, type StoreReport } from './reports/reportMath'
-import { DetailCards, HeadlineTiles, StoreComparison } from './reports/SummaryParts'
+import { DetailCards } from './reports/DetailCards'
+import { HeadlineTiles, StoreComparison } from './reports/SummaryParts'
 import { useMoneyRecords, useReportDaily, useReportItems, useReportSummary } from './reports/useReports'
 
 type Tab = 'overview' | 'records'
@@ -48,9 +49,7 @@ export default function Reports() {
     <div className="space-y-6">
       <div>
         <h1 className="mb-1 text-xl font-semibold">Reports</h1>
-        <p className="text-sm text-slate-500">
-          {scopeName} · {rangeLabel(range)}. {selectedLocationId ? 'Choose “All locations” in the header to compare pharmacies.' : ''}
-        </p>
+        <p className="text-sm text-slate-500">{scopeName} · {rangeLabel(range)}</p>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -78,10 +77,11 @@ export default function Reports() {
   )
 }
 
+/** When a kind of record began, so an empty early day reads as "not recorded yet", not zero. */
 function since(label: string, at: string | null) {
-  if (!at) return `${label} start collecting from today.`
+  if (!at) return `${label} from today`
   const d = new Date(at.length === 10 ? `${at}T12:00:00Z` : at)
-  return `${label} began on ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/New_York' })}; earlier days show none.`
+  return `${label} since ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/New_York' })}`
 }
 
 function Overview({ location, range, moneyVisible, current, before, stores, onOpenStore, history, recordsSince }: {
@@ -109,7 +109,7 @@ function Overview({ location, range, moneyVisible, current, before, stores, onOp
       <DetailCards r={current} />
       {items.isLoading ? <Loading /> : items.error ? <Failed error={items.error} /> : <ItemsTable items={items.data ?? []} />}
       <p className="text-xs text-slate-400">
-        {moneyVisible ? `${since('Money records', recordsSince)} ` : ''}{since('Daily history', history)}
+        {[moneyVisible ? since('Money records', recordsSince) : null, since('Daily history', history)].filter(Boolean).join(' · ')}
       </p>
     </div>
   )
@@ -119,9 +119,7 @@ function Records({ location, range, recordsSince }: { location: string | null; r
   const records = useMoneyRecords({ kind: 'range', location, range })
   return (
     <section className="space-y-2">
-      <p className="text-sm text-slate-500">
-        Every payment, refund and deposit in this period, with who recorded it and how. Records can’t be edited or deleted. {since('Records', recordsSince)}
-      </p>
+      <p className="text-sm text-slate-500">Payments, refunds and deposits · can’t be edited · {since('records', recordsSince)}</p>
       {records.isLoading ? <Loading /> : records.error ? <Failed error={records.error} />
         : <MoneyRecordsTable records={records.data ?? []} filename={`money-records-${range.from}-to-${range.to}.csv`} />}
     </section>

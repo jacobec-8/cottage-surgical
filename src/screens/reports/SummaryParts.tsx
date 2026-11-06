@@ -16,7 +16,7 @@ function Tile({ label, value, sub, alert = false }: { label: string; value: stri
   return (
     <div className={`rounded-xl border px-4 py-3 ${alert ? 'border-red-200 bg-red-50' : 'border-slate-200 bg-white'}`}>
       <div className="text-xs uppercase tracking-wide text-slate-500">{label}</div>
-      <div className={`mt-0.5 text-2xl font-semibold tabular-nums ${alert ? 'text-red-700' : 'text-slate-900'}`}>{value}</div>
+      <div className={`mt-0.5 text-3xl font-bold tabular-nums ${alert ? 'text-red-700' : 'text-slate-900'}`}>{value}</div>
       {sub && <div className="mt-0.5">{sub}</div>}
     </div>
   )
@@ -52,8 +52,7 @@ export function StoreComparison({ stores, onOpen }: { stores: StoreReport[]; onO
   const showMoney = stores.every((s) => s.money)
   return (
     <section>
-      <h2 className="text-base font-semibold text-slate-900">By pharmacy</h2>
-      <p className="mb-2 text-sm text-slate-500">Click a pharmacy to see its own report.</p>
+      <h2 className="mb-2 text-base font-semibold text-slate-900">By pharmacy</h2>
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
         <table className="w-full min-w-[820px] text-sm">
           <thead>
@@ -98,72 +97,5 @@ export function StoreComparison({ stores, onOpen }: { stores: StoreReport[]; onO
         </table>
       </div>
     </section>
-  )
-}
-
-function Card({ title, rows, note }: { title: string; rows: [string, string, boolean?][]; note?: string }) {
-  return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4">
-      <h3 className="mb-2 text-sm font-semibold text-slate-800">{title}</h3>
-      <dl className="space-y-1.5 text-sm">
-        {rows.map(([label, value, alert]) => (
-          <div key={label} className="flex justify-between gap-3">
-            <dt className="text-slate-500">{label}</dt>
-            <dd className={`tabular-nums ${alert ? 'font-semibold text-red-700' : 'text-slate-900'}`}>{value}</dd>
-          </div>
-        ))}
-      </dl>
-      {note && <p className="mt-2 text-xs text-slate-400">{note}</p>}
-    </section>
-  )
-}
-
-const hours = (h: number | null) => {
-  if (h == null) return '—'
-  if (h < 1) return 'Under 1 hour'
-  return h < 48 ? `${h} hours` : `${Math.round((h / 24) * 10) / 10} days`
-}
-
-/** The period in four plain cards: money, rentals, service, customers. */
-export function DetailCards({ r }: { r: StoreReport }) {
-  const p = r.position
-  const onTime = onTimePercent(r)
-  return (
-    <div className="grid gap-3 md:grid-cols-2">
-      {r.money && (
-        <Card title="Money" note="Revenue is money received, minus refunds, plus deposits the pharmacy kept. Deposits held are not revenue." rows={[
-          ['Payments received', money(r.money.collected)],
-          ['Refunded or reversed', money(-r.money.refunded), r.money.refunded > 0],
-          ['Deposits kept', money(r.money.deposits_kept)],
-          ['Revenue', money(r.money.revenue)],
-          ['Deposits taken / returned', `${money(r.money.deposits_taken)} / ${money(r.money.deposits_returned)}`],
-          ['Deposits held now', money(p.deposits_held ?? 0)],
-          ['Overdue 1–30 days', money(p.overdue_1_30 ?? 0), Number(p.overdue_1_30) > 0],
-          ['Overdue 31–60 days', money(p.overdue_31_60 ?? 0), Number(p.overdue_31_60) > 0],
-          ['Overdue over 60 days', money(p.overdue_61_plus ?? 0), Number(p.overdue_61_plus) > 0],
-        ]} />
-      )}
-      <Card title="Rentals & purchases" rows={[
-        ['Rentals started', String(r.rentals_started)],
-        ['Rentals returned', String(r.rentals_returned)],
-        ['Average rental length', r.avg_rental_days != null ? `${r.avg_rental_days} days` : '—'],
-        ['Rentals out now', String(p.rentals_out)],
-        ['Purchases completed', String(r.purchases)],
-        ['Equipment out now', `${p.units_out} of ${p.units_total}${utilizationPercent(p) != null ? ` (${utilizationPercent(p)}%)` : ''}`],
-      ]} />
-      <Card title="Deliveries & pickups" rows={[
-        ['Stops done', String(r.stops_done)],
-        ['Done on their day', onTime != null ? `${onTime}%` : '—'],
-        ['Missed stops', String(r.stops_missed), r.stops_missed > 0],
-        ['Order to handover', hours(r.handover_hours)],
-      ]} />
-      <Card title="Orders & customers" rows={[
-        ['Website orders', String(r.orders_web)],
-        ['Staff orders', String(r.orders_staff)],
-        ['Cancelled', String(r.orders_cancelled)],
-        ['New customers', String(r.customers_new)],
-        ['Returning customers', String(r.customers_returning)],
-      ]} />
-    </div>
   )
 }
