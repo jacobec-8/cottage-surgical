@@ -20,8 +20,8 @@ const show = (el: HTMLElement) => { el.style.visibility = 'visible' }
 const hide = (el: HTMLElement) => { el.style.visibility = 'hidden' }
 
 /**
- * The hero band's moving background: the delivery van, then the laptop order, then the
- * shopper, on a loop, behind the text. Decorative; it stays on the van's still frame when
+ * The hero band's moving background: the laptop order, then the shopper, on a loop,
+ * behind the text. Decorative; it stays on the first clip's still frame when
  * the visitor prefers reduced motion, and the button beside it pauses it.
  */
 export default function HeroReel() {

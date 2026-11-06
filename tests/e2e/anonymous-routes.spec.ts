@@ -231,10 +231,7 @@ test('cart quantity persists across reload and items can be removed', async ({ p
   await mockCatalogReads(page)
   await openPublicRoute(page, '/')
 
-  const productDetails = page
-    .getByRole('link', { name: 'Playwright Wheelchair', exact: true })
-    .locator('..')
-  await productDetails.getByRole('button', { name: 'Rent Now' }).click()
+  await rentNow(page, 'Playwright Wheelchair')
 
   const drawer = page.getByRole('complementary')
   const cartItem = drawer
