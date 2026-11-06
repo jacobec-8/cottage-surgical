@@ -5,6 +5,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Search, Pencil, Trash2, X, ImagePlus, Building2, Lock } from 'lucide-react'
 
 const LOCKED_PRODUCTS = 'Locked by the owner (Staff Access → Change products)'
+
+/** What staff may do here, in the page blurb: it follows the owner's switches so it never offers a locked power. */
+function staffInventoryNote(productsLocked: boolean, pricesLocked: boolean): string {
+  const products = productsLocked ? 'The business owner maintains the product list' : 'The business owner maintains the product list; add your own store-only products with Add Item'
+  const yours = pricesLocked ? 'keep your store’s stock up to date on each item (prices are set by the owner)' : 'set your store’s stock and prices on each item'
+  return ` ${products}, and ${yours}.`
+}
 import { supabase } from '../lib/supabase'
 import { Checked, SaveForm, SubmitButton } from '../components/SaveForm'
 import { productFormProblems, startingStockProblems } from '../lib/formChecks/inventoryChecks'
@@ -101,6 +108,7 @@ export default function Inventory() {
   // Trusted powers show greyed out, not hidden, so staff can see what the owner has locked (BUSINESS-SHAPE.md).
   const staffHere = profile?.role === 'staff' && Boolean(selectedLocationId)
   const productsLocked = staffHere && !access.canAccess('edit_products')
+  const pricesLocked = staffHere && !access.canAccess('edit_prices')
 
   const inStore = (it: InventoryItem) => Boolean(selectedLocationId && it.location_inventory?.some((entry) => entry.location_id === selectedLocationId))
   // A scanner types a unit's asset tag or serial number: find the product that unit belongs to.
@@ -174,7 +182,7 @@ export default function Inventory() {
       <h2 className="text-lg font-semibold mt-2">Equipment &amp; Supplies</h2>
       <p className="text-slate-500 text-sm mb-5">
         Manage rental inventory, pricing, and stock. Returned units become available when the rental closes.
-        {!catalogManager && ' The business owner maintains the product list; add your own store-only products with Add Item, and set your store’s stock and prices on each item.'}
+        {!catalogManager && staffInventoryNote(productsLocked, pricesLocked)}
       </p>
 
       <div className={`mb-4 grid gap-3 ${canSwitchStores(profile) ? 'sm:grid-cols-[minmax(0,1fr)_auto_minmax(15rem,20rem)]' : 'sm:grid-cols-[minmax(0,1fr)_auto]'}`}>
