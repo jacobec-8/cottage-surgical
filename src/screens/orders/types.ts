@@ -5,7 +5,6 @@ export type OrderCustomer = {
   full_name: string
   phone: string | null
   email: string | null
-  coverage_type?: string | null
 }
 
 type OrderUnit = { asset_tag: string | null; serial_number: string | null } | null
@@ -134,7 +133,7 @@ export const ORDER_LIST_SELECT =
 export const ORDER_DETAIL_SELECT =
   `${ORDER_BASE},square_order_id,closed_reason,closed_at,` +
   'closed_by_profile:profiles!rental_orders_closed_by_fkey(full_name,email),' +
-  'customer:customers(id,full_name,phone,email,coverage_type),' +
+  'customer:customers(id,full_name,phone,email),' +
   `${LINE_SELECT},${DELIVERY_DETAIL_SELECT},` +
   'recurring_charges(id,amount,status,billing_start,billing_end,next_due_date,last_billed_on),' +
   'deposits(id,amount,status,held_at)'

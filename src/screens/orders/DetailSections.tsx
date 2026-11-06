@@ -53,9 +53,6 @@ export function CustomerSection({ o, customerHref }: { o: OrderDetail; customerH
         {c?.email && (
           <a href={`mailto:${c.email}`} className="flex items-center gap-2 text-slate-600 hover:text-blue-600 break-all"><Mail size={14} />{c.email}</a>
         )}
-        {c?.coverage_type && (
-          <div className="text-slate-500 capitalize">Coverage: {c.coverage_type.replace(/_/g, ' ')}</div>
-        )}
         <div className="flex items-start gap-2 text-slate-600 pt-1 border-t border-slate-100">
           <MapPin size={14} className="mt-0.5 shrink-0" />
           {o.fulfillment_method === 'pickup' && pickup ? (

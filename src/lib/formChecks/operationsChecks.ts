@@ -17,6 +17,16 @@ export type NewOrderValues = {
   customerMode: 'existing' | 'new'; customerChosen: boolean
   newName: string; newEmail: string; newPhone: string; newZip: string
   rental: boolean; deposit: string
+  /** Delivery orders are paid before they're saved; pickups pay at the counter. */
+  delivery: boolean; paymentAmount: string; canTakePayment: boolean
+}
+
+const NO_BILLING = 'You can’t take payments at this store, so you can’t save a delivery order. Ask the owner to turn on Billing for you, or choose in-store pickup.'
+
+function paymentProblem(amount: string): FieldProblem | null {
+  const found = rules.price(amount, 'paymentAmount', 'Enter the amount taken. Delivery orders are paid before they’re saved.')
+  if (found) return found
+  return Number(amount) > 0 ? null : { field: 'paymentAmount', message: 'Enter the amount taken, more than $0.' }
 }
 
 export function newOrderProblems(o: NewOrderValues): FieldProblem[] {
@@ -31,6 +41,8 @@ export function newOrderProblems(o: NewOrderValues): FieldProblem[] {
     isNew && rules.phone(o.newPhone, 'customerPhone'),
     isNew && rules.zip(o.newZip, 'customerZip'),
     o.rental && rules.price(o.deposit, 'deposit'),
+    o.delivery && !o.canTakePayment && rules.form(NO_BILLING),
+    o.delivery && o.canTakePayment && paymentProblem(o.paymentAmount),
     ...windowProblems(o.start, o.end),
   )
 }

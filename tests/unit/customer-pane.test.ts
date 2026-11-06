@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict'
+import { readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import test from 'node:test'
 import { customerInitials, itemsOf, moneySummary, newestFirst, outNow, stopKind, upcomingStops, type SummaryOrder } from '../../src/screens/customers/customerSummary.ts'
 import {
-  addressChange, addressLabel, birthDateChange, coverageChange, coverageLabel, emailChange, nameChange, phoneChange, textChange,
+  addressChange, addressLabel, birthDateChange, emailChange, nameChange, phoneChange, textChange,
 } from '../../src/screens/customers/contactRules.ts'
 
 const order = (over: Partial<SummaryOrder> = {}): SummaryOrder => ({
@@ -69,14 +71,17 @@ test('contact edits: name, phone and email are checked; clearing saves empty', (
   assert.deepEqual(textChange('notes', '  '), { notes: null })
 })
 
-test('date of birth and coverage', () => {
+test('date of birth', () => {
   assert.deepEqual(birthDateChange('1950-04-02', '2026-10-29'), { date_of_birth: '1950-04-02' })
   assert.equal(typeof birthDateChange('2027-01-01', '2026-10-29'), 'string')
   assert.equal(typeof birthDateChange('1950-04', '2026-10-29'), 'string')
-  assert.deepEqual(coverageChange('medicare'), { coverage_type: 'medicare' })
-  assert.deepEqual(coverageChange(''), { coverage_type: null })
-  assert.equal(typeof coverageChange('cash'), 'string')
-  assert.equal(coverageLabel('private_pay'), 'Private pay')
+})
+
+test('no insurance anywhere staff or customers can see: it is all private pay', () => {
+  const root = join(import.meta.dirname, '../../src')
+  const files = readdirSync(root, { recursive: true, encoding: 'utf8' }).filter((f) => /\.(tsx?|md)$/.test(f))
+  const hits = files.filter((f) => /insurance|medicare|medicaid|coverage_type/i.test(readFileSync(join(root, f), 'utf8')))
+  assert.deepEqual(hits, [])
 })
 
 test('address saves as a whole and never guesses a state', () => {

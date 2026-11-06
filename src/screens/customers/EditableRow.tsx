@@ -76,20 +76,6 @@ export function TextEditor({ label, initial, type = 'text', multiline = false, c
   )
 }
 
-export function SelectEditor({ label, initial, options, check, save, done }: {
-  label: string; initial: string; options: readonly { value: string; label: string }[]; check: Check; save: Save; done: () => void
-}) {
-  const [value, setValue] = useState(initial)
-  return (
-    <EditorForm label={label} validate={() => problemOn('value', check(value))} onSave={() => save(patchOf(check(value)))} done={done}>
-      <Checked name="value" message={false}><select autoFocus aria-label={label} value={value} onChange={(e) => setValue(e.target.value)} className={`${INPUT} w-52`}>
-        <option value="">Not set</option>
-        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select></Checked>
-    </EditorForm>
-  )
-}
-
 export function AddressEditor({ initial, check, save, done }: {
   initial: ContactAddress; check: (a: ContactAddress) => ContactPatch | string; save: Save; done: () => void
 }) {

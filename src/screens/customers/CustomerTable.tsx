@@ -2,7 +2,6 @@
 
 import { ChevronRight } from 'lucide-react'
 import { TONE_CARD, TONE_PILL } from '../../lib/status'
-import { coverageLabel } from './contactRules'
 import { customerInitials, outNow } from './customerSummary'
 
 export type CustomerRow = {
@@ -10,7 +9,6 @@ export type CustomerRow = {
   full_name: string
   phone: string | null
   email: string | null
-  coverage_type: string | null
   address_line1: string | null
   address_city: string | null
   address_state: string | null
@@ -21,7 +19,7 @@ export type CustomerRow = {
 // Columns appear as the screen widens; the customer's cell carries what is hidden.
 const COLUMNS =
   'items-center gap-x-4 px-4 grid-cols-[minmax(0,1fr)_1rem] sm:grid-cols-[minmax(0,1fr)_4.5rem_1rem] md:grid-cols-[minmax(0,1fr)_9rem_4.5rem_1rem] ' +
-  'lg:grid-cols-[minmax(0,1fr)_9rem_minmax(0,1fr)_4.5rem_1rem] xl:grid-cols-[minmax(0,1.6fr)_8rem_minmax(0,1.2fr)_7rem_7rem_4.5rem_1rem]'
+  'lg:grid-cols-[minmax(0,1fr)_9rem_minmax(0,1fr)_4.5rem_1rem] xl:grid-cols-[minmax(0,1.6fr)_8rem_minmax(0,1.2fr)_8rem_4.5rem_1rem]'
 
 const Empty = () => <span className="text-slate-300">—</span>
 
@@ -36,7 +34,6 @@ export default function CustomerTable({ customers, selected, onOpen }: {
         <span className="hidden md:block">Phone</span>
         <span className="hidden lg:block">Email</span>
         <span className="hidden xl:block">City</span>
-        <span className="hidden xl:block">Coverage</span>
         <span>Out now</span>
         <span />
       </div>
@@ -45,7 +42,6 @@ export default function CustomerTable({ customers, selected, onOpen }: {
           const rentals = outNow(c.rental_orders)
           const out = rentals.length
           const late = rentals.some((order) => order.status === 'overdue')
-          const coverage = coverageLabel(c.coverage_type)
           return (
             <li key={c.id}>
               <button
@@ -58,10 +54,10 @@ export default function CustomerTable({ customers, selected, onOpen }: {
                   <span aria-hidden="true" className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-slate-100 text-xs font-medium text-slate-600">{customerInitials(c.full_name)}</span>
                   <span className="min-w-0">
                     <span className="block truncate font-medium text-slate-900">{c.full_name}</span>
-                    {(c.phone || c.address_city || coverage) && (
+                    {(c.phone || c.address_city) && (
                       <span className="block truncate text-xs text-slate-500 xl:hidden">
-                        <span className="md:hidden">{c.phone}{c.phone && (c.address_city || coverage) ? ' · ' : ''}</span>
-                        {[c.address_city, coverage].filter(Boolean).join(' · ')}
+                        <span className="md:hidden">{c.phone}{c.phone && c.address_city ? ' · ' : ''}</span>
+                        {c.address_city}
                       </span>
                     )}
                   </span>
@@ -69,7 +65,6 @@ export default function CustomerTable({ customers, selected, onOpen }: {
                 <span className="hidden truncate tabular-nums text-slate-600 md:block">{c.phone || <Empty />}</span>
                 <span className="hidden truncate text-slate-600 lg:block">{c.email || <Empty />}</span>
                 <span className="hidden truncate text-slate-600 xl:block">{c.address_city || <Empty />}</span>
-                <span className="hidden truncate text-slate-600 xl:block">{coverage || <Empty />}</span>
                 <span className="hidden sm:block">
                   {out > 0 ? <span className={`rounded-full px-2 py-0.5 text-xs font-medium tabular-nums ${TONE_PILL[late ? 'red' : 'green']}`}>{out}</span> : <Empty />}
                 </span>

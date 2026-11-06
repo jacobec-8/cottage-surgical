@@ -3,10 +3,9 @@
 import { businessToday } from '../delivery/stopStatus'
 import { Section } from '../orders/DetailSections'
 import {
-  addressChange, addressLabel, birthDateChange, COVERAGE_OPTIONS, coverageChange, coverageLabel,
-  emailChange, nameChange, phoneChange, textChange,
+  addressChange, addressLabel, birthDateChange, emailChange, nameChange, phoneChange, textChange,
 } from './contactRules'
-import { AddressEditor, EditableRow, SelectEditor, TextEditor } from './EditableRow'
+import { AddressEditor, EditableRow, TextEditor } from './EditableRow'
 import type { CustomerRecord } from './useCustomerDetail'
 import { useSaveCustomer } from './useSaveCustomer'
 
@@ -17,11 +16,11 @@ function birthDate(dob: string | null): string | null {
   return dob ? new Date(`${dob}T12:00:00`).toLocaleDateString('en-US', LONG_DATE) : null
 }
 
-/** Contact, coverage and notes; every field edits in place for the store's staff. */
+/** Contact details and notes; every field edits in place for the store's staff. */
 export default function ContactSection({ c }: { c: CustomerRecord }) {
   const save = useSaveCustomer(c.id)
   return (
-    <Section title="Contact & coverage">
+    <Section title="Contact">
       <dl className="grid gap-x-6 gap-y-4 rounded-lg border border-slate-200 bg-white p-4 sm:grid-cols-2">
         <EditableRow label="Name" value={c.full_name}
           editor={(done) => <TextEditor label="Name" initial={c.full_name} check={nameChange} save={save} done={done} />} />
@@ -36,10 +35,6 @@ export default function ContactSection({ c }: { c: CustomerRecord }) {
             editor={(done) => <AddressEditor initial={{ line1: c.address_line1 ?? '', city: c.address_city ?? '', state: c.address_line1 ? c.address_state ?? '' : '', zip: c.address_zip ?? '' }}
               check={addressChange} save={save} done={done} />} />
         </div>
-        <EditableRow label="Coverage" value={coverageLabel(c.coverage_type)} empty="Not set"
-          editor={(done) => <SelectEditor label="Coverage" initial={c.coverage_type ?? ''} options={COVERAGE_OPTIONS} check={coverageChange} save={save} done={done} />} />
-        <EditableRow label="Insurance notes" value={c.insurance_notes} empty="None"
-          editor={(done) => <TextEditor label="Insurance notes" multiline initial={c.insurance_notes ?? ''} check={(v) => textChange('insurance_notes', v)} save={save} done={done} />} />
         <div className="sm:col-span-2">
           <EditableRow label="Notes" value={c.notes} empty="None"
             editor={(done) => <TextEditor label="Notes" multiline initial={c.notes ?? ''} check={(v) => textChange('notes', v)} save={save} done={done} />} />
