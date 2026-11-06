@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, type ReactNode } from 'react'
-import { Lock, Pencil } from 'lucide-react'
+import { Lock, Pencil, X } from 'lucide-react'
 import { fulfillmentLabel } from '../lib/fulfillment'
 import {
   fulfillmentEditProblem, parsePrice, pickupEditProblem, purchaseEditProblem, rentalEditProblem,
@@ -11,8 +11,11 @@ import { notSavedText } from '../lib/saveErrors'
 import { Checked, SaveForm, SubmitButton, useSavePending } from './SaveForm'
 import { problems, rules, type FieldProblem } from '../lib/fieldRules'
 import type { ProductEdits } from '../lib/useProductEdits'
+import { MAX_PAIRINGS, pairingsProblem } from '../lib/pairings'
+import { usePairingCandidates, useProductPairings, type PairedProduct } from '../lib/useProductPairings'
 
 export type ProductDetailsItem = {
+  id?: string
   name?: string
   description?: string | null
   category?: string
@@ -37,7 +40,7 @@ const money = (n: number | null, suffix = '') => (n == null ? null : `$${Number(
 const text = (n: number | null) => (n == null ? '' : String(Number(n)))
 
 /**
- * Every product shows the same sixteen fields in the same order, whatever it
+ * Every product shows the same seventeen fields in the same order, whatever it
  * is or who is looking. With `edits`, each value the viewer may change gets a
  * pencil that edits it in place. Turning rental or purchase on asks for the
  * price in the same edit, so a product is never offered without one.
@@ -58,6 +61,7 @@ export default function ProductDetailsList({ item, edits, openField }: { item: P
   const productLocked = Boolean(edits?.lockedProducts && store) && !productEdit
   const priceLocked = Boolean(edits?.lockedPrices && store) && !priceEdit
   const noStore = 'Choose a store in the header'
+  const pairings = useProductPairings(item.id ?? null)
 
   // Prices typed while turning something on become the store's prices too, so
   // what staff typed is what their customers see.
@@ -131,6 +135,10 @@ export default function ProductDetailsList({ item, edits, openField }: { item: P
         editor={productEdit ? (done) => <YesNoEditor initial={item.same_day_pickup} done={done} save={(v) => edits!.saveProduct({ same_day_pickup: v })} /> : undefined} />
       <Row locked={productLocked} label="Installation required" value={item.installation_required ? 'Yes' : 'No'}
         editor={productEdit ? (done) => <YesNoEditor initial={item.installation_required} done={done} save={(v) => edits!.saveProduct({ installation_required: v })} /> : undefined} />
+
+      <Row locked={productLocked} label="Goes well with"
+        value={pairings.picks == null ? '…' : pairings.picks.length ? pairings.picks.map((p) => p.name).join(', ') : 'None picked'}
+        editor={productEdit && item.id && pairings.picks ? (done) => <PairingsEditor itemId={item.id!} initial={pairings.picks!} done={done} save={pairings.save} /> : undefined} />
 
       <Row label="Created" value={new Date(item.created_at).toLocaleDateString()} />
       <Row label="Last updated" value={new Date(item.updated_at).toLocaleString()} />
@@ -340,6 +348,33 @@ function TextEditor({ label, action, initial = '', multiline = false, required, 
         ? <textarea autoFocus aria-label={label} value={value} rows={3} onChange={(e) => setValue(e.target.value)} className={`${INPUT} w-full`} />
         : <input autoFocus aria-label={label} placeholder={label} value={value} onChange={(e) => setValue(e.target.value)} className={`${INPUT} w-56`} />}</Checked>
       <Actions done={done} saveLabel={action} />
+    </EditorForm>
+  )
+}
+
+/** Up to four products shown with this one on the website, in the order picked. */
+function PairingsEditor({ itemId, initial, save, done }: { itemId: string; initial: PairedProduct[]; save: (ids: string[]) => Promise<void>; done: () => void }) {
+  const [picked, setPicked] = useState(initial)
+  const candidates = usePairingCandidates(itemId)
+  const options = (candidates ?? []).filter((c) => !picked.some((p) => p.id === c.id))
+  return (
+    <EditorForm label="Goes well with" save={() => save(picked.map((p) => p.id))} done={done}
+      validate={() => onBox('pairings', pairingsProblem(itemId, picked.map((p) => p.id)))}>
+      {picked.map((p) => (
+        <span key={p.id} className="inline-flex items-center gap-1 rounded-full bg-blue-50 py-0.5 pl-2.5 pr-1 text-xs font-normal text-blue-800">
+          {p.name}
+          <button type="button" aria-label={`Remove ${p.name}`} onClick={() => setPicked(picked.filter((x) => x.id !== p.id))} className="rounded-full p-0.5 hover:bg-blue-100"><X size={12} /></button>
+        </span>
+      ))}
+      {picked.length < MAX_PAIRINGS && <Checked name="pairings" message={false}>
+        <select autoFocus aria-label="Add a product" value="" disabled={candidates == null}
+          onChange={(e) => { const chosen = options.find((o) => o.id === e.target.value); if (chosen) setPicked([...picked, chosen]) }}
+          className={`${INPUT} w-56`}>
+          <option value="">{candidates == null ? 'Loading products…' : options.length ? 'Add a product…' : 'No other products'}</option>
+          {options.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+        </select>
+      </Checked>}
+      <Actions done={done} />
     </EditorForm>
   )
 }

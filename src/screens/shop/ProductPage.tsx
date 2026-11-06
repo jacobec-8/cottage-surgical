@@ -6,7 +6,8 @@ import { useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronRight } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { PRODUCT_FIELDS, productPickupLocations, rentalPriceText, type Product } from '../../lib/shop'
+import { PRODUCT_FIELDS, rentalPriceText, type Product } from '../../lib/shop'
+import { canBuy, canRent, cartItemFor } from '../../lib/pairings'
 import ShopHeader from '../../components/shop/ShopHeader'
 import ShopFooter from '../../components/shop/ShopFooter'
 import { useCart } from '../../components/shop/CartContext'
@@ -14,6 +15,7 @@ import ProductSummary, { type ProductPrices } from './product/ProductSummary'
 import ProductDetails from './product/ProductDetails'
 import ProductBuyBox from './product/ProductBuyBox'
 import RentingInfo from './product/RentingInfo'
+import GoesWellWith from '../../components/shop/GoesWellWith'
 
 export default function ProductPage({
   handle,
@@ -53,27 +55,15 @@ export default function ProductPage({
     else window.scrollTo(0, 0)
   }, [handle, shown])
 
-  const rentable = !!(p && p.is_rentable && (
-    (p.pickup_enabled && p.pickup_rental_price != null)
-    || (p.delivery_enabled && p.delivery_rental_price != null)
-  ))
-  const purchasable = Boolean(p?.can_buy && p.sale_price != null)
+  const rentable = Boolean(p && canRent(p))
+  const purchasable = Boolean(p && canBuy(p))
   const pickupPrice = p ? rentalPriceText(p.pickup_price_range, p.pickup_rental_price) : null
   const deliveryPrice = p ? rentalPriceText(p.delivery_price_range, p.delivery_rental_price) : null
   const addToCart = (mode: 'rent' | 'purchase') => {
     if (!p) return
     if (mode === 'purchase' && !purchasable) return
-    const price = mode === 'rent' ? Number(p.delivery_rental_price ?? p.pickup_rental_price) : Number(p.sale_price)
     const n = Math.min(Math.max(1, qty), 20)
-    const fulfillment = {
-      pickup_enabled: p.pickup_enabled,
-      delivery_enabled: p.delivery_enabled,
-      same_day_pickup: p.same_day_pickup,
-      pickup_locations: productPickupLocations(p),
-      pickup_price: mode === 'rent' ? p.pickup_rental_price : null,
-      delivery_price: mode === 'rent' ? p.delivery_rental_price : null,
-    }
-    for (let i = 0; i < n; i++) add({ id: p.id, name: p.name, image_url: p.image_url, category: p.category, mode, price, ...fulfillment })
+    for (let i = 0; i < n; i++) add(cartItemFor(p, mode))
   }
   const prices: ProductPrices = { rentable, purchasable, pickupPrice, deliveryPrice }
   // "Rent now" skips the cart drawer and goes straight to checkout.
@@ -109,6 +99,8 @@ export default function ProductPage({
               className="lg:col-start-3 lg:row-start-1 lg:row-span-2 lg:sticky lg:top-24" />
             <div className="lg:col-start-2 lg:row-start-2"><ProductDetails p={p} rentable={rentable} /></div>
           </div>
+
+          <GoesWellWith productIds={[p.id]} variant="page" />
 
           {rentable && <RentingInfo />}
         </main>
