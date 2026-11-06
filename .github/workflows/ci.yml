@@ -47,6 +47,9 @@ jobs:
       - name: Form save guards
         run: node --test tests/unit/form-saves.test.ts tests/unit/save-errors.test.ts tests/unit/checkout-plan.test.ts tests/unit/field-rules.test.ts tests/unit/form-checks.test.ts tests/unit/request-id.test.ts
 
+      - name: Goes well with
+        run: node --test tests/unit/goes-well-with.test.ts
+
       - name: Build
         run: npm run build
 

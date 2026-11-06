@@ -18,6 +18,14 @@ export function driverSettingsProblems(d: { first: string; last: string; phone: 
   )
 }
 
+/** The stores a login works at, as set_login_pharmacies refuses them (123): at least one; a driver exactly one. */
+export function worksAtProblems(chosen: readonly string[], isDriver: boolean): FieldProblem[] {
+  return problems(
+    chosen.length === 0 && { field: 'works-at', message: 'Choose at least one store.' },
+    isDriver && chosen.length > 1 && { field: 'works-at', message: 'A driver has one home store.' },
+  )
+}
+
 export function newLoginProblems(draft: NewLoginDraft): FieldProblem[] {
   return problems(
     !draft.locationId && { field: 'locationId', message: storeLoginMessage('invalid_location') },

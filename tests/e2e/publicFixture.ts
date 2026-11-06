@@ -101,6 +101,35 @@ export async function mockCatalogReads(page: Page, products = catalog) {
   })
 }
 
+export type FixturePairing = { equipment_item_id: string; paired_item_id: string; position: number }
+
+/** The "Goes well with" picks (127) the browser reads with the public key. */
+export async function mockPairings(page: Page, pairings: FixturePairing[]) {
+  await page.route('**/rest/v1/product_pairings**', async (route) => {
+    if (route.request().method() === 'OPTIONS') {
+      await route.fulfill({
+        status: 204,
+        headers: {
+          'access-control-allow-origin': '*',
+          'access-control-allow-methods': 'GET, OPTIONS',
+          'access-control-allow-headers':
+            'authorization, apikey, content-type, x-client-info, prefer, accept-profile',
+        },
+      })
+      return
+    }
+    const raw = new URL(route.request().url()).searchParams.get('equipment_item_id') ?? ''
+    const ids = raw.startsWith('in.(') ? raw.slice(4, -1).split(',') : []
+    const result = pairings.filter((pairing) => ids.includes(pairing.equipment_item_id))
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(result),
+      headers: { 'access-control-allow-origin': '*' },
+    })
+  })
+}
+
 export async function openPublicRoute(page: Page, path: string) {
   const response = await page.goto(path, { waitUntil: 'domcontentloaded' })
 

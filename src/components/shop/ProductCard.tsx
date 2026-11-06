@@ -3,33 +3,19 @@
 import { shopPrice } from '../../lib/shopPrice'
 import Link from 'next/link'
 import { Check, MapPin, Truck, Wrench, Zap } from 'lucide-react'
-import { productPickupLocations, rentalPriceText, type Product } from '../../lib/shop'
+import { rentalPriceText, type Product } from '../../lib/shop'
+import { canBuy, canRent, cartItemFor } from '../../lib/pairings'
 import { useCart } from './CartContext'
 
 export default function ProductCard({ p }: { p: Product }) {
   const { add } = useCart()
   const to = `/product/${p.shopify_handle ?? p.id}`
-  const rentable = p.is_rentable && (
-    (p.pickup_enabled && p.pickup_rental_price != null)
-    || (p.delivery_enabled && p.delivery_rental_price != null)
-  )
+  const rentable = canRent(p)
   const pickupPrice = rentalPriceText(p.pickup_price_range, p.pickup_rental_price)
   const deliveryPrice = rentalPriceText(p.delivery_price_range, p.delivery_rental_price)
   // Buyable only while the owner's retail switch is on and it is priced and in stock (094).
-  const purchasable = Boolean(p.can_buy && p.sale_price != null)
+  const purchasable = canBuy(p)
   const soldOut = p.in_stock === false && (rentable || purchasable)
-  const base = {
-    id: p.id,
-    name: p.name,
-    image_url: p.image_url,
-    category: p.category,
-    pickup_enabled: p.pickup_enabled,
-    delivery_enabled: p.delivery_enabled,
-    same_day_pickup: p.same_day_pickup,
-    pickup_locations: productPickupLocations(p),
-    pickup_price: p.pickup_rental_price,
-    delivery_price: p.delivery_rental_price,
-  }
 
   return (
     <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden flex flex-col hover:shadow-lg hover:border-slate-300 transition">
@@ -78,11 +64,11 @@ export default function ProductCard({ p }: { p: Product }) {
         <div className="flex gap-2 mt-auto">
           {soldOut && <a href="tel:+15163679030" className="flex-1 text-center text-sm font-semibold border border-slate-300 text-slate-600 rounded-lg px-3 py-2.5">Out of stock — call us</a>}
           {!soldOut && rentable && (
-            <button onClick={() => add({ ...base, mode: 'rent', price: Number(p.delivery_rental_price ?? p.pickup_rental_price) })}
+            <button onClick={() => add(cartItemFor(p, 'rent'))}
               className="flex-1 text-center text-sm font-semibold bg-navy text-white rounded-lg px-3 py-2.5 hover:bg-navy-800">Rent Now</button>
           )}
           {!soldOut && purchasable && (
-            <button onClick={() => add({ ...base, mode: 'purchase', price: Number(p.sale_price), pickup_price: null, delivery_price: null })}
+            <button onClick={() => add(cartItemFor(p, 'purchase'))}
               className="flex-1 text-center text-sm font-semibold text-terracotta border border-terracotta rounded-lg px-3 py-2.5 hover:bg-terracotta hover:text-white transition">Purchase</button>
           )}
           {!rentable && !purchasable && <Link href={to} className="flex-1 text-center text-sm font-semibold bg-navy text-white rounded-lg px-3 py-2.5">View details</Link>}
