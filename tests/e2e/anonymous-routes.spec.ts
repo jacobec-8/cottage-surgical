@@ -422,6 +422,205 @@ test('checkout shows the items beside the form', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Checkout', exact: true })).toBeVisible()
 })
 
+// ── One payment for a rental and a purchase; Stripe cancel keeps the cart (128) ──
+const ORDER = '4bd8b3c4-6012-4eac-8c42-49cc2d7edb28'
+const PURCHASE_ORDER = '9a1f0c55-3e0b-4f7e-8d2a-6b1c2d3e4f50'
+const FAKE_STRIPE = 'https://stripe.test/pay/cs_fake_1'
+const CHECKOUT_RPCS = ['create_stripe_cart_checkout_once', 'create_stripe_rental_checkout_once', 'create_stripe_checkout_once', 'submit_rental_request_once'] as const
+
+type RpcLog = { calls: () => number; bodies: () => Array<Record<string, unknown>> }
+
+/** Answer one RPC with a reply (a function may change it between calls) and record what the page sent. */
+async function mockRpc(page: Page, name: string, reply: unknown): Promise<RpcLog> {
+  const bodies: Array<Record<string, unknown>> = []
+  await page.route(`**/rest/v1/rpc/${name}`, async (route) => {
+    if (route.request().method() === 'POST') bodies.push(route.request().postDataJSON() ?? {})
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(typeof reply === 'function' ? reply() : reply),
+      headers: { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*' },
+    })
+  })
+  return { calls: () => bodies.length, bodies: () => bodies }
+}
+
+/** Every order-placing RPC, answered with `reply` for the one expected and counted for all. */
+async function mockCheckoutRpcs(page: Page, expected: (typeof CHECKOUT_RPCS)[number], reply: unknown) {
+  const logs = {} as Record<(typeof CHECKOUT_RPCS)[number], RpcLog>
+  for (const name of CHECKOUT_RPCS) {
+    logs[name] = await mockRpc(page, name, name === expected ? reply : { ok: false, reason: 'unexpected_call' })
+  }
+  return logs
+}
+
+/** Stripe's page, without leaving the machine. */
+async function mockStripePage(page: Page) {
+  await page.route('https://stripe.test/**', (route) =>
+    route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>Fake Stripe</title><h1>Fake Stripe</h1>' }))
+}
+
+/** A cart of one kind is emptied at the redirect, exactly as before 128, and nothing is left pending. */
+async function expectClearedLikeToday(page: Page) {
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('cs_cart_v1') || '[]').length)).toBe(0)
+  expect(await page.evaluate(() => localStorage.getItem('cs_checkout_pending'))).toBeNull()
+}
+
+async function fillDelivery(page: Page) {
+  await page.getByPlaceholder('Full name').fill('Pat Buyer')
+  await page.getByPlaceholder('Phone').fill('5165550100')
+  await page.getByPlaceholder('Email').fill('pat@example.com')
+  await page.getByPlaceholder('Delivery address').fill('2 Oak St')
+  await page.getByPlaceholder('City').fill('Melville')
+  await page.getByPlaceholder('ZIP').fill('11747')
+}
+
+test('a rental and a purchase pay once through the combined call, and a Stripe cancel keeps the cart', async ({ page }) => {
+  await mockCatalogReads(page)
+  await mockStripePage(page)
+  await mockRpc(page, 'quote_storefront_cart', { ok: true, method: 'delivery', prices: { [catalog[0].id]: 125 }, sale_prices: { [catalog[0].id]: 300 } })
+  await mockRpc(page, 'verify_stripe_payment', { ok: true, paid: false, state: 'unpaid', order_ids: [ORDER, PURCHASE_ORDER] })
+  const cancels = await mockRpc(page, 'cancel_stripe_checkout', { ok: true, paid: false, released: true })
+  const rpcs = await mockCheckoutRpcs(page, 'create_stripe_cart_checkout_once', {
+    ok: true, order_id: ORDER, order_no: 101, purchase_order_id: PURCHASE_ORDER, purchase_order_no: 102,
+    order_ids: [ORDER, PURCHASE_ORDER], checkout_url: FAKE_STRIPE,
+  })
+  await page.addInitScript((items) => {
+    if (sessionStorage.getItem('seeded')) return
+    sessionStorage.setItem('seeded', '1')
+    localStorage.setItem('cs_cart_v1', JSON.stringify(items))
+  }, [savedCartItem('rent'), savedCartItem('purchase')])
+
+  await openPublicRoute(page, '/checkout')
+  await expect(page.getByText(/everything is paid online together/)).toBeVisible()
+  await expect(page.getByText('Pay Delivery Person', { exact: true })).toHaveCount(0)
+  const summary = page.getByRole('region', { name: 'Your order' })
+  await expect(summary.getByText('$425', { exact: true })).toBeVisible()
+  await fillDelivery(page)
+  await page.getByRole('button', { name: 'Continue to Secure Payment' }).dblclick()
+  await expect(page).toHaveURL(FAKE_STRIPE)
+
+  expect(rpcs.create_stripe_cart_checkout_once.calls()).toBe(1)
+  for (const name of ['create_stripe_rental_checkout_once', 'create_stripe_checkout_once', 'submit_rental_request_once'] as const) {
+    expect(rpcs[name].calls(), `${name} is not used for a mixed cart`).toBe(0)
+  }
+  const sent = rpcs.create_stripe_cart_checkout_once.bodies()[0]
+  expect(sent.p_rentals).toEqual([{ item_id: catalog[0].id, quantity: 1 }])
+  expect(sent.p_purchases).toEqual([{ item_id: catalog[0].id, quantity: 1 }])
+  expect(sent.p_notes).toBeNull()
+  expect(sent.p_request_key).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+  expect((sent.p_fulfillment as { payment_method?: string }).payment_method).toBe('online')
+
+  // The cart is kept until Stripe confirms payment.
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('cs_cart_v1') || '[]').length)).toBe(2)
+  expect(await page.evaluate(() => localStorage.getItem('cs_checkout_pending'))).toBe(ORDER)
+
+  // Stripe's cancel link brings the customer back to checkout with everything intact.
+  await openPublicRoute(page, `/checkout?cancelled=${ORDER}`)
+  await expect(page.getByRole('status').filter({ hasText: 'Payment cancelled' })).toBeVisible()
+  await expect(page).toHaveURL(/\/checkout$/)
+  await expect(summary.getByText(catalog[0].name, { exact: true }).first()).toBeVisible()
+  await expect(page.getByPlaceholder('Full name')).toHaveValue('Pat Buyer')
+  await expect(page.getByPlaceholder('ZIP')).toHaveValue('11747')
+  expect(cancels.calls()).toBe(1)
+  expect(cancels.bodies()[0]).toEqual({ p_order_id: ORDER })
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('cs_checkout_pending'))).toBeNull()
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('cs_cart_v1') || '[]').length)).toBe(2)
+})
+
+test('coming back to a combined payment that was paid goes to the confirmation, not a second order', async ({ page }) => {
+  await mockCatalogReads(page)
+  await mockRpc(page, 'cancel_stripe_checkout', { ok: true, paid: true, released: false })
+  await mockRpc(page, 'verify_stripe_payment', { ok: true, paid: true, order_ids: [ORDER, PURCHASE_ORDER] })
+  const emails = await mockRpc(page, 'dispatch_order_emails', { ok: true })
+  await page.addInitScript(({ items, order }) => {
+    if (sessionStorage.getItem('seeded')) return
+    sessionStorage.setItem('seeded', '1')
+    localStorage.setItem('cs_cart_v1', JSON.stringify(items))
+    localStorage.setItem('cs_checkout_pending', order)
+  }, { items: [savedCartItem('rent'), savedCartItem('purchase')], order: ORDER })
+  await openPublicRoute(page, '/checkout')
+  await expect(page).toHaveURL(new RegExp(`/checkout/success\\?ref=${ORDER}$`))
+  await expect(page.getByRole('heading', { name: /Payment received/ })).toBeVisible()
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('cs_cart_v1') || '[]').length)).toBe(0)
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('cs_checkout_pending'))).toBeNull()
+  // Each order on the payment gets its own mail.
+  await expect.poll(() => emails.bodies().map((b) => b.p_order_id).sort()).toEqual([ORDER, PURCHASE_ORDER].sort())
+})
+
+test('a rental-only cart paid online still uses today’s rental call', async ({ page }) => {
+  await mockCatalogReads(page)
+  await mockStripePage(page)
+  const rpcs = await mockCheckoutRpcs(page, 'create_stripe_rental_checkout_once', { ok: true, order_id: ORDER, order_no: 101, checkout_url: FAKE_STRIPE })
+  await openPublicRoute(page, '/')
+  await rentNow(page, 'Playwright Wheelchair')
+  await page.getByRole('complementary').getByRole('link', { name: 'Continue to checkout (1)' }).click()
+  await expect(page).toHaveURL(/\/checkout$/)
+  await expect(page.getByText(/everything is paid online together/)).toHaveCount(0)
+  await page.getByText('Pay Online', { exact: true }).click()
+  await fillDelivery(page)
+  await page.getByRole('button', { name: 'Continue to Secure Payment' }).click()
+  await expect(page).toHaveURL(FAKE_STRIPE)
+  expect(rpcs.create_stripe_rental_checkout_once.calls()).toBe(1)
+  expect(rpcs.create_stripe_cart_checkout_once.calls()).toBe(0)
+  expect(rpcs.create_stripe_checkout_once.calls()).toBe(0)
+  expect(Object.keys(rpcs.create_stripe_rental_checkout_once.bodies()[0]).sort())
+    .toEqual(['p_address', 'p_customer', 'p_fulfillment', 'p_items', 'p_notes', 'p_redirect_base', 'p_request_key'])
+  await expectClearedLikeToday(page)
+})
+
+test('a purchase-only cart still uses today’s purchase call, with no pay-later choice', async ({ page }) => {
+  await mockCatalogReads(page)
+  await mockStripePage(page)
+  const rpcs = await mockCheckoutRpcs(page, 'create_stripe_checkout_once', { ok: true, order_id: ORDER, order_no: 101, checkout_url: FAKE_STRIPE })
+  await page.addInitScript((item) => {
+    if (sessionStorage.getItem('seeded')) return
+    sessionStorage.setItem('seeded', '1')
+    localStorage.setItem('cs_cart_v1', JSON.stringify([item]))
+  }, savedCartItem('purchase'))
+  await openPublicRoute(page, '/checkout')
+  await expect(page.getByText('Pay Delivery Person', { exact: true })).toHaveCount(0)
+  await expect(page.getByText(/everything is paid online together/)).toHaveCount(0)
+  await fillDelivery(page)
+  await page.getByRole('button', { name: 'Continue to Secure Payment' }).click()
+  await expect(page).toHaveURL(FAKE_STRIPE)
+  expect(rpcs.create_stripe_checkout_once.calls()).toBe(1)
+  expect(rpcs.create_stripe_cart_checkout_once.calls()).toBe(0)
+  expect(rpcs.create_stripe_rental_checkout_once.calls()).toBe(0)
+  expect(Object.keys(rpcs.create_stripe_checkout_once.bodies()[0]).sort())
+    .toEqual(['p_address', 'p_customer', 'p_fulfillment', 'p_items', 'p_redirect_base', 'p_request_key'])
+  await expectClearedLikeToday(page)
+})
+
+test('if a cancelled combined payment can’t be closed in Stripe, no second payment can start until it is', async ({ page }) => {
+  await mockCatalogReads(page)
+  await mockRpc(page, 'verify_stripe_payment', { ok: true, paid: false, state: 'unpaid', order_ids: [ORDER, PURCHASE_ORDER] })
+  let stripeUp = false
+  const cancels = await mockRpc(page, 'cancel_stripe_checkout', () => stripeUp ? { ok: true, paid: false, released: true } : { ok: false, reason: 'stripe_unreachable' })
+  const rpcs = await mockCheckoutRpcs(page, 'create_stripe_cart_checkout_once', { ok: false, reason: 'unexpected_call' })
+  await page.addInitScript(({ items, order }) => {
+    if (sessionStorage.getItem('seeded')) return
+    sessionStorage.setItem('seeded', '1')
+    localStorage.setItem('cs_cart_v1', JSON.stringify(items))
+    localStorage.setItem('cs_checkout_pending', order)
+  }, { items: [savedCartItem('rent'), savedCartItem('purchase')], order: ORDER })
+  await openPublicRoute(page, `/checkout?cancelled=${ORDER}`)
+  const status = page.getByRole('status').filter({ hasText: 'couldn’t close your last payment attempt' })
+  await expect(status).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Continue to Secure Payment' })).toBeDisabled()
+  expect(await page.evaluate(() => localStorage.getItem('cs_checkout_pending'))).toBe(ORDER)
+
+  stripeUp = true
+  await status.getByRole('button', { name: 'Try again' }).click()
+  await expect(page.getByRole('status').filter({ hasText: 'Payment cancelled' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Continue to Secure Payment' })).toBeEnabled()
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('cs_checkout_pending'))).toBeNull()
+  expect(cancels.calls()).toBe(2)
+  expect(rpcs.create_stripe_cart_checkout_once.calls()).toBe(0)
+})
+
 test('an empty cart at checkout says so', async ({ page }) => {
   await mockCatalogReads(page)
   await openPublicRoute(page, '/checkout')

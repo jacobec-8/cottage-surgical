@@ -10,6 +10,7 @@ const ORDER_FUNCTIONS = [
   'submit_rental_request',
   'create_stripe_checkout_with_fulfillment',
   'create_stripe_rental_checkout_with_fulfillment',
+  'create_stripe_cart_checkout',
   'create_staff_order',
 ]
 
