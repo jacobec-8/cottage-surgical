@@ -1,41 +1,36 @@
 'use client'
 
-import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
-import { Checked, FieldMarks, fieldErrorsOf, focusFirstProblem } from '../../components/SaveForm'
-import { checkoutProblems } from '../../lib/formChecks/peopleChecks'
-import { newRequestId, newSaveKey, shortRef, withRequestId } from '../../lib/requestId'
-import { UnconfirmedSave, unconfirmedReply } from '../../lib/saveErrors'
-import { failureCode, failureLayer } from '../../lib/saveFailure'
-import { logSaveFailure } from '../../lib/saveFailureLog'
-
-// One key per create in this checkout, kept in the tab so a reload after a lost
-// reply reuses it: the repeat returns the first order, never a second one (migration 118).
-type CheckoutKeys = { rent: string; buy: string }
-const KEYS = 'cottage-checkout-keys'
-function loadKeys(): CheckoutKeys {
-  try {
-    const saved = JSON.parse(sessionStorage.getItem(KEYS) ?? 'null') as CheckoutKeys | null
-    if (saved?.rent && saved?.buy) return saved
-  } catch { /* storage blocked: fresh keys */ }
-  return { rent: newSaveKey(), buy: newSaveKey() }
-}
-function storeKeys(keys: CheckoutKeys): void {
-  try { sessionStorage.setItem(KEYS, JSON.stringify(keys)) } catch { /* storage blocked */ }
-}
-const LOST_REPLY = 'The connection dropped before we could confirm your order. Press the button again: it won’t create a second order.'
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import Link from 'next/link'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { CheckCircle, CreditCard, Loader2, MapPin, ShoppingCart, Store, Truck, Zap } from 'lucide-react'
+import { Checked, FieldMarks, fieldErrorsOf, focusFirstProblem } from '../../components/SaveForm'
 import { useCart } from '../../components/shop/CartContext'
 import { useCartQuote } from '../../components/shop/useCartQuote'
 import ShopFooter from '../../components/shop/ShopFooter'
 import ShopHeader from '../../components/shop/ShopHeader'
-import { CHECKOUT_REASONS, dueToday, payLaterChoice, type Fulfillment, type PaymentChoice } from '../../lib/checkoutPlan'
+import { CHECKOUT_REASONS, checkoutFlow, dueToday, effectivePayment, orderRef, payLaterAllowed, payLaterChoice, type Fulfillment, type PaymentChoice } from '../../lib/checkoutPlan'
+import {
+  clearCheckoutDraft, forgetCheckoutKeys, forgetPendingCheckout, loadCheckoutDraft, loadCheckoutKeys, pendingCheckout,
+  rememberPendingCheckout, saveCheckoutDraft, storeCheckoutKeys, type CheckoutKeys,
+} from '../../lib/checkoutSession'
 import { dispatchOrderEmails } from '../../lib/customerEmails'
+import { checkoutProblems } from '../../lib/formChecks/peopleChecks'
 import { commonPickupLocations, pickupLocationSelection } from '../../lib/fulfillment'
 import { publicSupabase } from '../../lib/publicSupabase'
+import { newRequestId, newSaveKey, shortRef, withRequestId } from '../../lib/requestId'
+import { UnconfirmedSave, unconfirmedReply } from '../../lib/saveErrors'
+import { failureCode, failureLayer } from '../../lib/saveFailure'
+import { logSaveFailure } from '../../lib/saveFailureLog'
 import { shopPrice } from '../../lib/shopPrice'
 import { outOfStockMessage } from '../../lib/stockMessage'
 import CheckoutSummary from './CheckoutSummary'
+
+// One key per create in this checkout, kept in the tab so a reload after a lost
+// reply reuses it: the repeat returns the first order, never a second one (migration 118).
+const LOST_REPLY = 'The connection dropped before we could confirm your order. Press the button again: it won’t create a second order.'
+const CANCELLED = 'Payment cancelled. You weren’t charged, and your cart is still here.'
+const STILL_OPEN = 'We couldn’t close your last payment attempt with Stripe yet, so a new one can’t start: you could be charged twice. Try again in a moment, or call us.'
 
 const INPUT = 'border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-navy/20'
 const choiceClass = (selected: boolean, enabled = true) =>
@@ -43,6 +38,8 @@ const choiceClass = (selected: boolean, enabled = true) =>
 
 export default function Checkout() {
   const { items, hydrated, clear, setOpen } = useCart()
+  const router = useRouter()
+  const cancelledRef = orderRef(useSearchParams().get('cancelled'))
   const [paymentChoice, setPaymentChoice] = useState<PaymentChoice>('on_delivery')
   const [fulfillment, setFulfillment] = useState<Fulfillment>('delivery')
   const [pickupLocationId, setPickupLocationId] = useState('')
@@ -53,17 +50,72 @@ export default function Checkout() {
   const formRef = useRef<HTMLFormElement>(null)
   const [marks, setMarks] = useState<Record<string, string>>({})
   const [done, setDone] = useState<{ numbers: number[]; fulfillment: Fulfillment } | null>(null)
+  const [notice, setNotice] = useState('')
+  const [releasing, setReleasing] = useState(false)
+  // A combined payment we couldn't close in Stripe: it could still be paid, so no new one starts.
+  const [unsettled, setUnsettled] = useState<string | null>(null)
 
   const rentItems = items.filter((i) => i.mode === 'rent')
   const buyItems = items.filter((i) => i.mode === 'purchase')
   const deliveryZip = fulfillment === 'delivery' && /^\d{5}/.test(form.zip.trim()) ? form.zip.trim().slice(0, 5) : null
   const { priceOf, rentTotal, buyTotal, problem, priceNotice, refuseForStock, clearRefusal } = useCartQuote({ items, fulfillment, pickupLocationId, deliveryZip, enabled: hydrated })
+  // A cart with a purchase always pays online; a rental and a purchase are one payment (128).
+  const payment = effectivePayment(paymentChoice, buyItems.length)
   const pickupLocations = commonPickupLocations(items)
   const pickupAvailable = pickupLocations.length > 0
   const deliveryAvailable = items.length > 0 && items.every((item) => item.delivery_enabled)
   const selectedPickupLocation = pickupLocations.find((location) => location.id === pickupLocationId)
   const set = (k: keyof typeof form) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm({ ...form, [k]: e.target.value })
+
+  // Back from Stripe without paying for a combined payment (128): close that attempt so
+  // its hold can't block the retry. Paid after all: go to the confirmation.
+  const settle = useCallback(async (ref: string, returned: boolean) => {
+    setReleasing(true)
+    const { data, error: rpcError } = await publicSupabase.rpc('cancel_stripe_checkout', { p_order_id: ref })
+      .then((reply) => reply, () => ({ data: null, error: new Error('offline') }))
+    setReleasing(false)
+    if (!rpcError && data?.paid) {
+      router.replace(`/checkout/success?ref=${ref}`)
+      return
+    }
+    // Unknown order (a stale link): nothing to close. Anything else: it may still be payable.
+    if (rpcError || (!data?.ok && data?.reason !== 'not_found')) {
+      setUnsettled(ref)
+      setNotice(STILL_OPEN)
+    } else {
+      setUnsettled(null)
+      if (pendingCheckout() === ref) forgetPendingCheckout()
+      setNotice(returned ? CANCELLED : '')
+    }
+    if (returned) router.replace('/checkout')
+  }, [router])
+
+  // Once on arrival: bring the customer's details back, then settle any attempt they left.
+  const arrived = useRef(false)
+  useEffect(() => {
+    if (arrived.current) return
+    arrived.current = true
+    const draft = loadCheckoutDraft()
+    if (draft) {
+      setForm(draft.form)
+      setFulfillment(draft.fulfillment)
+      setPickupLocationId(draft.pickupLocationId)
+      setPaymentChoice(draft.payment)
+    }
+    const ref = cancelledRef ?? pendingCheckout()
+    if (ref) void settle(ref, Boolean(cancelledRef))
+  }, [cancelledRef, settle])
+
+  // The browser's Back button can restore this page from memory without running the above.
+  useEffect(() => {
+    const onShow = (e: PageTransitionEvent) => {
+      const ref = pendingCheckout()
+      if (e.persisted && ref) void settle(ref, false)
+    }
+    window.addEventListener('pageshow', onShow)
+    return () => window.removeEventListener('pageshow', onShow)
+  }, [settle])
 
   useEffect(() => {
     if (deliveryAvailable) setFulfillment((choice) => choice === 'pickup' && pickupAvailable ? choice : 'delivery')
@@ -81,7 +133,7 @@ export default function Checkout() {
 
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (submittingRef.current) return
+    if (submittingRef.current || unsettled) return
     // The form's own checks first: a flagged field turns red, gets the cursor, and nothing is sent.
     const found = checkoutProblems(form, fulfillment, Boolean(selectedPickupLocation))
     setMarks(fieldErrorsOf(found))
@@ -96,10 +148,15 @@ export default function Checkout() {
     setBusy(true)
     setError('')
     clearRefusal()
-    const keys = loadKeys()
-    storeKeys(keys)
+    const keys = loadCheckoutKeys()
+    storeCheckoutKeys(keys)
     // A definite refusal frees that create's key; a lost reply keeps it for a safe retry.
-    const refused = (which: keyof CheckoutKeys, error: Error) => { storeKeys({ ...keys, [which]: newSaveKey() }); return error }
+    const refused = (which: keyof CheckoutKeys, error: Error) => { storeCheckoutKeys({ ...keys, [which]: newSaveKey() }); return error }
+    // The order exists and Stripe has its page, so the keys have done their job.
+    const toStripe = (url: string) => {
+      forgetCheckoutKeys()
+      window.location.assign(url)
+    }
     try { await withRequestId(requestId, async () => {
       if (fulfillment === 'delivery' && !deliveryAvailable) {
         throw new Error('Delivery is not available for every item in your cart.')
@@ -112,68 +169,76 @@ export default function Checkout() {
         method: fulfillment,
         pickup_location_id: fulfillment === 'pickup' ? pickupLocationId : null,
         delivery_zip: deliveryZip,
-        payment_method: paymentChoice,
+        payment_method: payment,
+      }
+      const flow = checkoutFlow(rentItems.length, buyItems.length, payment)
+
+      // A rental and a purchase: one Stripe payment, two orders from one pharmacy (128).
+      if (flow === 'cart') {
+        const { data, error: rpcError } = await publicSupabase.rpc('create_stripe_cart_checkout_once', {
+          p_request_key: keys.cart,
+          p_rentals: rentItems.map((i) => ({ item_id: i.id, quantity: i.qty })),
+          p_purchases: buyItems.map((i) => ({ item_id: i.id, quantity: i.qty })),
+          p_customer: customer,
+          p_address: address,
+          p_notes: form.notes || null,
+          p_redirect_base: window.location.origin,
+          p_fulfillment: details,
+        })
+        if (rpcError) throw new UnconfirmedSave('network', LOST_REPLY, true)
+        const uncertain = unconfirmedReply(data?.reason)
+        if (uncertain) throw uncertain
+        if (data?.reason === 'out_of_stock') {
+          refused('cart', new Error('out_of_stock'))
+          refuseForStock(outOfStockMessage(data.shortages, fulfillment))
+          return
+        }
+        if (!data?.ok) throw refused('cart', new Error(CHECKOUT_REASONS[data?.reason] || 'We couldn’t start your payment. Please call us.'))
+        // The cart stays until payment is confirmed (CheckoutSuccess, or CartContext on a
+        // later visit); the details stay for a cancel, which comes back to /checkout.
+        saveCheckoutDraft({ form, fulfillment, pickupLocationId, payment })
+        rememberPendingCheckout(data.order_id)
+        toStripe(data.checkout_url)
+        return
       }
 
       // Rentals remain rentals whichever payment rail the customer chooses.
       // Online = first month through Stripe, then the paid request enters the
       // same staff review/stock workflow. In-store/on-delivery = submit immediately.
-      let rentNo: number | null = null
-      if (rentItems.length) {
-        if (paymentChoice === 'online') {
-          const { data, error: rpcError } = await publicSupabase.rpc('create_stripe_rental_checkout_once', {
-            p_request_key: keys.rent,
-            p_items: rentItems.map((i) => ({ item_id: i.id, quantity: i.qty })),
-            p_customer: customer,
-            p_address: address,
-            p_notes: form.notes || null,
-            p_redirect_base: window.location.origin,
-            p_fulfillment: details,
-          })
-          if (rpcError) throw new UnconfirmedSave('network', LOST_REPLY, true)
-          const uncertain = unconfirmedReply(data?.reason)
-          if (uncertain) throw uncertain
-          if (!data?.ok) {
-            if (data?.reason === 'invalid_redirect') {
-              throw refused('rent', new Error('Checkout is misconfigured for this site. Please call us.'))
-            }
-            if (data?.reason === 'missing_email') {
-              throw refused('rent', new Error('Please enter a valid email for payment and order updates.'))
-            }
-            if (data?.reason === 'out_of_stock') {
-              refused('rent', new Error('out_of_stock'))
-              refuseForStock(outOfStockMessage(data.shortages, fulfillment))
-              return
-            }
-            throw refused('rent', new Error(CHECKOUT_REASONS[data?.reason] || 'We couldn’t start your payment. Please call us.'))
+      if (flow === 'rent_online') {
+        const { data, error: rpcError } = await publicSupabase.rpc('create_stripe_rental_checkout_once', {
+          p_request_key: keys.rent,
+          p_items: rentItems.map((i) => ({ item_id: i.id, quantity: i.qty })),
+          p_customer: customer,
+          p_address: address,
+          p_notes: form.notes || null,
+          p_redirect_base: window.location.origin,
+          p_fulfillment: details,
+        })
+        if (rpcError) throw new UnconfirmedSave('network', LOST_REPLY, true)
+        const uncertain = unconfirmedReply(data?.reason)
+        if (uncertain) throw uncertain
+        if (!data?.ok) {
+          if (data?.reason === 'invalid_redirect') {
+            throw refused('rent', new Error('Checkout is misconfigured for this site. Please call us.'))
           }
-          clear()
-          window.location.assign(data.checkout_url)
-          return
-        } else {
-          const { data, error: rpcError } = await publicSupabase.rpc('submit_rental_request_once', {
-            p_request_key: keys.rent,
-            p_order_type: 'rental', p_items: rentItems.map((i) => ({ item_id: i.id, quantity: i.qty })),
-            p_customer: customer, p_address: address, p_notes: form.notes || null,
-            p_fulfillment: details,
-          })
-          if (rpcError) throw new UnconfirmedSave('network', LOST_REPLY, true)
-          const uncertain = unconfirmedReply(data?.reason)
-          if (uncertain) throw uncertain
+          if (data?.reason === 'missing_email') {
+            throw refused('rent', new Error('Please enter a valid email for payment and order updates.'))
+          }
           if (data?.reason === 'out_of_stock') {
             refused('rent', new Error('out_of_stock'))
             refuseForStock(outOfStockMessage(data.shortages, fulfillment))
             return
           }
-          if (!data?.ok) throw refused('rent', new Error(CHECKOUT_REASONS[data?.reason] || 'We couldn’t submit your rental request. Please call us.'))
-          rentNo = data.order_no
-          // Guests may send only their own order's mail (100); the scheduler is the backstop.
-          void dispatchOrderEmails(data.order_id)
+          throw refused('rent', new Error(CHECKOUT_REASONS[data?.reason] || 'We couldn’t start your payment. Please call us.'))
         }
+        clear()
+        toStripe(data.checkout_url)
+        return
       }
 
       // Purchases → Stripe Checkout; the server refuses them while retail sales are off (094).
-      if (buyItems.length) {
+      if (flow === 'buy_online') {
         const { data, error: rpcError } = await publicSupabase.rpc('create_stripe_checkout_once', {
           p_request_key: keys.buy,
           p_items: buyItems.map((i) => ({ item_id: i.id, quantity: i.qty })),
@@ -193,13 +258,31 @@ export default function Checkout() {
           throw refused('buy', new Error(CHECKOUT_REASONS[data?.reason] || 'We couldn’t start your payment. Please call us.'))
         }
         clear()
-        window.location.assign(data.checkout_url) // → Stripe, then back to /checkout/success
+        toStripe(data.checkout_url) // → Stripe, then back to /checkout/success
         return
       }
 
+      const { data, error: rpcError } = await publicSupabase.rpc('submit_rental_request_once', {
+        p_request_key: keys.rent,
+        p_order_type: 'rental', p_items: rentItems.map((i) => ({ item_id: i.id, quantity: i.qty })),
+        p_customer: customer, p_address: address, p_notes: form.notes || null,
+        p_fulfillment: details,
+      })
+      if (rpcError) throw new UnconfirmedSave('network', LOST_REPLY, true)
+      const uncertain = unconfirmedReply(data?.reason)
+      if (uncertain) throw uncertain
+      if (data?.reason === 'out_of_stock') {
+        refused('rent', new Error('out_of_stock'))
+        refuseForStock(outOfStockMessage(data.shortages, fulfillment))
+        return
+      }
+      if (!data?.ok) throw refused('rent', new Error(CHECKOUT_REASONS[data?.reason] || 'We couldn’t submit your rental request. Please call us.'))
+      // Guests may send only their own order's mail (100); the scheduler is the backstop.
+      void dispatchOrderEmails(data.order_id)
       clear()
-      storeKeys({ rent: newSaveKey(), buy: newSaveKey() })
-      setDone({ numbers: rentNo ? [rentNo] : [], fulfillment })
+      clearCheckoutDraft()
+      forgetCheckoutKeys()
+      setDone({ numbers: [data.order_no], fulfillment })
     }) } catch (e) {
       logSaveFailure(publicSupabase, { requestId, form: 'Checkout', field: null, layer: failureLayer(e), code: failureCode(e), message: (e as Error).message })
       setError(`${(e as Error).message} Ref ${shortRef(requestId)}`)
@@ -231,10 +314,20 @@ export default function Checkout() {
         ) : (
           <>
             <h1 className="font-serif font-bold text-navy text-3xl">Checkout</h1>
+            {notice && (
+              <div role="status" className="mt-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                {notice}
+                {unsettled && (
+                  <button type="button" disabled={releasing} onClick={() => void settle(unsettled, true)} className="ml-2 font-semibold underline disabled:opacity-50">
+                    {releasing ? 'Trying…' : 'Try again'}
+                  </button>
+                )}
+              </div>
+            )}
             <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start">
               <div className="lg:order-last">
                 <CheckoutSummary items={items} priceOf={priceOf} rentTotal={rentTotal} buyTotal={buyTotal}
-                  due={dueToday(rentTotal, buyTotal, paymentChoice)} payLater={rentItems.length > 0 && paymentChoice !== 'online'} onEdit={() => setOpen(true)} />
+                  due={dueToday(rentTotal, buyTotal, payment)} payLater={payment !== 'online'} onEdit={() => setOpen(true)} />
               </div>
               <form ref={formRef} noValidate onSubmit={submit} onChange={(event) => { const name = (event.target as Element).getAttribute('name'); if (name && marks[name]) setMarks(Object.fromEntries(Object.entries(marks).filter(([key]) => key !== name))) }} className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4"><FieldMarks errors={marks}>
                 <div className="grid grid-cols-2 gap-3">
@@ -282,7 +375,7 @@ export default function Checkout() {
                   </div>
                 )}
                 <textarea placeholder={`${fulfillment === 'pickup' ? 'Pickup' : 'Delivery'} instructions (optional)`} value={form.notes} onChange={set('notes')} rows={2} className={`w-full ${INPUT}`} />
-                {rentItems.length > 0 && (
+                {rentItems.length > 0 && payLaterAllowed(buyItems.length) ? (
                   <fieldset>
                     <legend className="mb-2 text-sm font-semibold text-navy">How would you like to pay?</legend>
                     <div className="grid grid-cols-2 gap-2">
@@ -300,17 +393,21 @@ export default function Checkout() {
                       </label>
                     </div>
                   </fieldset>
+                ) : rentItems.length > 0 && (
+                  <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">Your cart includes a purchase, so everything is paid online together: the first month’s rental and the purchase.</p>
                 )}
                 {priceNotice && <div role="status" className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">Price updated — {priceNotice}</div>}
                 {problem && !error && <div role="alert" className="text-sm text-red-600">{problem}</div>}
                 {error && <div role="alert" className="text-sm text-red-600">{error}</div>}
-                <button type="submit" disabled={busy || Boolean(problem)} className="w-full bg-terracotta hover:opacity-90 text-white rounded-lg py-3 font-semibold disabled:opacity-50">
+                <button type="submit" disabled={busy || releasing || Boolean(unsettled) || Boolean(problem)} className="w-full bg-terracotta hover:opacity-90 text-white rounded-lg py-3 font-semibold disabled:opacity-50">
                   {busy
-                    ? (buyItems.length || paymentChoice === 'online' ? 'Redirecting…' : 'Submitting…')
-                    : buyItems.length || paymentChoice === 'online' ? 'Continue to Secure Payment' : 'Submit Request'}
+                    ? (payment === 'online' ? 'Redirecting…' : 'Submitting…')
+                    : payment === 'online' ? 'Continue to Secure Payment' : 'Submit Request'}
                 </button>
                 <p className="text-xs text-slate-400 text-center">
-                  {buyItems.length
+                  {buyItems.length && rentItems.length
+                    ? 'Stripe collects the first month’s rental and the purchase as one payment. Your equipment is held for you while you pay; we then confirm your delivery or pickup time.'
+                    : buyItems.length
                     ? 'Purchases are paid securely with Stripe on the next step.'
                     : paymentChoice === 'online'
                       ? 'Stripe collects the first month’s rental. Your equipment is held for you while you pay; we then confirm your delivery or pickup time.'

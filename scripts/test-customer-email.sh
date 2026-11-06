@@ -46,3 +46,12 @@ if ! psql_pairings -f "$qa_cluster/schema.sql" > "$qa_cluster/pairings-bootstrap
 if ! psql_pairings -f tests/sql/product-pairings.sql > "$qa_cluster/pairings.log" 2>&1; then cat "$qa_cluster/pairings.log"; exit 1; fi
 echo "PASS product-pairings (goes well with: who picks, what, who reads)"
 
+# One payment for a rental and a purchase (128), against a fake Stripe, in its own database.
+"$qa_pg/createdb" -h "$qa_cluster/socket" -p 55451 checkout_tests
+psql_checkout() { "$qa_pg/psql" -X -h "$qa_cluster/socket" -p 55451 -d checkout_tests -v ON_ERROR_STOP=1 "$@"; }
+if ! psql_checkout -f "$qa_cluster/schema.sql" > "$qa_cluster/checkout-bootstrap.log" 2>&1; then cat "$qa_cluster/checkout-bootstrap.log"; exit 1; fi
+# The runner has no ledger, so 128 must be safe to apply twice: run it again before the test.
+if ! psql_checkout -f supabase/migrations/128_one_payment_checkout.sql > "$qa_cluster/checkout-rerun.log" 2>&1; then cat "$qa_cluster/checkout-rerun.log"; exit 1; fi
+if ! psql_checkout -f tests/sql/one-payment-checkout.sql > "$qa_cluster/checkout.log" 2>&1; then cat "$qa_cluster/checkout.log"; exit 1; fi
+echo "PASS one-payment-checkout (a rental and a purchase on one Stripe session, fake HTTP)"
+

@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { PRODUCT_FIELDS, type PickupLocation, type Product } from '../../lib/shop'
 import { publicSupabase } from '../../lib/publicSupabase'
 import { withLatestProduct } from '../../lib/cartRefresh'
+import { clearCheckoutDraft, forgetCheckoutKeys, forgetPendingCheckout, pendingCheckout } from '../../lib/checkoutSession'
 
 type CartMode = 'rent' | 'purchase'
 export type CartItem = {
@@ -120,6 +121,27 @@ export function CartProvider({ children }: { children: ReactNode }) {
     return () => document.removeEventListener('visibilitychange', onVisible)
   }, [refreshFromStore])
 
+  // A rental and a purchase paid together (128): the cart stays until Stripe confirms
+  // payment. Paid, then closed the tab before the confirmation page: empty the cart so
+  // the same order isn't placed twice.
+  useEffect(() => {
+    if (!hydrated) return
+    const ref = pendingCheckout()
+    if (!ref) return
+    void publicSupabase.rpc('verify_stripe_payment', { p_order_id: ref }).then(({ data, error }) => {
+      if (error || !data?.ok) return // Couldn't tell; ask again next visit.
+      if (!data.paid && data.state) return // Still open in Stripe; they may yet pay.
+      if (pendingCheckout() !== ref) return // A newer checkout has started since.
+      if (data.paid) {
+        setItems([])
+        clearCheckoutDraft()
+      }
+      // Paid, or the order was closed without payment: either way it is settled.
+      forgetPendingCheckout()
+      forgetCheckoutKeys()
+    }, () => { /* Offline: ask again next visit. */ })
+  }, [hydrated])
+
   const add: Ctx['add'] = (i) => {
     setItems((cur) => {
       const ex = cur.find((c) => c.id === i.id && c.mode === i.mode)
@@ -137,7 +159,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
       cur.map((c) => (c.id === id && c.mode === mode ? { ...c, qty: Math.min(Math.max(1, qty), 20) } : c)),
     )
   const remove: Ctx['remove'] = (id, mode) => setItems((cur) => cur.filter((c) => !(c.id === id && c.mode === mode)))
-  const clear = () => setItems([])
+  // Saved at once, not on the next render: checkout empties the cart right before
+  // leaving for Stripe, and the page may be gone before the save effect runs.
+  const clear = () => {
+    setItems([])
+    try { window.localStorage.setItem(KEY, '[]') } catch { /* ignore */ }
+  }
   const count = items.reduce((n, c) => n + c.qty, 0)
 
   return (

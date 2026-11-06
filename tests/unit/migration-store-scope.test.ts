@@ -31,5 +31,5 @@ test('the parser sees the functions this guard exists for', () => {
   // baseline, while these two were rebuilt by later migrations.
   assert.equal(latest.get('update_rental_details')?.file, '000_baseline.sql')
   assert.equal(latest.get('settle_deposit')?.file, '121_trust.sql')
-  assert.equal(latest.get('cancel_order')?.file, '122_one_owner_and_website_wall.sql')
+  assert.equal(latest.get('cancel_order')?.file, '128_one_payment_checkout.sql')
 })

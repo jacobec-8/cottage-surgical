@@ -14,9 +14,13 @@ const REASONS: Record<string, string> = {
   refund_not_configured: 'Stripe refunding is not configured. The order was not cancelled.',
   refund_lookup_failed: 'Couldn’t locate the Stripe payment. The order was not cancelled; try again or check Stripe.',
   refund_failed: 'Stripe did not accept the refund. The order was not cancelled; try again or check Stripe.',
+  // One card payment for a rental and a purchase (128).
+  refund_amount_unknown: 'This order shares a card payment with another order, and its recorded payment doesn’t match what was charged. The order was not cancelled; check the amount in Stripe.',
+  checkout_open: 'The customer’s Stripe payment couldn’t be closed. The order was not cancelled; try again in a moment.',
+  just_paid: 'The customer has just paid. The order was not cancelled; cancel it again to refund them.',
 }
 
-type Result = { ok: boolean; reason?: string; units_released?: number; bulk_released?: number; legs_cancelled?: number; refunded?: boolean }
+type Result = { ok: boolean; reason?: string; units_released?: number; bulk_released?: number; legs_cancelled?: number; refunded?: boolean; orders_cancelled?: number }
 
 /** Cancel (not delivered) or close out (equipment out) an order via the atomic RPCs (038). */
 export function useCloseOrder(onMessage: (msg: string) => void) {
@@ -36,9 +40,11 @@ export function useCloseOrder(onMessage: (msg: string) => void) {
       qc.invalidateQueries({ queryKey: ['equipment_units'] })
       const bulk = r.bulk_released ? ` ${r.bulk_released} bulk item(s) back in store stock.` : ''
       const deposit = ' Any held deposit stays held until you record it under Billing.'
+      // An unpaid rental and purchase on one card payment are cancelled together (128).
+      const together = (r.orders_cancelled ?? 0) > 1 ? ' The other order on the same card payment was cancelled with it.' : ''
       onMessage(
         r.kind === 'cancel'
-          ? `Order cancelled${r.refunded ? ' and Stripe refund initiated' : ''}. ${r.units_released ?? 0} unit(s) released.${bulk} ${r.legs_cancelled ?? 0} stop(s) cancelled. Billing ended.${deposit}`
+          ? `Order cancelled${r.refunded ? ' and Stripe refund initiated' : ''}. ${r.units_released ?? 0} unit(s) released.${bulk} ${r.legs_cancelled ?? 0} stop(s) cancelled. Billing ended.${deposit}${together}`
           : `Order closed. ${r.units_released ?? 0} unit(s) returned to available inventory.${bulk} Billing ended.${deposit}`,
       )
     },

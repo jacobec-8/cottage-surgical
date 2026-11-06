@@ -19,7 +19,12 @@ customer-email-provider (the real Resend sender against a fake HTTP transport:
 quotas, rate limits, retries, idempotency keys, sender name) and roles (one
 assertion per cell of the role contract in `~/cottagedme/BUSINESS-SHAPE.md`:
 reach per role, switched-off pharmacies, owners and logins, membership fences,
-closed sign-ups; it runs in its own database).
+closed sign-ups; it runs in its own database), product-pairings (goes well
+with) and one-payment-checkout (migration 128 against a fake Stripe transport: a
+rental and a purchase on one session, request keys, verify and the sweep,
+cancelling in Stripe, split refunds, today's single-type checkouts unchanged,
+who may call what; it re-applies 128 first to prove it is safe to re-run, and
+runs in its own database).
 
 Never run these SQL fixtures against an existing database. The shell runner is
 the supported entry point; it intentionally ignores `DB_CONNECTION`.
