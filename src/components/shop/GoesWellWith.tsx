@@ -47,7 +47,7 @@ export default function GoesWellWith({ productIds, variant, onNavigate }: { prod
           )
           return variant === 'page' ? (
             <li key={p.id} className="flex flex-col rounded-2xl border border-slate-200 bg-white overflow-hidden">
-              <Link href={productHref(p)} className="block aspect-square bg-slate-50">
+              <Link href={productHref(p)} className="block aspect-square overflow-hidden bg-slate-50">
                 {p.image_url ? <img src={p.image_url} alt={p.name} className="h-full w-full object-contain p-3" /> : <span className="grid h-full place-items-center text-sm text-slate-300">No image</span>}
               </Link>
               <div className="flex flex-1 flex-col gap-1 p-3">

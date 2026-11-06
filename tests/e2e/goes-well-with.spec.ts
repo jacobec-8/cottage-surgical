@@ -65,3 +65,24 @@ test('nothing picked, nothing shown', async ({ page }) => {
   await expect(page.getByRole('heading', { level: 1, name: 'Playwright Hospital Bed' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Goes well with' })).toHaveCount(0)
 })
+
+const svg = (w: number, h: number) => `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect width="${w}" height="${h}" fill="#888"/></svg>`)}`
+
+test.describe('on a phone', () => {
+  test.use({ viewport: { width: 390, height: 844 } })
+
+  test('a tall photo and a wide photo get the same square box, so the cards line up', async ({ page }) => {
+    const pictured = products.map((p) =>
+      p.id === 'playwright-wheelchair-1' ? { ...p, image_url: svg(300, 1200) }
+        : p.id === 'playwright-retail-1' ? { ...p, image_url: svg(1200, 300) } : p)
+    await mockCatalogReads(page, pictured)
+    await mockPairings(page, bedPicks)
+    await openPublicRoute(page, '/product/playwright-hospital-bed')
+
+    const boxes = pageSuggestions(page).getByRole('listitem').locator('a:has(img)')
+    await expect(boxes).toHaveCount(2)
+    const [tall, wide] = [await boxes.nth(0).boundingBox(), await boxes.nth(1).boundingBox()]
+    expect(Math.round(tall!.height)).toBe(Math.round(tall!.width))
+    expect(Math.round(wide!.height)).toBe(Math.round(tall!.height))
+  })
+})
