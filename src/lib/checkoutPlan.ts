@@ -1,7 +1,8 @@
 import { outOfStockMessage, type Shortage } from './stockMessage.ts'
 
 export type Fulfillment = 'pickup' | 'delivery'
-export type PaymentChoice = 'in_store' | 'on_delivery' | 'online'
+/** Customers pay online or to the store (in store for pickup, by phone for delivery); never the driver. */
+export type PaymentChoice = 'in_store' | 'online'
 
 /** What the cart costs at the pharmacy that would fill it (quote_storefront_cart, 128). */
 export type CartQuote = {
@@ -37,10 +38,6 @@ export function payLaterAllowed(purchaseCount: number): boolean {
 /** The payment that really happens: the customer's choice, unless the cart has a purchase. */
 export function effectivePayment(choice: PaymentChoice, purchaseCount: number): PaymentChoice {
   return payLaterAllowed(purchaseCount) ? choice : 'online'
-}
-
-export function payLaterChoice(fulfillment: Fulfillment): PaymentChoice {
-  return fulfillment === 'delivery' ? 'on_delivery' : 'in_store'
 }
 
 /**

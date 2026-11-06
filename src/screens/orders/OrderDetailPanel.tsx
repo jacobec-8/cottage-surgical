@@ -186,7 +186,7 @@ function PanelBody({ o, onClose, actions, focusDeliveryId }: BodyProps) {
             <Field label={isRental ? 'Monthly rate' : 'Total'}>{amountOf(o)}</Field>
             <Field label="Payment">
               {backofficeLinks
-                ? <PaymentStateSetting order={o} payment={payment} />
+                ? <PaymentStateSetting payment={payment} />
                 : paymentStateLabel(orderPaymentState(o.payment_status, o.payment_preference))}
             </Field>
             <Field label="Source">{sourceLabel(o.source) ?? '—'}</Field>
@@ -237,9 +237,8 @@ const PAID_LABEL: Record<SettablePaymentState, string> = {
   not_paid: 'Not paid', paid_online: 'Paid online', paid_in_store: 'Paid in store', paid_on_delivery: 'Paid delivery person',
 }
 
-function PaymentStateSetting({ order, payment }: { order: OrderDetail; payment: ReturnType<typeof usePaymentState> }) {
-  const isDelivery = order.fulfillment_method === 'delivery'
-    || order.deliveries.some((delivery) => delivery.leg_type === 'delivery')
+/** The store takes every payment that isn't online, in person or by phone (129); "delivery person" stays only on old orders. */
+function PaymentStateSetting({ payment }: { payment: ReturnType<typeof usePaymentState> }) {
   if (payment.stored === 'refunded') return <span>{paymentStateLabel(payment.stored)}</span>
   return (
     <select
@@ -251,9 +250,8 @@ function PaymentStateSetting({ order, payment }: { order: OrderDetail; payment: 
     >
       <option value="not_paid">Not Paid</option>
       <option value="paid_online">Paid Online</option>
-      {isDelivery
-        ? <option value="paid_on_delivery">Paid Delivery Person</option>
-        : <option value="paid_in_store">Paid In Store</option>}
+      <option value="paid_in_store">Paid In Store</option>
+      {payment.stored === 'paid_on_delivery' && <option value="paid_on_delivery">Paid Delivery Person</option>}
     </select>
   )
 }

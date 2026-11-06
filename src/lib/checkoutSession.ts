@@ -53,7 +53,10 @@ export function loadCheckoutDraft(): CheckoutDraft | null {
   const raw = parse(read(session, DRAFT_KEY)) as Partial<CheckoutDraft> | null
   if (!raw || typeof raw !== 'object' || typeof raw.form !== 'object' || raw.form === null) return null
   if (raw.fulfillment !== 'pickup' && raw.fulfillment !== 'delivery') return null
-  if (raw.payment !== 'online' && raw.payment !== 'in_store' && raw.payment !== 'on_delivery') return null
+  // A draft saved before 129 may still say on_delivery; the store collects that payment now.
+  const stored: unknown = raw.payment
+  const payment = stored === 'online' ? 'online' : stored === 'in_store' || stored === 'on_delivery' ? 'in_store' : null
+  if (!payment) return null
   const saved = raw.form as Record<string, unknown>
   const form = Object.fromEntries(Object.entries(EMPTY_FORM).map(([k, fallback]) =>
     [k, typeof saved[k] === 'string' ? saved[k] : fallback])) as CheckoutForm
@@ -61,7 +64,7 @@ export function loadCheckoutDraft(): CheckoutDraft | null {
     form,
     fulfillment: raw.fulfillment,
     pickupLocationId: typeof raw.pickupLocationId === 'string' ? raw.pickupLocationId : '',
-    payment: raw.payment,
+    payment,
   }
 }
 

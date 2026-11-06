@@ -3,13 +3,13 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { CheckCircle, CreditCard, Loader2, MapPin, ShoppingCart, Store, Truck, Zap } from 'lucide-react'
+import { CheckCircle, CreditCard, Loader2, MapPin, Phone, ShoppingCart, Store, Truck, Zap } from 'lucide-react'
 import { Checked, FieldMarks, fieldErrorsOf, focusFirstProblem } from '../../components/SaveForm'
 import { useCart } from '../../components/shop/CartContext'
 import { useCartQuote } from '../../components/shop/useCartQuote'
 import ShopFooter from '../../components/shop/ShopFooter'
 import ShopHeader from '../../components/shop/ShopHeader'
-import { CHECKOUT_REASONS, checkoutFlow, dueToday, effectivePayment, orderRef, payLaterAllowed, payLaterChoice, type Fulfillment, type PaymentChoice } from '../../lib/checkoutPlan'
+import { CHECKOUT_REASONS, checkoutFlow, dueToday, effectivePayment, orderRef, payLaterAllowed, type Fulfillment, type PaymentChoice } from '../../lib/checkoutPlan'
 import {
   clearCheckoutDraft, forgetCheckoutKeys, forgetPendingCheckout, loadCheckoutDraft, loadCheckoutKeys, pendingCheckout,
   rememberPendingCheckout, saveCheckoutDraft, storeCheckoutKeys, type CheckoutKeys,
@@ -40,7 +40,7 @@ export default function Checkout() {
   const { items, hydrated, clear, setOpen } = useCart()
   const router = useRouter()
   const cancelledRef = orderRef(useSearchParams().get('cancelled'))
-  const [paymentChoice, setPaymentChoice] = useState<PaymentChoice>('on_delivery')
+  const [paymentChoice, setPaymentChoice] = useState<PaymentChoice>('in_store')
   const [fulfillment, setFulfillment] = useState<Fulfillment>('delivery')
   const [pickupLocationId, setPickupLocationId] = useState('')
   const [form, setForm] = useState({ full_name: '', phone: '', email: '', line1: '', city: '', state: 'NY', zip: '', notes: '' })
@@ -127,10 +127,6 @@ export default function Checkout() {
     if (next !== pickupLocationId) setPickupLocationId(next)
   }, [pickupLocationId, pickupLocations])
 
-  useEffect(() => {
-    setPaymentChoice((current) => current === 'online' ? current : payLaterChoice(fulfillment))
-  }, [fulfillment])
-
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (submittingRef.current || unsettled) return
@@ -204,7 +200,7 @@ export default function Checkout() {
 
       // Rentals remain rentals whichever payment rail the customer chooses.
       // Online = first month through Stripe, then the paid request enters the
-      // same staff review/stock workflow. In-store/on-delivery = submit immediately.
+      // same staff review/stock workflow. Pay the store = submit immediately (129).
       if (flow === 'rent_online') {
         const { data, error: rpcError } = await publicSupabase.rpc('create_stripe_rental_checkout_once', {
           p_request_key: keys.rent,
@@ -302,7 +298,14 @@ export default function Checkout() {
           <div className="max-w-xl mx-auto py-12 text-center">
             <CheckCircle className="mx-auto text-emerald-600 mb-4" size={48} />
             <h1 className="font-serif font-bold text-navy text-3xl">Request received: {done.numbers.map((n) => `#${n}`).join(' & ')}</h1>
-            <p className="text-slate-600 mt-3">Our team will review availability and contact you to confirm {done.fulfillment === 'pickup' ? 'your pickup' : 'delivery'}.</p>
+            <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-navy px-4 py-1.5 text-sm font-bold uppercase tracking-wide text-white">
+              {done.fulfillment === 'pickup' ? <Store size={16} /> : <Truck size={16} />}{done.fulfillment === 'pickup' ? 'Pickup' : 'Delivery'}
+            </div>
+            <p className="text-slate-600 mt-3">
+              {done.fulfillment === 'pickup'
+                ? 'Our team will review availability and contact you to confirm your pickup. You’ll pay in store when you pick up.'
+                : 'Our team will review availability, then call you to take payment and confirm your delivery.'}
+            </p>
             <Link href="/" className="inline-block mt-6 bg-navy text-white rounded-lg px-6 py-3 font-semibold">Back to shop</Link>
           </div>
         ) : items.length === 0 ? (
@@ -327,7 +330,10 @@ export default function Checkout() {
             <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start">
               <div className="lg:order-last">
                 <CheckoutSummary items={items} priceOf={priceOf} rentTotal={rentTotal} buyTotal={buyTotal}
-                  due={dueToday(rentTotal, buyTotal, payment)} payLater={payment !== 'online'} onEdit={() => setOpen(true)} />
+                  due={dueToday(rentTotal, buyTotal, payment)} payLater={payment !== 'online'} onEdit={() => setOpen(true)}
+                  fulfillment={fulfillment} where={fulfillment === 'pickup'
+                    ? selectedPickupLocation ? `${selectedPickupLocation.name}, ${selectedPickupLocation.address_city}` : null
+                    : [form.line1, form.city, form.zip].filter((part) => part.trim()).join(', ') || null} />
               </div>
               <form ref={formRef} noValidate onSubmit={submit} onChange={(event) => { const name = (event.target as Element).getAttribute('name'); if (name && marks[name]) setMarks(Object.fromEntries(Object.entries(marks).filter(([key]) => key !== name))) }} className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4"><FieldMarks errors={marks}>
                 <div className="grid grid-cols-2 gap-3">
@@ -380,10 +386,10 @@ export default function Checkout() {
                     <legend className="mb-2 text-sm font-semibold text-navy">How would you like to pay?</legend>
                     <div className="grid grid-cols-2 gap-2">
                       <label className={choiceClass(paymentChoice !== 'online')}>
-                        <input type="radio" name="payment-choice" value={payLaterChoice(fulfillment)} checked={paymentChoice !== 'online'} onChange={() => setPaymentChoice(payLaterChoice(fulfillment))} className="sr-only" />
-                        {fulfillment === 'delivery' ? <Truck size={20} className="mb-2 text-navy" /> : <Store size={20} className="mb-2 text-navy" />}
-                        <span className="block text-sm font-semibold text-navy">{fulfillment === 'delivery' ? 'Pay Delivery Person' : 'Pay In Store'}</span>
-                        <span className="mt-0.5 block text-xs leading-5 text-slate-500">{fulfillment === 'delivery' ? 'Pay when your equipment arrives.' : 'Pay when you pick up your equipment.'}</span>
+                        <input type="radio" name="payment-choice" value="in_store" checked={paymentChoice !== 'online'} onChange={() => setPaymentChoice('in_store')} className="sr-only" />
+                        {fulfillment === 'delivery' ? <Phone size={20} className="mb-2 text-navy" /> : <Store size={20} className="mb-2 text-navy" />}
+                        <span className="block text-sm font-semibold text-navy">{fulfillment === 'delivery' ? 'Pay by Phone' : 'Pay In Store'}</span>
+                        <span className="mt-0.5 block text-xs leading-5 text-slate-500">{fulfillment === 'delivery' ? 'The pharmacy calls you to take payment before delivery.' : 'Pay when you pick up your equipment.'}</span>
                       </label>
                       <label className={choiceClass(paymentChoice === 'online')}>
                         <input type="radio" name="payment-choice" value="online" checked={paymentChoice === 'online'} onChange={() => setPaymentChoice('online')} className="sr-only" />
@@ -412,7 +418,7 @@ export default function Checkout() {
                     : paymentChoice === 'online'
                       ? 'Stripe collects the first month’s rental. Your equipment is held for you while you pay; we then confirm your delivery or pickup time.'
                       : fulfillment === 'delivery'
-                        ? 'No payment is taken now. Pay the delivery person when your equipment arrives.'
+                        ? 'No payment is taken now. The pharmacy will call you to take payment before your delivery is scheduled.'
                         : 'No payment is taken now. Pay in store when you pick up your equipment.'}
                 </p>
               </FieldMarks></form>
