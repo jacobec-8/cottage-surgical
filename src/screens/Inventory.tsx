@@ -10,7 +10,7 @@ const LOCKED_PRODUCTS = 'Locked by the owner (Staff Access → Change products)'
 function staffInventoryNote(productsLocked: boolean, pricesLocked: boolean): string {
   const products = productsLocked ? 'The business owner maintains the product list' : 'The business owner maintains the product list; add your own store-only products with Add Item'
   const yours = pricesLocked ? 'keep your store’s stock up to date on each item (prices are set by the owner)' : 'set your store’s stock and prices on each item'
-  return ` ${products}, and ${yours}.`
+  return ` ${products}; ${yours}.`
 }
 import { supabase } from '../lib/supabase'
 import { Checked, SaveForm, SubmitButton } from '../components/SaveForm'
