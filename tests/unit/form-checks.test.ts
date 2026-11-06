@@ -6,7 +6,7 @@ import {
 } from '../../src/lib/formChecks/operationsChecks.ts'
 import {
   businessContactProblems, checkoutProblems, driverSettingsProblems, locationProblems, locationUserProblems, loginProfileProblems,
-  newLoginProblems, passwordProblems, rentalProblems, returnAddressProblems, signInProblems, staffProfileProblems,
+  newLoginProblems, passwordProblems, rentalProblems, returnAddressProblems, signInProblems, staffProfileProblems, worksAtProblems,
 } from '../../src/lib/formChecks/peopleChecks.ts'
 import type { FieldProblem } from '../../src/lib/fieldRules.ts'
 
@@ -102,6 +102,9 @@ test('staff, driver settings, logins and passwords', () => {
   assert.deepEqual(staffProfileProblems({ fullName: 'Pat Lee', phone: '' }), [])
   assert.equal(messageFor(staffProfileProblems({ fullName: '', phone: '' }), 'fullName'), 'Full name is required.')
   assert.deepEqual(fields(driverSettingsProblems({ first: '', last: 'Lee', phone: '12' })), ['first', 'phone'])
+  assert.deepEqual(worksAtProblems(['a1', 'a2'], false), [])
+  assert.equal(messageFor(worksAtProblems([], false), 'works-at'), 'Choose at least one store.')
+  assert.equal(messageFor(worksAtProblems(['a1', 'a2'], true), 'works-at'), 'A driver has one home store.')
 
   const login = { locationId: 'loc', role: 'staff' as const, fullName: 'Pat', phone: '', username: 'pat-lee', password: LONG }
   assert.deepEqual(newLoginProblems(login), [])

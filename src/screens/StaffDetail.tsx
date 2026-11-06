@@ -13,7 +13,7 @@ import { LoginAccessSettings, ResetPassword } from './staff/LoginAccess'
 import { supabase } from '../lib/supabase'
 import { Checked, SaveForm, SubmitButton } from '../components/SaveForm'
 import { noteProblems } from '../lib/formChecks/inventoryChecks'
-import { driverSettingsProblems, staffProfileProblems } from '../lib/formChecks/peopleChecks'
+import { driverSettingsProblems, staffProfileProblems, worksAtProblems } from '../lib/formChecks/peopleChecks'
 import { ensureChanged } from '../lib/saveErrors'
 
 type Profile = { id: string; email: string; full_name: string | null; phone: string | null; role: 'admin' | 'owner' | 'staff' | 'driver'; is_active: boolean; created_at: string; updated_at: string; location_id: string | null }
@@ -176,7 +176,7 @@ function WorksAt({ profile, locations, onSaved }: { profile: Profile; locations:
     },
     onSuccess: () => { setChosen(null); qc.invalidateQueries({ queryKey: ['memberships', profile.id] }); onSaved() },
   })
-  return <SaveForm aria-label="Works at" onSave={() => save.mutateAsync()} savedMessage="Stores saved." errorClassName="mt-3" className="bg-white border border-slate-200 rounded-2xl p-5">
+  return <SaveForm aria-label="Works at" onSave={() => save.mutateAsync()} validate={() => worksAtProblems(current, isDriver)} savedMessage="Stores saved." errorClassName="mt-3" className="bg-white border border-slate-200 rounded-2xl p-5">
     <div className="flex items-center gap-2 mb-2"><Building2 size={18} className="text-blue-600" /><h2 className="font-semibold text-lg">Works at</h2></div>
     <p className="text-sm text-slate-500 mb-4">{isDriver ? 'A driver has one home store. Extra stores they cover are set on the Drivers page.' : 'Tick every store this person works at. With more than one, they pick a store in the header.'}</p>
     {memberships.isLoading ? <div className="text-sm text-slate-500">Loading…</div> : <div className="grid sm:grid-cols-2 gap-2">
