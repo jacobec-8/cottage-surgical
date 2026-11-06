@@ -40,3 +40,9 @@ if ! psql_roles -f "$qa_cluster/schema.sql" > "$qa_cluster/roles-bootstrap.log" 
 if ! psql_roles -f tests/sql/roles.sql > "$qa_cluster/roles.log" 2>&1; then cat "$qa_cluster/roles.log"; exit 1; fi
 echo "PASS roles (one assertion per cell of the role contract)"
 
+"$qa_pg/createdb" -h "$qa_cluster/socket" -p 55451 pairings_tests
+psql_pairings() { "$qa_pg/psql" -X -h "$qa_cluster/socket" -p 55451 -d pairings_tests -v ON_ERROR_STOP=1 "$@"; }
+if ! psql_pairings -f "$qa_cluster/schema.sql" > "$qa_cluster/pairings-bootstrap.log" 2>&1; then cat "$qa_cluster/pairings-bootstrap.log"; exit 1; fi
+if ! psql_pairings -f tests/sql/product-pairings.sql > "$qa_cluster/pairings.log" 2>&1; then cat "$qa_cluster/pairings.log"; exit 1; fi
+echo "PASS product-pairings (goes well with: who picks, what, who reads)"
+

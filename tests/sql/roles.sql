@@ -570,10 +570,11 @@ SELECT test_assert((SELECT count(*) = 1 FROM memberships m JOIN profiles p ON p.
   'the new login has its membership and cached columns');
 SELECT test_assert((reset_branch_login_password((SELECT id FROM profiles WHERE email = 'qa-new-person@staff-login.cottagesurgical.invalid'), 'password-34'))->>'ok' = 'true',
   'the owner resets its password');
+RESET ROLE;
+-- Read back as the database, not the owner: logins can't read auth.users or call pgcrypto.
 SELECT test_assert((SELECT encrypted_password = extensions.crypt('password-34', encrypted_password) FROM auth.users
                      WHERE email = 'qa-new-person@staff-login.cottagesurgical.invalid'),
   'the new password is the one stored');
-RESET ROLE;
 
 SELECT test_as('');
 SELECT 'roles assertions passed' AS result;

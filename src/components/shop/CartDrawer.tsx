@@ -7,6 +7,7 @@ import { commonPickupLocations, pickupLocationSelection } from '../../lib/fulfil
 import { shopPrice } from '../../lib/shopPrice'
 import { useCart } from './CartContext'
 import { useCartQuote } from './useCartQuote'
+import GoesWellWith from './GoesWellWith'
 
 export default function CartDrawer() {
   const { items, open, setOpen, setQty, remove, count } = useCart()
@@ -62,6 +63,7 @@ export default function CartDrawer() {
                   </div>
                 </div>
               ))}
+              <GoesWellWith productIds={items.map((i) => i.id)} variant="cart" onNavigate={close} />
             </div>
             <div className="border-t border-slate-200 p-5 shrink-0">
               {rentTotal > 0 && <div className="flex justify-between text-sm mb-1"><span className="text-slate-500">Rental / month</span><span className="font-semibold text-navy">{shopPrice(rentTotal)}/mo</span></div>}
