@@ -1,12 +1,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { latestFunctions } from './schemaText.ts'
 
 // REG012: 068 rebuilt a function from an old copy and silently dropped 067's
-// store check. Guard the latest definition of every staff-gated function.
-const DIR = join(import.meta.dirname, '../../supabase/migrations')
-const SEEDS = /^(seed_|catalog_import)/
+// store check. Guard the latest definition of every staff-gated function, read
+// from the schema baseline plus every later migration.
 
 // Staff-gated but intentionally store-agnostic.
 const ALLOWED = new Set([
@@ -16,19 +14,8 @@ const ALLOWED = new Set([
   'reconcile_pending_stripe_orders', // only confirms Stripe payments, same as the cron sweep
 ])
 
-function latestDefinitions(): Map<string, { file: string; body: string }> {
-  const latest = new Map<string, { file: string; body: string }>()
-  const files = readdirSync(DIR).filter((f) => f.endsWith('.sql') && !SEEDS.test(f)).sort()
-  const fn = /CREATE OR REPLACE FUNCTION public\.(\w+)\s*\(([\s\S]*?)\n\$(\w*)\$;/g
-  for (const file of files) {
-    const sql = readFileSync(join(DIR, file), 'utf8')
-    for (const m of sql.matchAll(fn)) latest.set(m[1], { file, body: m[2] })
-  }
-  return latest
-}
-
 test('every staff-gated function checks the order store in its latest definition', () => {
-  const missing = [...latestDefinitions()]
+  const missing = [...latestFunctions()]
     .filter(([name, { body }]) => body.includes('is_staff_or_admin()') && !ALLOWED.has(name))
     .filter(([, { body }]) => !/can_access_location|current_location_id/.test(body))
     .map(([name, { file }]) => `${name} (${file})`)
@@ -36,9 +23,13 @@ test('every staff-gated function checks the order store in its latest definition
 })
 
 test('the parser sees the functions this guard exists for', () => {
-  const latest = latestDefinitions()
+  const latest = latestFunctions()
   for (const name of ['update_rental_details', 'cancel_order', 'close_out_order', 'settle_deposit']) {
     assert.ok(latest.has(name), `${name} not found in migrations`)
   }
-  assert.equal(latest.get('update_rental_details')?.file, '111_switch_order_fulfillment.sql')
+  // The latest definition wins: update_rental_details still comes from the
+  // baseline, while these two were rebuilt by later migrations.
+  assert.equal(latest.get('update_rental_details')?.file, '000_baseline.sql')
+  assert.equal(latest.get('settle_deposit')?.file, '121_trust.sql')
+  assert.equal(latest.get('cancel_order')?.file, '122_one_owner_and_website_wall.sql')
 })
