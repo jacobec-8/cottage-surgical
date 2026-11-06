@@ -259,7 +259,7 @@ RESET ROLE; SELECT test_as(NULL);
 SELECT test_assert(:'c'::jsonb->>'reason' = 'just_paid' AND (SELECT bool_and(status = 'requested' AND payment_status = 'paid') FROM rental_orders WHERE id IN (:'ro', :'po')),
   'a checkout paid just before the cancel is kept, and staff are told');
 SELECT test_calls('POST %/refunds') AS refunds_before \gset
-UPDATE rental_orders SET payment_preference = 'on_delivery' WHERE id = :'po';
+UPDATE rental_orders SET payment_preference = 'in_store' WHERE id = :'po';
 SELECT test_as(:'staff'); SET ROLE authenticated;
 SELECT cancel_order(:'po', 'Marked paid in store') AS c \gset
 RESET ROLE; SELECT test_as(NULL);
@@ -366,12 +366,39 @@ SELECT test_assert((:'c'::jsonb->>'refunded')::boolean AND (test_last('POST %/re
   AND (test_last('POST %/refunds')).body LIKE 'payment_intent=pi_fake&reason=requested_by_customer&%',
   'cancelling a single paid order refunds the whole payment, as before');
 
+-- ── Nobody pays the delivery person (129) ─────────────────────────────────
+SET ROLE anon;
+SELECT submit_rental_request_once(gen_random_uuid(), 'rental', :'one_each', :'customer', :'address', NULL,
+  '{"method": "delivery", "delivery_zip": "11747", "payment_method": "in_store"}') AS r \gset
+RESET ROLE;
+SELECT test_assert((:'r'::jsonb->>'ok')::boolean AND (SELECT status = 'requested' AND payment_preference = 'in_store' AND fulfillment_method = 'delivery' FROM rental_orders WHERE id = (:'r'::jsonb->>'order_id')::uuid),
+  'an unpaid delivery request is paid to the store');
+SELECT (:'r'::jsonb->>'order_id') AS pay_later_delivery \gset
+SELECT test_assert(EXISTS (SELECT 1 FROM customer_email_outbox WHERE order_id = :'pay_later_delivery' AND event_key = 'request_received'
+    AND text_body LIKE '%pharmacy will call you to take payment%')
+  AND NOT EXISTS (SELECT 1 FROM customer_email_outbox WHERE order_id = :'pay_later_delivery' AND text_body ILIKE '%delivery person%'),
+  'the request mail says the pharmacy will call to take payment, never the delivery person');
 SET ROLE anon;
 SELECT submit_rental_request_once(gen_random_uuid(), 'rental', :'one_each', :'customer', :'address', NULL,
   '{"method": "delivery", "delivery_zip": "11747", "payment_method": "on_delivery"}') AS r \gset
 RESET ROLE;
-SELECT test_assert((:'r'::jsonb->>'ok')::boolean AND (SELECT status = 'requested' AND payment_preference = 'on_delivery' FROM rental_orders WHERE id = (:'r'::jsonb->>'order_id')::uuid),
-  'pay-later rental requests are unchanged');
+SELECT test_assert((:'r'::jsonb->>'ok')::boolean AND (SELECT payment_preference = 'in_store' FROM rental_orders WHERE id = (:'r'::jsonb->>'order_id')::uuid),
+  'a page loaded before 129 still sends its request, and the store collects');
+UPDATE rental_orders SET payment_preference = 'on_delivery' WHERE id = :'pay_later_delivery';
+SELECT test_assert((SELECT payment_preference FROM rental_orders WHERE id = :'pay_later_delivery') = 'in_store',
+  'an unpaid order can''t be put back on the delivery person');
+SELECT test_as(:'staff'); SET ROLE authenticated;
+SELECT set_order_payment_state(:'pay_later_delivery', 'paid_in_store', 125, NULL) AS m \gset
+RESET ROLE; SELECT test_as(NULL);
+SELECT test_assert((:'m'::jsonb->>'ok')::boolean
+  AND (SELECT payment_status = 'paid' AND payment_preference = 'in_store' FROM rental_orders WHERE id = :'pay_later_delivery')
+  AND (SELECT method FROM money_records WHERE order_id = :'pay_later_delivery' AND kind = 'payment') = 'in_store',
+  'staff mark a delivery order paid in store, and the money record says in store');
+SELECT test_as(:'staff'); SET ROLE authenticated;
+SELECT set_order_payment_state((:'r'::jsonb->>'order_id')::uuid, 'paid_on_delivery', 125, NULL) AS m \gset
+RESET ROLE; SELECT test_as(NULL);
+SELECT test_assert((:'m'::jsonb->>'ok')::boolean AND (SELECT payment_preference = 'in_store' FROM rental_orders WHERE id = (:'r'::jsonb->>'order_id')::uuid),
+  'an old screen''s "paid delivery person" is recorded as paid in store');
 
 -- ── Who can call what ────────────────────────────────────────────────────
 SELECT test_assert(NOT has_function_privilege(r, 'public._stripe_request(text,text,text,text)', 'EXECUTE')

@@ -23,8 +23,9 @@ closed sign-ups; it runs in its own database), product-pairings (goes well
 with) and one-payment-checkout (migration 128 against a fake Stripe transport: a
 rental and a purchase on one session, request keys, verify and the sweep,
 cancelling in Stripe, split refunds, today's single-type checkouts unchanged,
-who may call what; it re-applies 128 first to prove it is safe to re-run, and
-runs in its own database).
+who may call what; and 129: nobody pays the delivery person, the store takes
+every payment that isn't online; it re-applies 128 and 129 first to prove they
+are safe to re-run, and runs in its own database).
 
 Never run these SQL fixtures against an existing database. The shell runner is
 the supported entry point; it intentionally ignores `DB_CONNECTION`.

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { cartItemPrice, checkoutFlow, dueToday, effectivePayment, orderRef, payLaterAllowed, payLaterChoice, quoteProblem } from '../../src/lib/checkoutPlan.ts'
+import { cartItemPrice, checkoutFlow, dueToday, effectivePayment, orderRef, payLaterAllowed, quoteProblem } from '../../src/lib/checkoutPlan.ts'
 import {
   clearCheckoutDraft, forgetCheckoutKeys, forgetPendingCheckout, loadCheckoutDraft, loadCheckoutKeys,
   pendingCheckout, rememberPendingCheckout, saveCheckoutDraft, storeCheckoutKeys,
@@ -31,9 +31,9 @@ function withStorage(run: () => void): void {
 test('a rental-only cart can pay later; any purchase means one online payment', () => {
   assert.equal(payLaterAllowed(0), true)
   assert.equal(payLaterAllowed(1), false)
-  assert.equal(effectivePayment('on_delivery', 0), 'on_delivery')
   assert.equal(effectivePayment('in_store', 0), 'in_store')
-  assert.equal(effectivePayment('on_delivery', 1), 'online')
+  assert.equal(effectivePayment('online', 0), 'online')
+  assert.equal(effectivePayment('in_store', 1), 'online')
   assert.equal(effectivePayment('in_store', 2), 'online')
 })
 
@@ -42,23 +42,16 @@ test('only a mixed cart paid online takes the combined payment; single-type cart
   assert.equal(checkoutFlow(2, 3, 'online'), 'cart')
   assert.equal(checkoutFlow(1, 0, 'online'), 'rent_online')
   assert.equal(checkoutFlow(0, 1, 'online'), 'buy_online')
-  assert.equal(checkoutFlow(1, 0, 'on_delivery'), 'rent_later')
   assert.equal(checkoutFlow(1, 0, 'in_store'), 'rent_later')
   // The payment passed in is already effectivePayment(): a cart with a purchase is never pay-later.
-  assert.equal(checkoutFlow(1, 1, effectivePayment('on_delivery', 1)), 'cart')
+  assert.equal(checkoutFlow(1, 1, effectivePayment('in_store', 1)), 'cart')
   assert.equal(checkoutFlow(0, 1, effectivePayment('in_store', 1)), 'buy_online')
-})
-
-test('pay-later follows how the customer gets the order', () => {
-  assert.equal(payLaterChoice('delivery'), 'on_delivery')
-  assert.equal(payLaterChoice('pickup'), 'in_store')
 })
 
 test('due today is the whole cart online and nothing when paying later', () => {
   assert.equal(dueToday(125, 300, 'online'), 425)
   assert.equal(dueToday(125, 0, 'online'), 125)
   assert.equal(dueToday(0, 300, 'online'), 300)
-  assert.equal(dueToday(125, 0, 'on_delivery'), 0)
   assert.equal(dueToday(125, 0, 'in_store'), 0)
 })
 

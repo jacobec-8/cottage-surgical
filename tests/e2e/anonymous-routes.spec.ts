@@ -302,9 +302,11 @@ test('checkout offers assigned pickup locations and keeps hospital beds delivery
   await expect(page.getByRole('radio', { name: /In-store pickup/i })).toBeDisabled()
   await expect(page.getByRole('radio', { name: /^Delivery\b/i })).toBeChecked()
   await expect(page.getByPlaceholder('Delivery address')).toBeVisible()
-  await expect(page.getByText('Pay Delivery Person', { exact: true })).toBeVisible()
+  // Nobody pays the driver (129): an unpaid delivery request is paid to the store by phone.
+  await expect(page.getByText('Pay by Phone', { exact: true })).toBeVisible()
   await expect(page.getByText('Pay Online', { exact: true })).toBeVisible()
   await expect(page.getByText('Pay In Store', { exact: true })).toHaveCount(0)
+  await expect(page.getByText(/delivery person/i)).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Submit Request' })).toBeVisible()
 })
 
@@ -373,6 +375,36 @@ test('double-clicking rental submit sends one request, with its save key and req
   // Migration 118: a key so a retry can't create a second order, and an ID that traces any failure.
   expect(sent.key).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
   expect(sent.requestId).toMatch(/^[0-9a-f]{32}$/)
+})
+
+test('an unpaid delivery request is paid to the store, labelled Delivery on the order', async ({ page }) => {
+  await mockCatalogReads(page)
+  let sent: Record<string, unknown> = {}
+  await page.route('**/rest/v1/rpc/submit_rental_request_once', async (route) => {
+    sent = route.request().postDataJSON() ?? {}
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, order_no: 4322 }),
+      headers: { 'access-control-allow-origin': '*' },
+    })
+  })
+  await page.addInitScript((item) => {
+    if (sessionStorage.getItem('seeded')) return
+    sessionStorage.setItem('seeded', '1')
+    localStorage.setItem('cs_cart_v1', JSON.stringify([item]))
+  }, savedCartItem('rent'))
+  await openPublicRoute(page, '/checkout')
+  await page.getByText('Delivered to your address.', { exact: true }).click()
+  await expect(page.getByRole('radio', { name: /^Delivery\b/i })).toBeChecked()
+  await page.getByText('Pay by Phone', { exact: true }).click()
+  await expect(page.getByTestId('summary-fulfillment')).toContainText('Delivery')
+  await expect(page.getByRole('region', { name: 'Your order' })).toContainText('The pharmacy will call you')
+  await fillDelivery(page)
+  await page.getByRole('button', { name: 'Submit Request' }).click()
+  await expect(page.getByText('Request received: #4322', { exact: true })).toBeVisible()
+  await expect(page.locator('main')).toContainText('call you to take payment')
+  expect((sent.p_fulfillment as { method?: string; payment_method?: string })).toMatchObject({ method: 'delivery', payment_method: 'in_store' })
 })
 
 function savedCartItem(mode: 'rent' | 'purchase') {
@@ -494,7 +526,7 @@ test('a rental and a purchase pay once through the combined call, and a Stripe c
 
   await openPublicRoute(page, '/checkout')
   await expect(page.getByText(/everything is paid online together/)).toBeVisible()
-  await expect(page.getByText('Pay Delivery Person', { exact: true })).toHaveCount(0)
+  await expect(page.getByText('Pay by Phone', { exact: true })).toHaveCount(0)
   const summary = page.getByRole('region', { name: 'Your order' })
   await expect(summary.getByText('$425', { exact: true })).toBeVisible()
   await fillDelivery(page)
@@ -581,7 +613,7 @@ test('a purchase-only cart still uses today’s purchase call, with no pay-later
     localStorage.setItem('cs_cart_v1', JSON.stringify([item]))
   }, savedCartItem('purchase'))
   await openPublicRoute(page, '/checkout')
-  await expect(page.getByText('Pay Delivery Person', { exact: true })).toHaveCount(0)
+  await expect(page.getByText('Pay by Phone', { exact: true })).toHaveCount(0)
   await expect(page.getByText(/everything is paid online together/)).toHaveCount(0)
   await fillDelivery(page)
   await page.getByRole('button', { name: 'Continue to Secure Payment' }).click()

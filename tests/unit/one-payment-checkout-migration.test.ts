@@ -32,12 +32,14 @@ test('today’s single-type checkout functions are not touched', () => {
 })
 
 test('128 rebuilds exactly the functions it says it does', () => {
+  // queue_order_status_email was rebuilt again by 129 (nobody pays the delivery person).
   const rebuilt = [...latestFunctions()].filter(([, d]) => d.file === MIGRATION).map(([n]) => n).sort()
   assert.deepEqual(rebuilt, [
     '_settle_stripe_session', '_stripe_request', 'cancel_order', 'cancel_stripe_checkout',
-    'create_stripe_cart_checkout', 'create_stripe_cart_checkout_once', 'queue_order_status_email',
+    'create_stripe_cart_checkout', 'create_stripe_cart_checkout_once',
     'quote_storefront_cart', 'reconcile_pending_stripe_orders', 'verify_stripe_payment',
   ])
+  assert.equal(latestFunctions().get('queue_order_status_email')?.file, '129_store_collects_payment.sql')
 })
 
 test('the website reaches Stripe only through the checkout calls, never the helpers', () => {
