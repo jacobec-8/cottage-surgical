@@ -18,7 +18,8 @@
 --   * submit_rental_request_with_fulfillment: pay-later is in_store for pickup
 --     and delivery (on_delivery from an old page is accepted as in_store).
 --   * Customer mail: "the pharmacy will call you to take payment" instead of
---     "payment will be collected by the delivery person".
+--     "payment will be collected by the delivery person"; an old order paid to a
+--     driver reads "Paid on delivery"; a cancelled or closed one, "Not paid".
 --   * Live unpaid orders still marked on_delivery move to in_store. Changing
 --     payment_preference fires no money, order-event or mail trigger.
 --
@@ -410,9 +411,11 @@ BEGIN
     WHEN p_event_key LIKE 'rental_payment_%' THEN 'Offline payment recorded by pharmacy' 
     WHEN v_payment_status = 'refunded' THEN 'Full refund initiated'
     WHEN v_payment_status = 'paid' AND v_payment_preference = 'online' THEN 'First month paid online'
+    WHEN v_payment_status = 'paid' AND v_payment_preference = 'on_delivery' THEN 'Paid on delivery'
     WHEN v_payment_status = 'paid' AND v_fulfillment = 'delivery' THEN 'Paid to the pharmacy'
     WHEN v_payment_status = 'paid' THEN 'Paid in store'
     WHEN v_payment_preference = 'online' THEN 'Online payment pending'
+    WHEN (SELECT status FROM public.rental_orders WHERE id = p_order_id) IN ('cancelled', 'closed') THEN 'Not paid'
     WHEN v_fulfillment = 'delivery' THEN 'The pharmacy will call you to take payment'
     ELSE 'Payment due in store'
   END;
