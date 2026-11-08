@@ -23,7 +23,7 @@ export default function ShopHeader({ onSearch, onHeaderSearch }: { onSearch?: (q
 
   return (
     <>
-      <header className="bg-navy text-white sticky top-0 z-30 font-sans">
+      <header data-sticky-header className="bg-navy text-white sticky top-0 z-30 font-sans">
         <div className="max-w-[1600px] mx-auto px-2 sm:px-4 h-[60px] lg:h-[72px] flex items-center gap-1 sm:gap-3">
           <button type="button" onClick={() => setMenuOpen(true)} aria-label="Menu" className={`md:hidden w-11 h-11 grid place-items-center ${hit}`}>
             <Menu size={24} />

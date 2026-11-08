@@ -6,6 +6,7 @@ import { AlertTriangle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { Checked, SaveForm, SubmitButton } from '../../components/SaveForm'
 import { missedStopProblems } from '../../lib/formChecks/operationsChecks'
+import { useRevealOnOpen } from '../../lib/useRevealOnOpen'
 import { MISSED_REASONS, type MissedReason } from './stopStatus'
 
 const ERRORS: Record<string, string> = {
@@ -34,6 +35,7 @@ export function MissedStopForm({ deliveryId, isPickup, onClose }: { deliveryId: 
   const qc = useQueryClient()
   const [reason, setReason] = useState<MissedReason>('no_one_home')
   const [note, setNote] = useState('')
+  const box = useRevealOnOpen<HTMLDivElement>()
   const report = useMutation({
     mutationFn: async () => {
       const { data, error } = await supabase.rpc('report_missed_stop', { p_delivery_id: deliveryId, p_reason: reason, p_note: note.trim() || null })
@@ -51,7 +53,7 @@ export function MissedStopForm({ deliveryId, isPickup, onClose }: { deliveryId: 
 
   return (
     // Clicks inside must not open the stop card underneath.
-    <div onClick={(e) => e.stopPropagation()}>
+    <div ref={box} onClick={(e) => e.stopPropagation()}>
     <SaveForm aria-label={label} onSave={() => report.mutateAsync()} validate={() => missedStopProblems(reason, note)} savedMessage="Recorded. The stop needs scheduling again." errorClassName="mb-2"
       className="w-full rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm sm:w-80">
       <div className="mb-2 font-medium text-amber-900">{label}: what happened?</div>

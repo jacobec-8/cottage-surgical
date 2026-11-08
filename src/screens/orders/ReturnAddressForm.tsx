@@ -1,10 +1,11 @@
 'use client'
 
-import { useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Checked, FieldMarks, fieldErrorsOf, focusFirstProblem } from '../../components/SaveForm'
 import { returnAddressProblems } from '../../lib/formChecks/peopleChecks'
 import { newRequestId, shortRef } from '../../lib/requestId'
 import { logSaveFailure } from '../../lib/saveFailureLog'
+import { revealSoon } from '../../lib/reveal'
 import { supabase } from '../../lib/supabase'
 import type { ReturnAddress } from './useSchedulePickup'
 
@@ -20,6 +21,8 @@ export default function ReturnAddressForm({ busy, onSubmit, onCancel }: Props) {
   const [err, setErr] = useState('')
   const formRef = useRef<HTMLFormElement>(null)
   const [marks, setMarks] = useState<Record<string, string>>({})
+  // It opens from a click, so the whole form comes into view.
+  useEffect(() => { revealSoon(() => formRef.current) }, [])
   const set = (k: keyof ReturnAddress) => (e: { target: { value: string } }) => setA({ ...a, [k]: e.target.value })
   const submit = (e: FormEvent) => {
     e.preventDefault()

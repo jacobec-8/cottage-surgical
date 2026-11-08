@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, ArrowRight, Check, CheckCircle2, CheckSquare, Plus, Store, Trash2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { revealSoon, toPageTop } from '../../lib/reveal'
 import { useLocationScope } from '../../contexts/LocationContext'
 import { newOnboardingId, type CatalogItem } from '../../lib/locationOnboarding'
 import {
@@ -36,6 +37,9 @@ export default function BusinessOnboarding() {
   const requestId = useRef<string | null>(null)
   const [uncertain, setUncertain] = useState(false)
   const title = useRef<HTMLHeadingElement>(null)
+  // The business being edited, and why the last try didn't go through: each comes into view when it changes.
+  const businessBox = useRef<HTMLDivElement>(null)
+  const problemBox = useRef<HTMLDivElement>(null)
   // Any edit clears the last validation message; Review re-checks everything.
   const set = <K extends keyof OnboardingDraft>(key: K, value: OnboardingDraft[K]) => { setError(null); setDraft((current) => ({ ...current, [key]: value })) }
   // Products belong to an owner, so a new owner starts every business with an empty product list.
@@ -103,8 +107,9 @@ export default function BusinessOnboarding() {
     }
     if (!data?.ok) throw new Error('Could not complete onboarding. Nothing was saved.')
     return readOnboardingResult(data)
-  }, onSuccess: (data) => {
+  }, onError: () => revealSoon(() => problemBox.current), onSuccess: (data) => {
     setResult(data)
+    toPageTop()
     setUncertain(false)
     // Drop passwords from memory once the logins exist.
     setDraft((current) => ({
@@ -119,6 +124,7 @@ export default function BusinessOnboarding() {
     setStep(0); setError(problem)
     const bad = draft.locations.findIndex((_, i) => locationProblem(draft, i))
     if (bad >= 0) setLocationIndex(bad)
+    revealSoon(() => problemBox.current)
   }
   function go(next: number) {
     if (next > step) {
@@ -137,6 +143,7 @@ export default function BusinessOnboarding() {
     const previous = draft.locations[draft.locations.length - 1]
     const next = { ...emptyLocation(), state: previous?.state || 'NY', fulfillmentMode: previous?.fulfillmentMode ?? 'pickup_and_delivery' }
     set('locations', [...draft.locations, next]); setLocationIndex(draft.locations.length); setError(null)
+    revealSoon(() => businessBox.current)
   }
   function removeLocation(key: string) {
     const index = draft.locations.findIndex((l) => l.key === key)
@@ -178,7 +185,7 @@ export default function BusinessOnboarding() {
                 ))}
                 <button type="button" className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 disabled:opacity-50" disabled={draft.locations.length >= MAX_LOCATIONS} onClick={addLocation}><Plus size={15} /> Add another business</button>
               </div>
-              <div className="rounded-xl border border-slate-200 p-4 sm:p-5">
+              <div ref={businessBox} className="rounded-xl border border-slate-200 p-4 sm:p-5">
                 <div className="mb-4 flex items-center justify-between gap-2">
                   <h3 className="font-semibold text-slate-900">{locationLabel(current, draft.locations.indexOf(current))}</h3>
                   {draft.locations.length > 1 && <button type="button" onClick={() => removeLocation(current.key)} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm text-slate-500 hover:bg-red-50 hover:text-red-600"><Trash2 size={15} /> Remove</button>}
@@ -191,8 +198,8 @@ export default function BusinessOnboarding() {
           </div>}
           {step === 1 && <ReviewStep draft={draft} ownerName={ownerName} catalog={catalog.data ?? []} go={go} ownerNames={ownerNames} />}
         </fieldset>
-        {(error || save.error) && <div role="alert" className="mx-5 mb-5 rounded-lg bg-red-50 p-3 text-sm text-red-700 sm:mx-7">{error || save.error?.message}</div>}
-        <footer className="sticky bottom-0 z-10 flex items-center justify-between gap-3 rounded-b-2xl border-t border-slate-200 bg-white p-5 sm:px-7">
+        {(error || save.error) && <div ref={problemBox} role="alert" className="mx-5 mb-5 rounded-lg bg-red-50 p-3 text-sm text-red-700 sm:mx-7">{error || save.error?.message}</div>}
+        <footer data-sticky-footer className="sticky bottom-0 z-10 flex items-center justify-between gap-3 rounded-b-2xl border-t border-slate-200 bg-white p-5 sm:px-7">
           <button type="button" disabled={step === 0 || locked} className={SECONDARY} onClick={() => go(step - 1)}><ArrowLeft size={16} /> Back</button>
           <button type="submit" disabled={save.isPending} className={PRIMARY}>{save.isPending ? 'Creating…' : uncertain ? 'Check and finish setup' : step === 1 ? `Create ${plural(draft.locations.length)}` : 'Review'}{!save.isPending && <ArrowRight size={16} />}</button>
         </footer>

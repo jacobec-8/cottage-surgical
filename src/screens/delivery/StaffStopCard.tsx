@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { RotateCcw, Store, Truck } from 'lucide-react'
 import ItemList from '../../components/ItemList'
 import { TONE_CARD } from '../../lib/status'
+import { revealSoon } from '../../lib/reveal'
 import { supabase } from '../../lib/supabase'
 import { invalidateOrderWorkflow } from '../../lib/workflowKeys'
 import { orderPaymentState, paymentStateLabel } from '../orders/format'
@@ -52,6 +53,7 @@ export default function StaffStopCard({ d, drivers, onOpen, selected }: { d: Del
   const [editing, setEditing] = useState(false)
   const [reporting, setReporting] = useState(false)
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null)
+  const scheduleBox = useRef<HTMLDivElement>(null)
   const { override, storePickup } = useStaffCompletion(d, (text) => setMsg({ text, ok: false }), () => setMsg(null))
 
   useEffect(() => {
@@ -101,7 +103,7 @@ export default function StaffStopCard({ d, drivers, onOpen, selected }: { d: Del
             </button>
           )}
           {!showForm && (
-            <button type="button" onClick={() => { setMsg(null); setEditing(true) }}
+            <button type="button" onClick={() => { setMsg(null); setEditing(true); revealSoon(() => scheduleBox.current) }}
               className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50">
               {isStorePickup ? 'Change date' : 'Change'}
             </button>
@@ -111,7 +113,7 @@ export default function StaffStopCard({ d, drivers, onOpen, selected }: { d: Del
       </div>
 
       {showForm && (
-        <div className="cursor-default" onClick={stopOpen}>
+        <div ref={scheduleBox} className="cursor-default" onClick={stopOpen}>
           <ScheduleForm d={d} drivers={drivers}
             onSaved={(text) => { setEditing(false); setMsg({ text, ok: true }) }}
             onCancel={d.status === 'pending' ? undefined : () => setEditing(false)} />
