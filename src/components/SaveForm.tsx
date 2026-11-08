@@ -4,6 +4,7 @@ import { cloneElement, createContext, useContext, useEffect, useId, useRef, useS
 import type { FieldProblem } from '../lib/fieldRules'
 import { UnconfirmedSave, failedField, mayHaveSaved, notSavedText, saveErrorMessage, type ErrorTranslator } from '../lib/saveErrors'
 import { newRequestId, newSaveKey, shortRef, withRequestId } from '../lib/requestId'
+import { revealSoon } from '../lib/reveal'
 import { failureCode, failureLayer } from '../lib/saveFailure'
 import { logSaveFailure } from '../lib/saveFailureLog'
 import { supabase } from '../lib/supabase'
@@ -57,6 +58,7 @@ export function SaveForm<T>({
   const notify = useSaveNotice()
   const idPrefix = useId()
   const formRef = useRef<HTMLFormElement>(null)
+  const alertRef = useRef<HTMLElement | null>(null)
   const [pending, setPending] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [summary, setSummary] = useState<string[]>([])
@@ -70,10 +72,11 @@ export function SaveForm<T>({
   const mounted = useRef(true)
   useEffect(() => () => { mounted.current = false }, [])
 
+  // The flagged field gets the cursor, which scrolls to it; with no field, the "Not saved" message comes into view.
   const focusField = (field: string | null) => {
-    if (!field) return
-    const target = formRef.current?.querySelector<HTMLElement>(`[name="${CSS.escape(field)}"]`)
-    target?.focus()
+    const target = field ? formRef.current?.querySelector<HTMLElement>(`[name="${CSS.escape(field)}"]`) : null
+    if (target) target.focus()
+    else revealSoon(() => alertRef.current)
   }
 
   const block = (found: FieldProblem[], requestId: string) => {
@@ -121,10 +124,8 @@ export function SaveForm<T>({
       if (mounted.current) {
         setFailure(notSavedText(error, translateError))
         setRef(shortRef(requestId))
-        if (field) {
-          setErrors({ [field]: saveErrorMessage(error, translateError) })
-          focusField(field)
-        }
+        if (field) setErrors({ [field]: saveErrorMessage(error, translateError) })
+        focusField(field)
       }
       return
     } finally {
@@ -164,13 +165,13 @@ export function SaveForm<T>({
     <form ref={formRef} noValidate onSubmit={submit} onKeyDown={keyDown} onChange={changed} className={className} aria-busy={pending || undefined} {...rest}>
       <FormContext.Provider value={{ pending, errors, idPrefix }}>{children}</FormContext.Provider>
       {summary.length > 0 && (
-        <div role="alert" className={alertClass}>
+        <div ref={(el) => { alertRef.current = el }} role="alert" className={alertClass}>
           {summary.length === 1
             ? <>Not saved. {summary[0]} <RefNote value={ref} /></>
             : <>Not saved. Fix these first: <RefNote value={ref} /><ul className="mt-1 list-disc pl-5">{summary.map((message) => <li key={message}>{message}</li>)}</ul></>}
         </div>
       )}
-      {failure && <p role="alert" className={alertClass}>{failure} <RefNote value={ref} /></p>}
+      {failure && <p ref={(el) => { alertRef.current = el }} role="alert" className={alertClass}>{failure} <RefNote value={ref} /></p>}
       {savedInline && <p role="status" className={`text-emerald-700 ${compact ? 'w-full text-xs' : 'text-sm'} ${errorClassName}`}>{savedInline}</p>}
     </form>
   )

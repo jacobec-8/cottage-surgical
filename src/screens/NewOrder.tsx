@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useQueryClient } from '@tanstack/react-query'
 import { Search, Plus, Minus, Trash2, CheckCircle, CreditCard, Store } from 'lucide-react'
@@ -9,6 +9,7 @@ import { Checked, SaveForm, SubmitButton } from '../components/SaveForm'
 import { unconfirmedReply } from '../lib/saveErrors'
 import { newOrderProblems } from '../lib/formChecks/operationsChecks'
 import { supabase } from '../lib/supabase'
+import { revealSoon, toPageTop } from '../lib/reveal'
 import { invalidateOrderWorkflow } from '../lib/workflowKeys'
 import { useLocationScope } from '../contexts/LocationContext'
 import { useStaffModuleAccess } from '../lib/useStaffModuleAccess'
@@ -89,6 +90,9 @@ export default function NewOrder() {
   const canTakePayment = loadingAccess || canAccess('billing')
 
   const [result, setResult] = useState<{ order_no: number; unallocated: number; method: Method; paid: number | null } | null>(null)
+  // Each finished step brings the next one into view: store → customer → equipment.
+  const customerRef = useRef<HTMLDivElement>(null)
+  const equipmentRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     setCart([])
@@ -224,6 +228,7 @@ export default function NewOrder() {
     if (uncertain) throw uncertain
     if (!data?.ok) throw new Error(orderErrorMessage(data?.reason))
     setResult({ order_no: data.order_no, unallocated: data.unallocated, method, paid: data.paid ?? null })
+    toPageTop()
     setPaidInput(null)
     setCart([]); setCust(null); setNc({ full_name: '', phone: '', email: '', dob: '', line1: '', city: '', state: 'NY', zip: '' })
     setDeliv({ date: '', time: '', end: '', driver: '', notes: '', deposit: '' })
@@ -248,7 +253,7 @@ export default function NewOrder() {
               ? ` ${result.unallocated} item(s) had no unit in stock — allocate them from the order once units are available.`
               : ' All items were reserved from inventory.'}
           </p>
-          <button onClick={() => setResult(null)} className="mt-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 text-sm">
+          <button onClick={() => { setResult(null); toPageTop() }} className="mt-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 text-sm">
             New order
           </button>
         </div>
@@ -271,7 +276,7 @@ export default function NewOrder() {
       {isAllLocations && (
         <label className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <span>Choose the store this order is for. Customers and equipment come from that store.</span>
-          <select value="" onChange={(e) => setSelectedLocationId(e.target.value)} aria-label="Store for this order"
+          <select value="" onChange={(e) => { setSelectedLocationId(e.target.value); revealSoon(() => customerRef.current) }} aria-label="Store for this order"
             className="min-h-10 rounded-lg border border-amber-300 bg-white px-3 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
             <option value="" disabled>Select a store</option>
             {locations.map((location) => <option key={location.id} value={location.id}>{location.name}{location.is_active ? '' : ' (not open)'}</option>)}
@@ -293,7 +298,7 @@ export default function NewOrder() {
       </div>
 
       {/* Customer */}
-      <div className={card}>
+      <div ref={customerRef} className={card}>
         <div className={label}>Customer</div>
         <div className="inline-flex rounded-lg border border-slate-200 p-1 mb-3">
           {(['existing', 'new'] as const).map((m) => (
@@ -318,7 +323,7 @@ export default function NewOrder() {
                 </div>
                 <div className="mt-2 space-y-1">
                   {matchedCustomers.map((c) => (
-                    <button type="button" key={c.id} onClick={() => { setCust({ id: c.id, name: c.full_name }); setCustSearch('') }}
+                    <button type="button" key={c.id} onClick={() => { setCust({ id: c.id, name: c.full_name }); setCustSearch(''); revealSoon(() => equipmentRef.current) }}
                       className="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-50 text-sm flex justify-between gap-3">
                       <span className="min-w-0 truncate">{c.full_name}</span><span className="min-w-0 truncate text-slate-400">{[c.phone, c.email].filter(Boolean).join(' · ')}</span>
                     </button>
@@ -346,7 +351,7 @@ export default function NewOrder() {
       </div>
 
       {/* Equipment */}
-      <div className={card}>
+      <div ref={equipmentRef} className={card}>
         <div className={label}>Equipment</div>
         <div className="relative mb-2">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />

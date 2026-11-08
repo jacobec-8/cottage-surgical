@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRevealOnOpen } from '../../lib/useRevealOnOpen'
 import { parseTaken } from './paymentDue'
 
 const INPUT = 'w-28 rounded-md border border-slate-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
@@ -16,6 +17,7 @@ export default function MarkPaidForm({ method, due, deposit, pending, onConfirm,
   const [amount, setAmount] = useState(due.toFixed(2))
   const [depositTaken, setDepositTaken] = useState(deposit ? deposit.toFixed(2) : '')
   const [problem, setProblem] = useState<string | null>(null)
+  const box = useRevealOnOpen<HTMLDivElement>()
 
   const confirm = () => {
     const taken = parseTaken(amount)
@@ -31,7 +33,7 @@ export default function MarkPaidForm({ method, due, deposit, pending, onConfirm,
   }
 
   return (
-    <div className="mt-2 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm" role="group" aria-label="Confirm payment taken">
+    <div ref={box} className="mt-2 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm" role="group" aria-label="Confirm payment taken">
       <div className="mb-2 font-medium text-slate-800">{method}: how much did you take?</div>
       <div className="flex flex-wrap items-center gap-3">
         <label className="flex items-center gap-1.5 text-slate-600">Payment $

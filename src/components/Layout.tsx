@@ -224,7 +224,7 @@ export default function Layout({ children }: { children: ReactNode }) {
       )}
 
       <div className="flex-1 min-w-0 flex flex-col">
-        <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-slate-200 bg-white px-3 py-3 sm:px-6 lg:static lg:h-[72px] lg:shrink-0 lg:justify-end lg:gap-4 lg:py-0 2xl:gap-6">
+        <header data-sticky-header className="sticky top-0 z-20 flex items-center gap-3 border-b border-slate-200 bg-white px-3 py-3 sm:px-6 lg:static lg:h-[72px] lg:shrink-0 lg:justify-end lg:gap-4 lg:py-0 2xl:gap-6">
           <div className="flex min-w-0 items-center gap-2 lg:hidden">
             <button
               type="button"

@@ -18,6 +18,7 @@ import { dispatchOrderEmails } from '../../lib/customerEmails'
 import { checkoutProblems } from '../../lib/formChecks/peopleChecks'
 import { commonPickupLocations, pickupLocationSelection } from '../../lib/fulfillment'
 import { publicSupabase } from '../../lib/publicSupabase'
+import { revealSoon, toPageTop } from '../../lib/reveal'
 import { newRequestId, newSaveKey, shortRef, withRequestId } from '../../lib/requestId'
 import { UnconfirmedSave, unconfirmedReply } from '../../lib/saveErrors'
 import { failureCode, failureLayer } from '../../lib/saveFailure'
@@ -48,6 +49,9 @@ export default function Checkout() {
   const submittingRef = useRef(false)
   const [error, setError] = useState('')
   const formRef = useRef<HTMLFormElement>(null)
+  // Where the order goes (store or address), and the reason a submit failed: each comes into view when it changes.
+  const placeRef = useRef<HTMLDivElement>(null)
+  const errorRef = useRef<HTMLDivElement>(null)
   const [marks, setMarks] = useState<Record<string, string>>({})
   const [done, setDone] = useState<{ numbers: number[]; fulfillment: Fulfillment } | null>(null)
   const [notice, setNotice] = useState('')
@@ -67,6 +71,14 @@ export default function Checkout() {
   const selectedPickupLocation = pickupLocations.find((location) => location.id === pickupLocationId)
   const set = (k: keyof typeof form) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm({ ...form, [k]: e.target.value })
+  const chooseFulfillment = (choice: Fulfillment) => {
+    setFulfillment(choice)
+    revealSoon(() => placeRef.current)
+  }
+  const showError = (message: string) => {
+    setError(message)
+    revealSoon(() => errorRef.current)
+  }
 
   // Back from Stripe without paying for a combined payment (128): close that attempt so
   // its hold can't block the retry. Paid after all: go to the confirmation.
@@ -135,7 +147,9 @@ export default function Checkout() {
     setMarks(fieldErrorsOf(found))
     const requestId = newRequestId()
     if (found.length) {
-      setError(`${found.map((p) => p.message).join(' ')} Ref ${shortRef(requestId)}`)
+      // A flagged field gets the cursor (and the screen goes to it); otherwise the message is shown.
+      if (found.some((p) => p.field)) setError(`${found.map((p) => p.message).join(' ')} Ref ${shortRef(requestId)}`)
+      else showError(`${found.map((p) => p.message).join(' ')} Ref ${shortRef(requestId)}`)
       logSaveFailure(publicSupabase, { requestId, form: 'Checkout', field: found.find((p) => p.field)?.field ?? null, layer: 'check', code: `fields:${found.map((p) => p.field ?? 'form').join(',')}`, message: found.map((p) => p.message).join(' ') })
       focusFirstProblem(formRef.current, found)
       return
@@ -279,9 +293,10 @@ export default function Checkout() {
       clearCheckoutDraft()
       forgetCheckoutKeys()
       setDone({ numbers: [data.order_no], fulfillment })
+      toPageTop()
     }) } catch (e) {
       logSaveFailure(publicSupabase, { requestId, form: 'Checkout', field: null, layer: failureLayer(e), code: failureCode(e), message: (e as Error).message })
-      setError(`${(e as Error).message} Ref ${shortRef(requestId)}`)
+      showError(`${(e as Error).message} Ref ${shortRef(requestId)}`)
     } finally {
       submittingRef.current = false
       setBusy(false)
@@ -345,13 +360,13 @@ export default function Checkout() {
                   <legend className="mb-2 text-sm font-semibold text-navy">How would you like to receive your order?</legend>
                   <div className="grid grid-cols-2 gap-2">
                     <label className={choiceClass(fulfillment === 'pickup', pickupAvailable)}>
-                      <input type="radio" name="fulfillment-choice" value="pickup" disabled={!pickupAvailable} checked={fulfillment === 'pickup'} onChange={() => setFulfillment('pickup')} className="sr-only" />
+                      <input type="radio" name="fulfillment-choice" value="pickup" disabled={!pickupAvailable} checked={fulfillment === 'pickup'} onChange={() => chooseFulfillment('pickup')} className="sr-only" />
                       <Store size={20} className="mb-2 text-navy" />
                       <span className="block text-sm font-semibold text-navy">In-store pickup</span>
                       <span className="mt-0.5 block text-xs leading-5 text-slate-500">{pickupAvailable ? 'Choose a store location.' : 'Not available for this cart.'}</span>
                     </label>
                     <label className={choiceClass(fulfillment === 'delivery', deliveryAvailable)}>
-                      <input type="radio" name="fulfillment-choice" value="delivery" disabled={!deliveryAvailable} checked={fulfillment === 'delivery'} onChange={() => setFulfillment('delivery')} className="sr-only" />
+                      <input type="radio" name="fulfillment-choice" value="delivery" disabled={!deliveryAvailable} checked={fulfillment === 'delivery'} onChange={() => chooseFulfillment('delivery')} className="sr-only" />
                       <Truck size={20} className="mb-2 text-navy" />
                       <span className="block text-sm font-semibold text-navy">Delivery</span>
                       <span className="mt-0.5 block text-xs leading-5 text-slate-500">Delivered to your address.</span>
@@ -359,7 +374,7 @@ export default function Checkout() {
                   </div>
                 </fieldset>
                 {fulfillment === 'pickup' ? (
-                  <div className="space-y-2">
+                  <div ref={placeRef} className="space-y-2">
                     <label className="block text-sm font-semibold text-navy" htmlFor="pickup-location">Pickup location</label>
                     <Checked name="pickupLocation" message={false}><select id="pickup-location" value={pickupLocationId} onChange={(event) => setPickupLocationId(event.target.value)} className={`w-full ${INPUT}`}>
                       {pickupLocations.length > 1 && <option value="">Select a pickup location…</option>}
@@ -374,7 +389,7 @@ export default function Checkout() {
                     )}
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 gap-3">
+                  <div ref={placeRef} className="grid grid-cols-2 gap-3">
                     <Checked name="line1" message={false}><input placeholder="Delivery address" value={form.line1} onChange={set('line1')} className={`col-span-2 ${INPUT}`} /></Checked>
                     <Checked name="city" message={false}><input placeholder="City" value={form.city} onChange={set('city')} className={INPUT} /></Checked>
                     <Checked name="zip" message={false}><input placeholder="ZIP" inputMode="numeric" value={form.zip} onChange={set('zip')} className={INPUT} /></Checked>
@@ -404,7 +419,7 @@ export default function Checkout() {
                 )}
                 {priceNotice && <div role="status" className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">Price updated — {priceNotice}</div>}
                 {problem && !error && <div role="alert" className="text-sm text-red-600">{problem}</div>}
-                {error && <div role="alert" className="text-sm text-red-600">{error}</div>}
+                {error && <div ref={errorRef} role="alert" className="text-sm text-red-600">{error}</div>}
                 <button type="submit" disabled={busy || releasing || Boolean(unsettled) || Boolean(problem)} className="w-full bg-terracotta hover:opacity-90 text-white rounded-lg py-3 font-semibold disabled:opacity-50">
                   {busy
                     ? (payment === 'online' ? 'Redirecting…' : 'Submitting…')
