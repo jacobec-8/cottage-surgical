@@ -128,7 +128,7 @@ export default function Orders() {
     <div>
       <h2 className="sr-only">Orders</h2>
       <p className="text-slate-500 text-sm mb-5">
-        New website requests are pinned at the top until you approve or decline them. Open includes approved rentals awaiting delivery and rentals currently out.
+        New website requests are pinned at the top; open one to take its next step. Open includes approved rentals awaiting delivery and rentals currently out.
         Use Schedule pickup to queue a return on the Delivery board. Unpaid checkouts stay under Unpaid.
       </p>
 
