@@ -1,6 +1,7 @@
 // Staff-readable text for the database's dispatch rules (migration 075).
 
 export const DRIVER_BUSY_MSG = 'That driver already has a stop at that time. Choose another time or driver.'
+export const PAYMENT_FIRST_MSG = 'This order isn’t paid yet. Take payment in store, by phone or online before a driver is assigned.'
 
 type DbError = { code?: string; message?: string } | null | undefined
 
@@ -12,6 +13,8 @@ export function dispatchErrorMessage(error: DbError, fallback = 'Couldn’t save
   // driver_branch: is the database's code for this until migration 102 renames it.
   if (text.startsWith('driver_location:') || text.startsWith('driver_branch:')) return 'That driver isn’t set up to work at this location. An owner or admin can change where they work on the Drivers page.'
   if (text.startsWith('driver_inactive:')) return 'That driver isn’t active. Choose another driver.'
+  // Drivers don't take payment (140).
+  if (text.startsWith('payment_required:')) return PAYMENT_FIRST_MSG
   return fallback
 }
 

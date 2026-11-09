@@ -14,6 +14,7 @@ type LifecycleResult = { ok?: boolean; reason?: string; unallocated?: number; ac
 export function lifecycleError(data: LifecycleResult): string {
   switch (data?.reason) {
     case 'no_driver': return 'Assign a driver and Save before starting.'
+    case 'payment_required': return 'This order isn’t paid yet. Take payment in store, by phone or online and mark the order paid first.'
     case 'address_required': return 'This stop has no address. Ask the store to add one before starting.'
     case 'photo_required': return 'A photo is required to complete.'
     case 'photo_missing': return 'The proof photo didn’t upload. Take the photo again.'

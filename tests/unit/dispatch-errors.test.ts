@@ -1,9 +1,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { DRIVER_BUSY_MSG, dispatchErrorMessage, windowProblem } from '../../src/lib/dispatchErrors.ts'
+import { DRIVER_BUSY_MSG, PAYMENT_FIRST_MSG, dispatchErrorMessage, windowProblem } from '../../src/lib/dispatchErrors.ts'
 
 test('3LOC-003: an overlapping booking explains the conflict', () => {
   assert.equal(dispatchErrorMessage({ code: '23P01', message: 'conflicting key value violates exclusion constraint "deliveries_driver_no_overlap"' }), DRIVER_BUSY_MSG)
+  assert.equal(dispatchErrorMessage({ code: 'P0001', message: 'payment_required: This order isn\'t paid yet.' }), PAYMENT_FIRST_MSG)
 })
 
 test('other dispatch rules map to plain messages', () => {
