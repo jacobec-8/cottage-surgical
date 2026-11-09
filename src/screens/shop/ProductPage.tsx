@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronRight } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { PRODUCT_FIELDS, rentalPriceText, type Product } from '../../lib/shop'
+import { PRODUCT_FIELDS, WEBSITE_PRODUCTS, rentalPriceText, type Product } from '../../lib/shop'
 import { canBuy, canRent, cartItemFor } from '../../lib/pairings'
 import ShopHeader from '../../components/shop/ShopHeader'
 import ShopFooter from '../../components/shop/ShopFooter'
@@ -31,11 +31,11 @@ export default function ProductPage({
   const { data: p, isLoading } = useQuery({
     queryKey: ['shop_product', handle],
     queryFn: async () => {
-      let { data } = await supabase.from('equipment_items').select(PRODUCT_FIELDS)
-        .eq('shopify_handle', handle).eq('is_active', true).eq('storefront_listed', true).maybeSingle()
+      let { data } = await supabase.from(WEBSITE_PRODUCTS).select(PRODUCT_FIELDS)
+        .eq('shopify_handle', handle).maybeSingle()
       if (!data) {
-        const r = await supabase.from('equipment_items').select(PRODUCT_FIELDS)
-          .eq('id', handle).eq('is_active', true).eq('storefront_listed', true).maybeSingle()
+        const r = await supabase.from(WEBSITE_PRODUCTS).select(PRODUCT_FIELDS)
+          .eq('id', handle).maybeSingle()
         data = r.data
       }
       return (data as unknown as Product) ?? null

@@ -2,7 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { publicSupabase } from '../../lib/publicSupabase'
-import { PRODUCT_FIELDS, type Product } from '../../lib/shop'
+import { PRODUCT_FIELDS, WEBSITE_PAIRINGS, WEBSITE_PRODUCTS, type Product } from '../../lib/shop'
 import { suggestionsFor, type Pairing } from '../../lib/pairings'
 
 /**
@@ -19,15 +19,15 @@ export function usePairedProducts(productIds: readonly string[]): Product[] {
     // Keep the last answer while the cart changes; suggestionsFor drops what no longer applies.
     placeholderData: (previous) => previous,
     queryFn: async () => {
-      const pairings = await publicSupabase.from('product_pairings')
+      const pairings = await publicSupabase.from(WEBSITE_PAIRINGS)
         .select('equipment_item_id,paired_item_id,position')
-        .in('equipment_item_id', ids).is('location_id', null)
+        .in('equipment_item_id', ids)
       if (pairings.error) throw pairings.error
       const rows = (pairings.data ?? []) as Pairing[]
       const pickedIds = [...new Set(rows.map((row) => row.paired_item_id))]
       if (pickedIds.length === 0) return { rows, listed: [] as Product[] }
-      const products = await publicSupabase.from('equipment_items').select(PRODUCT_FIELDS)
-        .in('id', pickedIds).eq('is_active', true).eq('storefront_listed', true)
+      const products = await publicSupabase.from(WEBSITE_PRODUCTS).select(PRODUCT_FIELDS)
+        .in('id', pickedIds)
       if (products.error) throw products.error
       return { rows, listed: (products.data ?? []) as unknown as Product[] }
     },

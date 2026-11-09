@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
-import { PRODUCT_FIELDS, type PickupLocation, type Product } from '../../lib/shop'
+import { PRODUCT_FIELDS, WEBSITE_PRODUCTS, type PickupLocation, type Product } from '../../lib/shop'
 import { publicSupabase } from '../../lib/publicSupabase'
 import { withLatestProduct } from '../../lib/cartRefresh'
 import { clearCheckoutDraft, forgetCheckoutKeys, forgetPendingCheckout, pendingCheckout } from '../../lib/checkoutSession'
@@ -102,8 +102,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const refreshFromStore = useCallback(() => {
     const itemIds = [...new Set(itemsRef.current.map((item) => item.id))]
     if (itemIds.length === 0) return
-    void publicSupabase.from('equipment_items').select(PRODUCT_FIELDS)
-      .in('id', itemIds).eq('is_active', true)
+    void publicSupabase.from(WEBSITE_PRODUCTS).select(PRODUCT_FIELDS)
+      .in('id', itemIds)
       .then(({ data, error }) => {
         if (error || !data) return
         const products = new Map((data as unknown as Product[]).map((product) => [product.id, product]))

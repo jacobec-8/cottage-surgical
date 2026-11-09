@@ -104,7 +104,7 @@ const server = createServer((request, response) => {
     return
   }
 
-  if (url.pathname === '/rest/v1/equipment_items') {
+  if (url.pathname === '/rest/v1/website_products') {
     const handle = url.searchParams.get('shopify_handle')?.replace(/^eq\./, '')
     const id = url.searchParams.get('id')?.replace(/^eq\./, '')
     const requestedProduct = handle || id

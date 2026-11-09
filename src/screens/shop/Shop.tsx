@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { Search, Check, Truck, Phone, ArrowRight } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { PRODUCT_FIELDS, type Product } from '../../lib/shop'
+import { PRODUCT_FIELDS, WEBSITE_PRODUCTS, type Product } from '../../lib/shop'
 import ShopHeader from '../../components/shop/ShopHeader'
 import ShopFooter from '../../components/shop/ShopFooter'
 import ProductCard from '../../components/shop/ProductCard'
@@ -61,8 +61,8 @@ export default function Shop({ initialProducts }: { initialProducts?: Product[] 
     queryKey: ['shop_catalog'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('equipment_items').select(PRODUCT_FIELDS)
-        .eq('is_active', true).eq('storefront_listed', true).order('category').order('name')
+        .from(WEBSITE_PRODUCTS).select(PRODUCT_FIELDS)
+        .order('category').order('name')
       if (error) throw error
       return data as unknown as Product[]
     },
