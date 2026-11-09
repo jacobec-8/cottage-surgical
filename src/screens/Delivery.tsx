@@ -14,20 +14,14 @@ import OrderDetailPanel from './orders/OrderDetailPanel'
 import { useSelectedOrder } from './orders/useSelectedOrder'
 import { useLocationScope } from '../contexts/LocationContext'
 import { PaymentBadge } from './orders/badges'
-import { DRIVER_LOCATION_FIELDS } from '../lib/driverLocations'
 import MissedStop from './delivery/MissedStop'
 import NewStopPanel from './delivery/NewStopPanel'
 import ProofPhoto from './delivery/ProofPhoto'
 import StaffStopCard from './delivery/StaffStopCard'
+import { STOP_SELECT, useActiveDrivers } from './delivery/stopData'
 import { addressLabel, clickableCard, customerLabel, DetailsHint, lifecycleError, stopOpen, type OpenStop } from './delivery/cardParts'
 import { businessToday, fmtStopDate, isLate, latestAttempt, reasonLabel, sortStops, stopTone } from './delivery/stopStatus'
-import { hasAddress, type Deliv, type DriverOption } from './delivery/types'
-
-const SELECT =
-  'id,leg_type,status,scheduled_date,window_start,window_end,started_at,completed_at,address_line1,address_city,address_state,address_zip,driver_id,requires_driver,location_id,location:pickup_locations!deliveries_location_id_fkey(name),' +
-  'driver:drivers!deliveries_driver_id_fkey(first_name,last_name),' +
-  'order:rental_orders(id,order_no,payment_status,payment_preference,customer:customers(full_name),rental_line_items(quantity,equipment:equipment_items(name,image_url))),' +
-  'delivery_photos(storage_path,captured_at,notes),attempts:stop_attempts(reason,note,created_at)'
+import { hasAddress, type Deliv } from './delivery/types'
 
 export default function Delivery() {
   const { profile } = useAuth()
@@ -53,20 +47,7 @@ export default function Delivery() {
 
   const contacts = useDriverStopContacts(isDriver)
 
-  // Every driver this scope can assign, home or shared. Each stop lists only
-  // the drivers set up for its location (3LOC-002).
-  const drivers = useQuery({
-    queryKey: ['drivers', 'active', 'locations'],
-    enabled: !isDriver,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('drivers')
-        .select(`id,first_name,last_name,user_id,${DRIVER_LOCATION_FIELDS}`)
-        .eq('status', 'active')
-        .order('first_name')
-      return (data ?? []) as DriverOption[]
-    },
-  })
+  const drivers = useActiveDrivers(!isDriver)
   const { data, isLoading, error } = useQuery({
     queryKey: ['deliveries', view, stopKind, selectedLocationId],
     refetchOnMount: 'always',        // never open the board on a stale cached list
@@ -74,7 +55,7 @@ export default function Delivery() {
     refetchInterval: 20_000,         // fallback poll behind the realtime subscription…
     refetchIntervalInBackground: true, // …that keeps ticking even in a background tab
     queryFn: async () => {
-      let q = supabase.from('deliveries').select(SELECT)
+      let q = supabase.from('deliveries').select(STOP_SELECT)
       // A driver's queue is every stop assigned to them, at any location they work at.
       if (selectedLocationId && !isDriver) q = q.eq('location_id', selectedLocationId)
       if (!isDriver && stopKind !== 'all') q = q.eq('leg_type', stopKind)

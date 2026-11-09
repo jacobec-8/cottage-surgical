@@ -1108,5 +1108,22 @@ DO $$ BEGIN
 EXCEPTION WHEN insufficient_privilege THEN NULL; END $$;
 RESET ROLE;
 
+-- ── The request flow's steps, in the order the screen offers them ───────────
+SELECT test_as('');
+INSERT INTO rental_orders (id, customer_id, location_id, status, source, order_type, fulfillment_method, payment_status, payment_preference, address_line1, address_city, address_state, address_zip)
+VALUES ('a5000000-0000-0000-0000-0000000000f9', 'a4000000-0000-0000-0000-0000000000a1', 'a1000000-0000-0000-0000-0000000000a1', 'requested', 'storefront', 'rental', 'delivery', 'unpaid', 'in_store', '1 Main St', 'Woodbury', 'NY', '11797');
+INSERT INTO rental_line_items (order_id, equipment_item_id, line_type, quantity, monthly_rate, is_active) VALUES ('a5000000-0000-0000-0000-0000000000f9', 'a7000000-0000-0000-0000-0000000000e1', 'rental', 1, 99, false);
+UPDATE equipment_location_inventory SET quantity_on_hand = 5 WHERE equipment_item_id = 'a7000000-0000-0000-0000-0000000000e1' AND location_id = 'a1000000-0000-0000-0000-0000000000a1';
+SELECT test_as('a2000000-0000-0000-0000-000000000003'); SET ROLE authenticated;
+CREATE TEMP TABLE flow_pay AS SELECT set_order_payment_state('a5000000-0000-0000-0000-0000000000f9', 'paid_in_store', 99, NULL) AS r;
+CREATE TEMP TABLE flow_ready AS SELECT confirm_rental_request('a5000000-0000-0000-0000-0000000000f9') AS r;
+UPDATE deliveries SET driver_id = 'a3000000-0000-0000-0000-000000000001', scheduled_date = CURRENT_DATE + 4 WHERE order_id = 'a5000000-0000-0000-0000-0000000000f9' AND leg_type = 'delivery';
+RESET ROLE;
+SELECT test_as('');
+SELECT test_assert((SELECT (r->>'ok')::boolean FROM flow_pay), 'step 1: staff mark a delivery request paid: ' || (SELECT r::text FROM flow_pay));
+SELECT test_assert((SELECT (r->>'ok')::boolean FROM flow_ready), 'step 2: the paid request is set aside and gets its stop: ' || (SELECT r::text FROM flow_ready));
+SELECT test_assert((SELECT status = 'scheduled' AND driver_id = 'a3000000-0000-0000-0000-000000000001' FROM deliveries WHERE order_id = 'a5000000-0000-0000-0000-0000000000f9' AND leg_type = 'delivery'),
+  'step 2: the stop is scheduled with its driver');
+
 SELECT test_as('');
 SELECT 'roles assertions passed' AS result;

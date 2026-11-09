@@ -24,6 +24,8 @@ import MoneyRecordsSection from '../reports/MoneyRecordsSection'
 import MarkPaidForm from './MarkPaidForm'
 import { amountDue, depositHeld } from './paymentDue'
 import { usePaymentState, type SettablePaymentState } from './usePaymentState'
+import RequestFlow from '../requests/RequestFlow'
+import { nextStep } from '../../lib/requestFlow'
 
 type Props = {
   orderId: string
@@ -190,6 +192,7 @@ function PanelBody({ o, onClose, actions, focusDeliveryId }: BodyProps) {
       </header>
 
       <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+        {backofficeLinks && <RequestFlow o={o} payment={payment} onMessage={setMsg} />}
         <Section title="Summary">
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3 rounded-lg border border-slate-200 bg-white p-3">
             <Field label={isRental ? 'Monthly rate' : 'Total'}>{amountOf(o)}</Field>
@@ -205,7 +208,7 @@ function PanelBody({ o, onClose, actions, focusDeliveryId }: BodyProps) {
             <Field label="Created">{fmtDateTime(o.created_at)}</Field>
             <Field label="Last updated">{fmtDateTime(o.updated_at)}</Field>
           </div>
-          {payment.confirming && (
+          {payment.confirming && !(backofficeLinks && nextStep(o) === 'pay') && (
             <MarkPaidForm method={PAID_LABEL[payment.confirming]} due={amountDue(o)} deposit={depositHeld(o.deposits)} pending={payment.pending}
               onConfirm={payment.confirm} onCancel={payment.cancel} />
           )}
