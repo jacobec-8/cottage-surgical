@@ -20,7 +20,7 @@ export function OrderSummary({ r }: { r: Receipt }) {
     <Section title="Order">
       <div className={`${BOX} grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3 p-3`}>
         <Field label="Type">{isRental ? 'Rental' : 'Purchase'}</Field>
-        <Field label="Status">{statusLabel(o.status)}</Field>
+        <Field label="Status"><span className="capitalize">{statusLabel(o.status)}</span></Field>
         <Field label="Placed">{fmtDateTime(o.created_at)}</Field>
         <Field label="Placed through">{sourceLabel(o.source) ?? '—'}{o.placed_by && o.source !== 'storefront' ? ` · ${o.placed_by}` : ''}</Field>
         <Field label="Fulfillment">{fulfillment}</Field>
@@ -103,7 +103,7 @@ export function PaymentBlock({ r }: { r: Receipt }) {
           <Field label="Cash received (incl. deposits)">{fmtMoney(received)}</Field>
           {r.deposits.map((d, i) => <Field key={i} label="Deposit">{fmtMoney(d.amount)} · {d.status.replace(/_/g, ' ')}</Field>)}
           {r.charges.map((c, i) => (
-            <Field key={`c${i}`} label="Monthly charge">{fmtMoney(c.amount)} · {c.status}{c.next_due_date ? ` · next ${fmtDate(c.next_due_date)}` : ''}</Field>
+            <Field key={`c${i}`} label="Monthly charge">{fmtMoney(c.amount)} · {c.status.replace(/_/g, ' ')}{c.next_due_date ? ` · next ${fmtDate(c.next_due_date)}` : ''}</Field>
           ))}
         </div>
         {r.money.length === 0 ? <div className={EMPTY}>No money records yet.</div> : (

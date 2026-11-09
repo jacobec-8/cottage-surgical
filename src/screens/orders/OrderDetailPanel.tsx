@@ -166,11 +166,12 @@ function PanelBody({ o, onClose, actions, focusDeliveryId }: BodyProps) {
                 {verify.isPending ? 'Checking…' : 'Verify payment'}
               </button>
             )}
-            <CloseOutControls
+            {/* A request is declined (above), not cancelled. */}
+            {!isRequest && <CloseOutControls
               o={o}
               busy={closeOrder.isPending}
               onConfirm={(kind, reason) => closeOrder.mutate({ kind, orderId: o.id, reason })}
-            />
+            />}
           </div>
         )}
         {canPickup && askAddress && (
