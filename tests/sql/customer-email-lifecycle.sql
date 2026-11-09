@@ -102,3 +102,16 @@ INSERT INTO rental_line_items(order_id,equipment_item_id,line_type,quantity,mont
 SELECT test_assert((SELECT bool_and(html_body LIKE '%HARBOR &lt;MEDICAL&gt;%' AND text_body LIKE '%Questions? Call 555-0100.%'
   AND html_body NOT LIKE '%COTTAGE SURGICAL%' AND text_body NOT LIKE '%516-367-9030%') FROM customer_email_outbox
   WHERE order_id='30000000-0000-0000-0000-000000000070'),'other business email uses its own escaped name and phone');
+-- Branded template (142): an owner without a logo gets their name on navy, never another owner's logo.
+SELECT test_assert((SELECT bool_and(html_body NOT LIKE '%<img%' AND html_body NOT LIKE '%cottage-logo%'
+  AND html_body LIKE '%background:#16294d%' AND html_body LIKE '%1 Harbor St, Huntington%'
+  AND html_body LIKE '%href="tel:5550100"%' AND text_body LIKE '%-- %Harbor%1 Harbor St, Huntington%') FROM customer_email_outbox
+  WHERE order_id='30000000-0000-0000-0000-000000000070'),'no logo: the name on navy, the pharmacy''s address in the footer, tap to call');
+UPDATE pharmacy_settings SET logo_url='https://harbor.example/logo.png' WHERE business_id='70000000-0000-0000-0000-000000000001';
+SELECT queue_customer_status_email('30000000-0000-0000-0000-000000000070','branding_check','Branding check','Branding check','Logo test');
+SELECT test_assert((SELECT html_body LIKE '%<img src="https://harbor.example/logo.png"%' AND html_body LIKE '%HARBOR &lt;MEDICAL&gt;%'
+  FROM customer_email_outbox WHERE dedupe_key='order_30000000-0000-0000-0000-000000000070_branding_check'),'with a logo: the owner''s own logo, and the pharmacy''s name under it');
+UPDATE pharmacy_settings SET phone='555-0100 ext 4' WHERE business_id='70000000-0000-0000-0000-000000000001';
+SELECT queue_customer_status_email('30000000-0000-0000-0000-000000000070','extension_check','Ext check','Ext check','Ext test');
+SELECT test_assert((SELECT html_body LIKE '%href="tel:5550100"%' AND html_body LIKE '%555-0100 ext 4%'
+  FROM customer_email_outbox WHERE dedupe_key='order_30000000-0000-0000-0000-000000000070_extension_check'),'tap to call dials the number, not the extension');
