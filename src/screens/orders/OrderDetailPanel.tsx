@@ -1,7 +1,8 @@
 'use client'
 
 import { useRef, useState, type ReactNode } from 'react'
-import { Loader2, Pencil, X } from 'lucide-react'
+import Link from 'next/link'
+import { FileText, Loader2, Pencil, X } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useDialogFocus } from '../../lib/useDialogFocus'
 import { useSlideClose } from '../../lib/useSlideClose'
@@ -122,9 +123,17 @@ function PanelBody({ o, onClose, actions, focusDeliveryId }: BodyProps) {
           </div>
         </div>
 
-        {(actions || canPickup || canVerify || !isClosed) && (
+        {(actions || canPickup || canVerify || !isClosed || backofficeLinks) && (
           <div className="mt-3 flex items-center gap-2 flex-wrap">
             {actions}
+            {backofficeLinks && (
+              <Link
+                href={`/orders/${o.id}/receipt`}
+                className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-300 px-3 text-sm text-slate-700 hover:bg-slate-50"
+              >
+                <FileText size={14} /> Receipt
+              </Link>
+            )}
             {backofficeLinks && isRental && !isClosed && (
               <button
                 type="button"
