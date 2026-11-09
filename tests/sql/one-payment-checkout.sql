@@ -53,6 +53,9 @@ INSERT INTO public.businesses (id, name, slug) VALUES ('c0000000-0000-0000-0000-
 INSERT INTO public.storefronts (business_id, slug, is_default) VALUES ('c0000000-0000-0000-0000-00000000000a', 'checkout-site', true);
 INSERT INTO public.pickup_locations (id, name, business_id, slug, address_line1, address_city, address_zip, delivery_zips, online_retail_enabled) VALUES
  ('c1000000-0000-0000-0000-000000000001', 'Melville Pharmacy', 'c0000000-0000-0000-0000-00000000000a', 'melville', '1 Main St', 'Melville', '11747', '{11747}', true);
+-- The website carries these pharmacies (132).
+INSERT INTO public.storefront_pharmacies (location_id, storefront_id)
+SELECT l.id, s.id FROM public.pickup_locations l, public.storefronts s WHERE s.slug = 'checkout-site' AND l.id IN ('c1000000-0000-0000-0000-000000000001');
 SELECT set_config('cottage.login_create', '1', false);
 INSERT INTO auth.users (id, email) VALUES ('c2000000-0000-0000-0000-000000000001', 'checkout-staff@example.invalid');
 SELECT set_config('cottage.login_create', '', false);

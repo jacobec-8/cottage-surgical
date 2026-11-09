@@ -15,7 +15,7 @@ type Props = {
   stock: number
   locationId: string | null
   storeName: string | null
-  /** False when the selected store is not open to customers. */
+  /** False when the selected pharmacy is inactive or not on the website. */
   storeOpen: boolean
   /** Field to open for editing straight away (the row's pencil). */
   startField?: DetailField | null

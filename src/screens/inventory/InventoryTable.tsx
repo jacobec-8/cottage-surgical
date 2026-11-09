@@ -10,7 +10,7 @@ import { stockTone, storesStockTone, TONE_CARD, TONE_TEXT } from '../../lib/stat
 import type { InventoryItem } from '../Inventory'
 import ProductPanel from './ProductPanel'
 
-type Store = { name: string; is_active: boolean }
+type Store = { name: string; is_active: boolean; on_website: boolean }
 
 type Props = {
   items: InventoryItem[]
@@ -135,7 +135,7 @@ export default function InventoryTable({ items, expandedId, onToggle, editTarget
                 </div>
                 <div className="flex shrink-0 items-center justify-end gap-1">{actions(it)}</div>
               </div>
-              {open && <ProductPanel key={editTarget?.id === it.id ? `edit-${editTarget.n}` : it.id} startField={editTarget?.id === it.id ? (locationId ? 'stock' : 'name') : null} item={it} stock={stock} locationId={locationId} storeName={location?.name ?? null} storeOpen={location?.is_active ?? true} />}
+              {open && <ProductPanel key={editTarget?.id === it.id ? `edit-${editTarget.n}` : it.id} startField={editTarget?.id === it.id ? (locationId ? 'stock' : 'name') : null} item={it} stock={stock} locationId={locationId} storeName={location?.name ?? null} storeOpen={location ? location.is_active && location.on_website : true} />}
             </li>
           )
         })}

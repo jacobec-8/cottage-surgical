@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Building2, ChevronRight, MapPin, Plus, Store, Users } from 'lucide-react'
+import { Building2, ChevronRight, Globe, MapPin, Plus, Store, Users } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import NewPharmacyForm from './locations/NewPharmacyForm'
@@ -28,6 +28,7 @@ type Location = {
   fulfillment_mode: 'pickup_and_delivery' | 'pickup_only'
   partner_type: 'owned' | 'partner'
   is_active: boolean
+  on_website: boolean
   users: LocationUser[]
 }
 
@@ -39,7 +40,7 @@ export default function Locations() {
     queryFn: async () => {
       const { data, error } = await supabase.from('pickup_locations').select(
         'id,name,address_line1,address_line2,address_city,address_state,address_zip,phone,instructions,' +
-        'fulfillment_mode,partner_type,is_active,' +
+        'fulfillment_mode,partner_type,is_active,on_website,' +
         'users:profiles!profiles_location_id_fkey(id,email,role,is_active),business:businesses!inner(is_active)',
       ).eq('business.is_active', true).order('name')
       if (error) throw error
@@ -64,7 +65,7 @@ export default function Locations() {
           <Link key={location.id} href={`/locations/${location.id}`} className={`group rounded-2xl border border-slate-200 bg-white p-5 transition hover:border-blue-300 hover:shadow-sm ${location.is_active ? '' : 'opacity-60'}`}>
             <div className="flex items-start justify-between gap-3"><h2 className="text-lg font-semibold">{location.name}</h2><span className="grid h-10 w-10 place-items-center rounded-lg text-blue-600 group-hover:bg-blue-50" aria-hidden="true"><ChevronRight size={18} /></span></div>
             <div className="mt-3 flex items-start gap-2 text-sm text-slate-600"><MapPin size={15} className="mt-0.5 shrink-0" /><span>{location.address_line1}{location.address_line2 ? `, ${location.address_line2}` : ''}<br />{location.address_city}, {location.address_state} {location.address_zip}</span></div>
-            <div className="mt-4 flex flex-wrap gap-2 text-xs"><Pill icon={Store}>{location.fulfillment_mode === 'pickup_only' ? 'Pickup only location' : 'Pickup + delivery location'}</Pill><Pill icon={Users}>{location.partner_type === 'partner' ? 'Partner pickup store' : 'Owned store'}</Pill><Pill icon={Users}>{location.users.length === 1 ? '1 user' : `${location.users.length} users`}</Pill></div>
+            <div className="mt-4 flex flex-wrap gap-2 text-xs"><Pill icon={Store}>{location.fulfillment_mode === 'pickup_only' ? 'Pickup only location' : 'Pickup + delivery location'}</Pill><Pill icon={Users}>{location.partner_type === 'partner' ? 'Partner pickup store' : 'Owned store'}</Pill><Pill icon={Users}>{location.users.length === 1 ? '1 user' : `${location.users.length} users`}</Pill>{location.on_website && <Pill icon={Globe}>On the website</Pill>}</div>
           </Link>
         ))}
       </div>

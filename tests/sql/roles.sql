@@ -436,6 +436,10 @@ RESET ROLE;
 
 -- ── The website wall (122): the public sees one owner, and only that owner ─
 INSERT INTO public.storefronts (business_id, slug, is_default) VALUES ('a0000000-0000-0000-0000-00000000000a', 'owner-a-site', true);
+SELECT test_as('');
+INSERT INTO public.storefront_pharmacies (location_id, storefront_id)
+SELECT l.id, s.id FROM pickup_locations l, storefronts s
+ WHERE s.slug = 'owner-a-site' AND l.id IN ('a1000000-0000-0000-0000-0000000000a1', 'a1000000-0000-0000-0000-0000000000a2');
 UPDATE equipment_items SET is_rentable = true, pickup_enabled = true, delivery_enabled = true, pickup_rental_price = 40, delivery_rental_price = 50
  WHERE id IN ('a7000000-0000-0000-0000-00000000000a', 'a7000000-0000-0000-0000-00000000000b');
 INSERT INTO public.equipment_location_inventory (equipment_item_id, location_id, quantity_on_hand, pickup_enabled, pickup_rental_price)
@@ -575,6 +579,108 @@ RESET ROLE;
 SELECT test_assert((SELECT encrypted_password = extensions.crypt('password-34', encrypted_password) FROM auth.users
                      WHERE email = 'qa-new-person@staff-login.cottagesurgical.invalid'),
   'the new password is the one stored');
+
+
+-- ── Website pools (132): the website carries the pharmacies the owner puts on it ─
+SELECT test_as('');
+-- A2 moves to Melville; both of owner A's pharmacies deliver anywhere and stock Wheelchair A
+-- at their own price. Bed A is stocked only at A2.
+UPDATE pickup_locations SET address_zip = '11747', delivers_anywhere = true WHERE id = 'a1000000-0000-0000-0000-0000000000a2';
+INSERT INTO equipment_location_inventory (equipment_item_id, location_id, quantity_on_hand, pickup_enabled, pickup_rental_price)
+VALUES ('a7000000-0000-0000-0000-00000000000a', 'a1000000-0000-0000-0000-0000000000a2', 3, true, 41) ON CONFLICT DO NOTHING;
+UPDATE equipment_location_inventory SET quantity_on_hand = 3, pickup_enabled = true, pickup_rental_price = 41
+ WHERE equipment_item_id = 'a7000000-0000-0000-0000-00000000000a' AND location_id = 'a1000000-0000-0000-0000-0000000000a2';
+INSERT INTO equipment_items (id, name, category, business_id, is_rentable, is_purchasable, is_serialized,
+                             pickup_enabled, delivery_enabled, pickup_rental_price, delivery_rental_price)
+VALUES ('a7000000-0000-0000-0000-0000000000c2', 'Bed A', 'bedroom', 'a0000000-0000-0000-0000-00000000000a', true, false, false, true, true, 60, 70);
+INSERT INTO equipment_location_inventory (equipment_item_id, location_id, quantity_on_hand, pickup_enabled)
+VALUES ('a7000000-0000-0000-0000-0000000000c2', 'a1000000-0000-0000-0000-0000000000a2', 1, true);
+
+SELECT test_assert((SELECT NOT on_website(l) FROM pickup_locations l WHERE l.id = 'a1000000-0000-0000-0000-0000000000a3'),
+  'a new pharmacy is not on the website until the owner puts it there');
+
+SELECT test_as('a2000000-0000-0000-0000-000000000002'); SET ROLE authenticated;
+SELECT set_pharmacy_on_website('a1000000-0000-0000-0000-0000000000a2', false);
+RESET ROLE;
+SELECT test_as(''); SET ROLE anon;
+SELECT test_assert((SELECT count(*) = 1 FROM pickup_locations), 'off the website, a pharmacy disappears from the public');
+SELECT test_assert((SELECT NOT storefront_listed(i) FROM equipment_items i WHERE i.id = 'a7000000-0000-0000-0000-0000000000c2'),
+  'a product stocked only at a pharmacy off the website is not listed');
+SELECT test_assert((validate_storefront_fulfillment('[{"item_id":"a7000000-0000-0000-0000-00000000000a","quantity":1}]',
+                    '{"method":"pickup","pickup_location_id":"a1000000-0000-0000-0000-0000000000a2"}'))->>'reason' = 'invalid_pickup_location',
+  'nobody picks up at a pharmacy off the website');
+SELECT test_assert((validate_storefront_fulfillment('[{"item_id":"a7000000-0000-0000-0000-00000000000b","quantity":1}]',
+                    '{"method":"pickup","pickup_location_id":"a1000000-0000-0000-0000-0000000000b1"}'))->>'reason' = 'invalid_pickup_location',
+  'nobody picks up at another owner''s pharmacy');
+SELECT test_assert((validate_storefront_fulfillment('[{"item_id":"a7000000-0000-0000-0000-00000000000a","quantity":1}]',
+                    '{"method":"delivery","delivery_zip":"11746"}'))->>'pickup_location_id' = 'a1000000-0000-0000-0000-0000000000a1',
+  'a pharmacy off the website is never routed an order, however near');
+RESET ROLE;
+
+SELECT test_as('a2000000-0000-0000-0000-000000000002'); SET ROLE authenticated;
+SELECT set_pharmacy_on_website('a1000000-0000-0000-0000-0000000000a2', true);
+SELECT test_assert((SELECT count(*) = 2 FROM storefront_pharmacies), 'the owner sees which pharmacies are on the website');
+RESET ROLE;
+SELECT test_as(''); SET ROLE anon;
+SELECT test_assert((SELECT storefront_listed(i) FROM equipment_items i WHERE i.id = 'a7000000-0000-0000-0000-0000000000c2'),
+  'back on the website, its stock lists the product: the pool''s combined stock');
+SELECT test_assert((validate_storefront_fulfillment('[{"item_id":"a7000000-0000-0000-0000-00000000000a","quantity":1}]',
+                    '{"method":"delivery","delivery_zip":"11746"}'))->>'pickup_location_id' = 'a1000000-0000-0000-0000-0000000000a2',
+  'a Huntington Station delivery goes to the nearer Melville pharmacy');
+SELECT test_assert((validate_storefront_fulfillment('[{"item_id":"a7000000-0000-0000-0000-00000000000a","quantity":1}]',
+                    '{"method":"delivery","delivery_zip":"11791"}'))->>'pickup_location_id' = 'a1000000-0000-0000-0000-0000000000a1',
+  'a Syosset delivery goes to the nearer Woodbury pharmacy');
+SELECT test_assert((validate_storefront_fulfillment('[{"item_id":"a7000000-0000-0000-0000-00000000000a","quantity":4}]',
+                    '{"method":"delivery","delivery_zip":"11746"}'))->>'pickup_location_id' = 'a1000000-0000-0000-0000-0000000000a1',
+  'the nearer pharmacy without enough stock loses to one that has it');
+SELECT test_assert((SELECT pickup_price_range(i) = '{"min": 41, "max": 46}'::jsonb FROM equipment_items i WHERE i.id = 'a7000000-0000-0000-0000-00000000000a'),
+  'prices stay per pharmacy: the website shows the range');
+SELECT test_assert((quote_storefront_rentals('[{"item_id":"a7000000-0000-0000-0000-00000000000a","quantity":1}]',
+                    '{"method":"pickup","pickup_location_id":"a1000000-0000-0000-0000-0000000000a2"}'))->'prices'->>'a7000000-0000-0000-0000-00000000000a' = '41.00',
+  'the customer pays the price of the pharmacy the order goes to');
+RESET ROLE;
+
+UPDATE pickup_locations SET delivery_zips = '{11746}' WHERE id = 'a1000000-0000-0000-0000-0000000000a1';
+SELECT test_assert((validate_storefront_fulfillment('[{"item_id":"a7000000-0000-0000-0000-00000000000a","quantity":1}]',
+                    '{"method":"delivery","delivery_zip":"11746"}'))->>'pickup_location_id' = 'a1000000-0000-0000-0000-0000000000a1',
+  'a pharmacy that lists the ZIP still wins over a nearer one');
+UPDATE pickup_locations SET delivery_zips = '{}' WHERE id = 'a1000000-0000-0000-0000-0000000000a1';
+
+SELECT test_assert((SELECT count(*) = 2 FROM change_log WHERE table_name = 'storefront_pharmacies'
+                     AND user_id = 'a2000000-0000-0000-0000-000000000002' AND location_id = 'a1000000-0000-0000-0000-0000000000a2'),
+  'taking a pharmacy off and putting it back are both in the history');
+
+SELECT test_as('a2000000-0000-0000-0000-000000000003'); SET ROLE authenticated;
+SELECT test_assert((SELECT count(*) = 0 FROM storefront_pharmacies), 'staff don''t read the website''s pharmacy list');
+DO $$ BEGIN
+  PERFORM set_pharmacy_on_website('a1000000-0000-0000-0000-0000000000a1', false);
+  RAISE EXCEPTION 'FAILED: staff took their pharmacy off the website';
+EXCEPTION WHEN insufficient_privilege THEN NULL; END $$;
+RESET ROLE;
+SELECT test_as('a2000000-0000-0000-0000-000000000006'); SET ROLE authenticated;
+DO $$ BEGIN
+  PERFORM set_pharmacy_on_website('a1000000-0000-0000-0000-0000000000a1', false);
+  RAISE EXCEPTION 'FAILED: another owner took a pharmacy off the website';
+EXCEPTION WHEN insufficient_privilege THEN NULL; END $$;
+RESET ROLE;
+SELECT test_as('a2000000-0000-0000-0000-000000000002'); SET ROLE authenticated;
+DO $$ BEGIN
+  PERFORM set_pharmacy_on_website('a1000000-0000-0000-0000-0000000000b1', true);
+  RAISE EXCEPTION 'FAILED: an owner put another owner''s pharmacy on their website';
+EXCEPTION WHEN insufficient_privilege THEN NULL; END $$;
+RESET ROLE;
+SELECT test_as('');
+DO $$ BEGIN
+  INSERT INTO storefront_pharmacies (location_id, storefront_id)
+  SELECT 'a1000000-0000-0000-0000-0000000000b1', id FROM storefronts WHERE slug = 'owner-a-site';
+  RAISE EXCEPTION 'FAILED: a website carried another owner''s pharmacy';
+EXCEPTION WHEN insufficient_privilege THEN NULL; END $$;
+SELECT test_as('a2000000-0000-0000-0000-000000000001'); SET ROLE authenticated;
+DO $$ BEGIN
+  PERFORM set_pharmacy_on_website('a1000000-0000-0000-0000-0000000000b1', true);
+  RAISE EXCEPTION 'FAILED: a pharmacy went on a website its owner doesn''t have';
+EXCEPTION WHEN no_data_found THEN NULL; END $$;
+RESET ROLE;
 
 SELECT test_as('');
 SELECT 'roles assertions passed' AS result;
