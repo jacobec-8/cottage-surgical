@@ -3,6 +3,7 @@
 import type { KeyboardEvent } from 'react'
 import Link from 'next/link'
 import { AlertTriangle, Building2, ChevronRight, MapPin, Store, Truck } from 'lucide-react'
+import { nextStepLabel } from '../../lib/requestFlow'
 import ItemThumb from '../../components/ItemThumb'
 import { HOVER_OUTLINE, TONE_CARD, TONE_PILL } from '../../lib/status'
 import { PaymentBadge } from '../orders/badges'
@@ -20,11 +21,12 @@ export function ShortageNote({ s }: { s: RequestState }) {
   )
 }
 
-/** One storefront request: who, where, what (with stock), and Approve / Decline. */
-export default function RequestCard({ r, s, selected, onOpen, onConfirm, onDecline }: {
+/** One storefront request: who, where, what (with stock), paid or not, and its next step. */
+export default function RequestCard({ r, s, selected, onOpen, onDecline }: {
   r: RequestRow; s: RequestState; selected: boolean
-  onOpen: (id: string) => void; onConfirm: () => void; onDecline: () => void
+  onOpen: (id: string) => void; onDecline: () => void
 }) {
+  const next = nextStepLabel({ ...r, status: 'requested', deliveries: [] })
   const isPickup = r.fulfillment_method === 'pickup'
   const place = r.pickup_location ?? r.location
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -52,7 +54,10 @@ export default function RequestCard({ r, s, selected, onOpen, onConfirm, onDecli
             )}
             <PaymentBadge paymentStatus={r.payment_status} paymentPreference={r.payment_preference} />
           </div>
-          <div className="mt-1 text-sm text-slate-500">{[r.customer?.phone, r.customer?.email].filter(Boolean).join(' · ')}</div>
+          <div className="mt-1 text-sm text-slate-500">
+            {r.customer?.phone && <a href={`tel:${r.customer.phone}`} onClick={(e) => e.stopPropagation()} className="font-medium text-slate-700 hover:underline">{r.customer.phone}</a>}
+            {r.customer?.phone && r.customer?.email && ' · '}{r.customer?.email}
+          </div>
           {isPickup ? (
             <div className="mt-1 flex items-start gap-1 text-sm text-purple-700">
               <MapPin size={14} className="mt-0.5 shrink-0" />
@@ -90,8 +95,8 @@ export default function RequestCard({ r, s, selected, onOpen, onConfirm, onDecli
           )}
         </div>
         <div className="flex shrink-0 flex-col items-end gap-2">
-          <RequestActions onConfirm={onConfirm} onDecline={onDecline} busy={s.busy} blocked={s.blocked} fulfillmentMethod={r.fulfillment_method} />
-          <span className="inline-flex items-center gap-0.5 text-xs text-slate-400 group-hover:text-blue-600">Details <ChevronRight size={14} /></span>
+          {next && <span className="inline-flex items-center gap-0.5 rounded-full bg-blue-600 px-2.5 py-1 text-xs font-medium text-white">Next: {next} <ChevronRight size={13} /></span>}
+          <RequestActions onDecline={onDecline} busy={s.busy} />
         </div>
       </div>
     </div>

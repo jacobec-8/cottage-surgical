@@ -1,42 +1,19 @@
 'use client'
 
 import type { MouseEvent } from 'react'
-import { Check, X } from 'lucide-react'
+import { X } from 'lucide-react'
 
-type Props = {
-  onConfirm: () => void
-  onDecline: () => void
-  busy: boolean
-  blocked: boolean
-  /** Row layout (inside a clickable card) vs inline layout (panel header). */
-  layout?: 'column' | 'row'
-  fulfillmentMethod?: string | null
-}
-
-/** Confirm / Decline pair shared by the Requests card and the detail panel. */
-export default function RequestActions({ onConfirm, onDecline, busy, blocked, layout = 'column', fulfillmentMethod }: Props) {
-  // Stop propagation so clicks don't also open the card's detail panel.
-  const run = (fn: () => void) => (e: MouseEvent) => { e.stopPropagation(); fn() }
-  const isPickup = fulfillmentMethod === 'pickup'
+/**
+ * Decline, shared by the request card and the order panel. Nothing is
+ * approved: opening a request shows its next step (RequestFlow).
+ */
+export default function RequestActions({ onDecline, busy }: { onDecline: () => void; busy: boolean }) {
+  // Stop propagation so the click doesn't also open the card's detail panel.
+  const decline = (e: MouseEvent) => { e.stopPropagation(); onDecline() }
   return (
-    <div className={`flex gap-2 shrink-0 ${layout === 'column' ? 'flex-col' : 'flex-row items-center'}`}>
-      <button
-        type="button"
-        onClick={run(onConfirm)}
-        disabled={busy || blocked}
-        title={blocked ? 'Out of stock — add units in Inventory first' : isPickup ? 'Reserve equipment and create an in-store pickup task' : 'Reserve equipment and queue a delivery'}
-        className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        <Check size={15} /> {isPickup ? 'Approve pickup' : fulfillmentMethod === 'delivery' ? 'Approve delivery' : 'Confirm'}
-      </button>
-      <button
-        type="button"
-        onClick={run(onDecline)}
-        disabled={busy}
-        className="flex items-center gap-1.5 text-slate-500 hover:text-red-600 text-sm rounded-lg px-3 py-1.5"
-      >
-        <X size={15} /> Decline
-      </button>
-    </div>
+    <button type="button" onClick={decline} disabled={busy}
+      className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-slate-500 hover:text-red-600 disabled:opacity-50">
+      <X size={15} /> Decline
+    </button>
   )
 }
