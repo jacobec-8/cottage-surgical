@@ -42,13 +42,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      # Enterprise hardening decision 1: saves are form submits with plain errors.
-      # The full unit suite isn't in CI yet; these tests guard this decision.
-      - name: Form save guards
-        run: node --test tests/unit/form-saves.test.ts tests/unit/save-errors.test.ts tests/unit/checkout-plan.test.ts tests/unit/field-rules.test.ts tests/unit/form-checks.test.ts tests/unit/request-id.test.ts
-
-      - name: Goes well with
-        run: node --test tests/unit/goes-well-with.test.ts
+      # Every unit test, including the migration checks (which migration holds each function).
+      - name: Unit tests
+        run: npm run test:unit
 
       - name: Build
         run: npm run build
