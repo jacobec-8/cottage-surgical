@@ -755,5 +755,28 @@ SELECT test_assert((SELECT count(*) FROM website_products) > 0
   'signed-in staff browsing the website see the website, and still read their own products');
 RESET ROLE;
 
+-- ── Pharmacy names may repeat; ids are unique (135) ─────────────────────────
+SELECT test_as('');
+INSERT INTO pickup_locations (id, name, business_id, address_line1, address_city, address_state, address_zip)
+VALUES ('a1000000-0000-0000-0000-0000000000d1', 'Main Street Pharmacy', 'a0000000-0000-0000-0000-00000000000a', '1 Main St', 'Huntington', 'NY', '11743'),
+       ('a1000000-0000-0000-0000-0000000000d2', 'main street pharmacy', 'a0000000-0000-0000-0000-00000000000a', '9 Main St', 'Huntington', 'NY', '11743'),
+       ('b1000000-0000-0000-0000-0000000000d3', 'Main Street Pharmacy', 'a0000000-0000-0000-0000-00000000000b', '5 Main St', 'Smithtown', 'NY', '11787');
+SELECT test_assert((SELECT count(*) = 3 AND count(DISTINCT slug) = 3 FROM pickup_locations WHERE lower(name) = 'main street pharmacy'),
+  'two owners, and one owner twice, can name pharmacies alike; each keeps its own id and website address');
+SELECT test_assert((SELECT bool_and(slug LIKE '%-' || id::text) FROM pickup_locations WHERE lower(name) = 'main street pharmacy'),
+  'a new pharmacy''s website address ends in its whole id, even when ids begin alike');
+DO $$ BEGIN
+  INSERT INTO pickup_locations (id, name, business_id, address_line1, address_city, address_state, address_zip)
+  VALUES ('a1000000-0000-0000-0000-0000000000d1', 'Another name', 'a0000000-0000-0000-0000-00000000000a', '2 Main St', 'Huntington', 'NY', '11743');
+  RAISE EXCEPTION 'FAILED: two pharmacies shared an id';
+EXCEPTION WHEN unique_violation THEN NULL; END $$;
+SELECT test_as('a2000000-0000-0000-0000-000000000002'); SET ROLE authenticated;
+INSERT INTO pickup_locations (name, address_line1, address_city, address_state, address_zip)
+VALUES ('Pharmacy B1', '3 A St', 'Huntington', 'NY', '11743');
+RESET ROLE;
+SELECT test_as('');
+SELECT test_assert((SELECT count(*) = 2 AND count(DISTINCT business_id) = 2 FROM pickup_locations WHERE name = 'Pharmacy B1'),
+  'an owner adds a pharmacy named like another owner''s');
+
 SELECT test_as('');
 SELECT 'roles assertions passed' AS result;
