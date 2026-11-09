@@ -6,8 +6,8 @@ import { functionBody, latestFunctions, openTo } from './schemaText.ts'
 // (baseline plus every later migration, latest definition wins), so a later
 // rebuild of create_staff_order from an old copy fails here.
 
-test('create_staff_order lives in 130 and keeps its search_path and grants', () => {
-  assert.equal(latestFunctions().get('create_staff_order')?.file, '130_staff_order_payment.sql')
+test('create_staff_order lives in 136 (prices once, rebuilt from 130) and keeps its search_path and grants', () => {
+  assert.equal(latestFunctions().get('create_staff_order')?.file, '136_prices_once.sql')
   assert.match(functionBody('create_staff_order'), /SET search_path TO 'public'\s/)
   assert.deepEqual(openTo('create_staff_order', ['PUBLIC', 'anon', 'authenticated']), ['authenticated'])
 })

@@ -50,9 +50,10 @@ export default function ProductDetailsList({ item, edits, openField }: { item: P
   const storeName = edits?.storeName ?? null
   const where = store && storeName ? ` at ${storeName}` : ''
   const pickupOn = store ? store.pickup_enabled : item.pickup_enabled
-  const pickupPrice = store?.pickup_rental_price ?? item.pickup_rental_price
-  const deliveryPrice = store?.delivery_rental_price ?? item.delivery_rental_price
-  const salePrice = store?.sale_price ?? item.sale_price
+  // At a store, only the store's prices; with no store, the product's starting prices.
+  const pickupPrice = store ? store.pickup_rental_price : item.pickup_rental_price
+  const deliveryPrice = store ? store.delivery_rental_price : item.delivery_rental_price
+  const salePrice = store ? store.sale_price : item.sale_price
   const storeEdit = Boolean(edits?.canEditStore && store)
   const productEdit = Boolean(edits?.canEditProduct)
   const priceEdit = Boolean(edits?.canEditPrices && store) || (!store && productEdit)
@@ -65,6 +66,10 @@ export default function ProductDetailsList({ item, edits, openField }: { item: P
 
   // Prices typed while turning something on become the store's prices too, so
   // what staff typed is what their customers see.
+  // In a pharmacy's view a typed price is that pharmacy's; the product's starting price is only filled when blank (136).
+  const startingOnly = <T extends Record<string, unknown>>(patch: T): Partial<T> => (store
+    ? Object.fromEntries(Object.entries(patch).filter(([key, value]) => !key.endsWith('price') || value == null || (item as Record<string, unknown>)[key] == null)) as Partial<T>
+    : patch)
   const savePrices = async (prices: { pickup?: number | null; delivery?: number | null; sale?: number | null }) => {
     if (!store) return
     await edits!.saveStore({
@@ -96,16 +101,15 @@ export default function ProductDetailsList({ item, edits, openField }: { item: P
       <Row label={`Online sales${where}`} value={!store ? noStore : edits?.retailOn == null ? '…' : edits.retailOn ? 'On' : 'Off: customers can’t buy online'}
         editor={retailEdit && edits?.retailOn != null ? (done) => <YesNoEditor question="Sell online?" initial={edits.retailOn!} done={done} save={(v) => edits!.setRetail(v)} /> : undefined} />
 
-      <Row locked={priceLocked} label="Pickup rental" value={pickupOn && pickupPrice != null ? money(pickupPrice, '/mo')! : `Not offered${where}`}
-        editor={priceEdit ? (done) => <PickupEditor where={where} initialOn={pickupOn} initialPrice={store ? store.pickup_rental_price : item.pickup_rental_price}
-          catalogPrice={store ? item.pickup_rental_price : null} done={done}
+      {!store && <div className="text-xs text-slate-500 sm:col-span-2">New pharmacies start at these prices; each pharmacy then sets its own.</div>}
+      <Row locked={priceLocked} label={store ? 'Pickup rental' : 'Starting pickup price'} value={pickupOn && pickupPrice != null ? money(pickupPrice, '/mo')! : `Not offered${where}`}
+        editor={priceEdit ? (done) => <PickupEditor where={where} initialOn={pickupOn} initialPrice={pickupPrice} done={done}
           save={(on, price) => (store ? edits!.saveStore({ pickup_enabled: on, pickup_rental_price: price }) : edits!.saveProduct({ pickup_enabled: on, pickup_rental_price: price }))} /> : undefined} />
-      <Row locked={priceLocked} label="Delivery + return pickup" value={item.delivery_enabled && deliveryPrice != null ? money(deliveryPrice, '/mo')! : 'Not offered'}
-        editor={priceEdit ? (done) => <PriceEditor initial={store ? store.delivery_rental_price : item.delivery_rental_price}
-          placeholder={store ? money(item.delivery_rental_price, ' catalog') ?? 'Price' : 'Price'} done={done}
+      <Row locked={priceLocked} label={store ? 'Delivery + return pickup' : 'Starting delivery + return price'} value={item.delivery_enabled && deliveryPrice != null ? money(deliveryPrice, '/mo')! : 'Not offered'}
+        editor={priceEdit ? (done) => <PriceEditor initial={deliveryPrice} placeholder="Price" done={done}
           save={(price) => (store ? edits!.saveStore({ delivery_rental_price: price }) : edits!.saveProduct({ delivery_rental_price: price }))} /> : undefined} />
-      <Row locked={priceLocked} open={openField === 'sale'} label={`Sale price${store ? where : ''}`} value={Number(salePrice) > 0 ? money(salePrice)! : 'Not set'}
-        editor={priceEdit ? (done) => <PriceEditor initial={store ? store.sale_price : item.sale_price} placeholder={store && Number(item.sale_price) > 0 ? money(item.sale_price, ' catalog')! : 'Price'} done={done}
+      <Row locked={priceLocked} open={openField === 'sale'} label={store ? `Sale price${where}` : 'Starting sale price'} value={Number(salePrice) > 0 ? money(salePrice)! : 'Not set'}
+        editor={priceEdit ? (done) => <PriceEditor initial={salePrice} placeholder="Price" done={done}
           save={(price) => (store ? edits!.saveStore({ sale_price: price }) : edits!.saveProduct({ sale_price: price }))} /> : undefined} />
 
       <Row locked={productLocked} label="Rental enabled" value={item.is_rentable ? 'Yes' : 'No'}
@@ -113,14 +117,14 @@ export default function ProductDetailsList({ item, edits, openField }: { item: P
           pickupPrice={text(pickupPrice)} deliveryPrice={text(deliveryPrice)} done={done}
           save={async (on, pickup, delivery) => {
             if (!on) { await edits!.saveProduct({ is_rentable: false }); return }
-            await edits!.saveProduct({ is_rentable: true, pickup_rental_price: pickup, delivery_rental_price: delivery })
+            await edits!.saveProduct(startingOnly({ is_rentable: true, pickup_rental_price: pickup, delivery_rental_price: delivery }))
             await savePrices({ pickup, delivery })
           }} /> : undefined} />
       <Row locked={productLocked} label="Purchase enabled" value={item.is_purchasable ? 'Yes' : 'No'}
         editor={productEdit ? (done) => <PurchaseEditor initialOn={item.is_purchasable} price={Number(salePrice) > 0 ? text(salePrice) : ''} done={done}
           save={async (on, price) => {
             if (!on) { await edits!.saveProduct({ is_purchasable: false }); return }
-            await edits!.saveProduct({ is_purchasable: true, sale_price: price })
+            await edits!.saveProduct(startingOnly({ is_purchasable: true, sale_price: price }))
             await savePrices({ sale: price })
           }} /> : undefined} />
       <Row locked={productLocked} label="Fulfillment" value={fulfillmentLabel({ pickup_enabled: pickupOn, delivery_enabled: item.delivery_enabled })}
@@ -128,7 +132,7 @@ export default function ProductDetailsList({ item, edits, openField }: { item: P
           pickupPrice={text(pickupPrice)} deliveryPrice={text(deliveryPrice)} done={done}
           save={async (pickup, delivery, pickupP, deliveryP) => {
             const prices = item.is_rentable ? { pickup_rental_price: pickup ? pickupP : null, delivery_rental_price: delivery ? deliveryP : null } : {}
-            await edits!.saveProduct({ pickup_enabled: pickup, delivery_enabled: delivery, ...prices })
+            await edits!.saveProduct(startingOnly({ pickup_enabled: pickup, delivery_enabled: delivery, ...prices }))
             if (store) await edits!.saveStore({ pickup_enabled: pickup, ...(item.is_rentable ? { pickup_rental_price: pickup ? pickupP : null, delivery_rental_price: delivery ? deliveryP : null } : {}) })
           }} /> : undefined} />
       <Row locked={productLocked} label="Same-day pickup" value={pickupOn && item.same_day_pickup ? 'May be available' : 'No'}
@@ -231,17 +235,17 @@ function PriceEditor({ initial, placeholder, save, done }: { initial: number | n
   )
 }
 
-function PickupEditor({ where, initialOn, initialPrice, catalogPrice, save, done }: {
-  where: string; initialOn: boolean; initialPrice: number | null; catalogPrice: number | null
+function PickupEditor({ where, initialOn, initialPrice, save, done }: {
+  where: string; initialOn: boolean; initialPrice: number | null
   save: (on: boolean, price: number | null) => Promise<void>; done: () => void
 }) {
   const [offered, setOffered] = useState(initialOn)
   const [value, setValue] = useState(initialPrice?.toString() ?? '')
   return (
     <EditorForm label="Pickup" save={() => save(offered, parsePrice(value) ?? null)} done={done}
-      validate={() => onBox('pickupPrice', pickupEditProblem(offered, value, catalogPrice))}>
+      validate={() => onBox('pickupPrice', pickupEditProblem(offered, value))}>
       <label className="inline-flex items-center gap-1.5 font-normal"><input type="checkbox" checked={offered} onChange={(e) => setOffered(e.target.checked)} /> Offer pickup{where}</label>
-      {offered && <Checked name="pickupPrice" message={false}><input autoFocus aria-label="Pickup price" inputMode="decimal" value={value} placeholder={money(catalogPrice, ' catalog') ?? 'Price /mo'}
+      {offered && <Checked name="pickupPrice" message={false}><input autoFocus aria-label="Pickup price" inputMode="decimal" value={value} placeholder="Price /mo"
         onChange={(e) => setValue(e.target.value)} className={INPUT} /></Checked>}
       <Actions done={done} />
     </EditorForm>

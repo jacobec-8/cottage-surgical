@@ -25,21 +25,22 @@ test('today’s single-type checkout functions are not touched', () => {
   for (const name of ['create_stripe_rental_checkout_once', 'create_stripe_checkout_once', 'submit_rental_request_once']) {
     assert.equal(latest.get(name)?.file, '118_save_failures_and_keys.sql', name)
   }
-  for (const name of ['create_stripe_rental_checkout_with_fulfillment', 'create_stripe_checkout_with_fulfillment']) {
-    assert.equal(latest.get(name)?.file, '122_one_owner_and_website_wall.sql', name)
-  }
+  assert.equal(latest.get('create_stripe_checkout_with_fulfillment')?.file, '122_one_owner_and_website_wall.sql')
+  // 136 (prices once) rebuilt the rental checkout to charge the pharmacy's price only.
+  assert.equal(latest.get('create_stripe_rental_checkout_with_fulfillment')?.file, '136_prices_once.sql')
   assert.notEqual(latest.get('submit_rental_request_with_fulfillment')?.file, MIGRATION)
 })
 
 test('128 rebuilds exactly the functions it says it does', () => {
-  // queue_order_status_email was rebuilt again by 129 (nobody pays the delivery person).
+  // queue_order_status_email was rebuilt again by 129 (nobody pays the delivery person),
+  // the cart create and quote by 136 (prices once).
   const rebuilt = [...latestFunctions()].filter(([, d]) => d.file === MIGRATION).map(([n]) => n).sort()
   assert.deepEqual(rebuilt, [
     '_settle_stripe_session', '_stripe_request', 'cancel_order', 'cancel_stripe_checkout',
-    'create_stripe_cart_checkout', 'create_stripe_cart_checkout_once',
-    'quote_storefront_cart', 'reconcile_pending_stripe_orders', 'verify_stripe_payment',
+    'create_stripe_cart_checkout_once', 'reconcile_pending_stripe_orders', 'verify_stripe_payment',
   ])
   assert.equal(latestFunctions().get('queue_order_status_email')?.file, '129_store_collects_payment.sql')
+  for (const name of ['create_stripe_cart_checkout', 'quote_storefront_cart']) assert.equal(latestFunctions().get(name)?.file, '136_prices_once.sql', name)
 })
 
 test('the website reaches Stripe only through the checkout calls, never the helpers', () => {

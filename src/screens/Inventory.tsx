@@ -32,11 +32,9 @@ export type InventoryItem = {
   description: string | null
   category: string
   sku: string | null
-  monthly_rental_price: number | null
   pickup_rental_price: number | null
   delivery_rental_price: number | null
   sale_price: number | null
-  quantity_on_hand: number
   image_url: string | null
   is_serialized: boolean
   is_active: boolean
@@ -50,10 +48,10 @@ export type InventoryItem = {
   updated_at: string
   /** Set for a store's own product (100); null for the owner's catalog. */
   location_id: string | null
-  location_inventory: { location_id: string; quantity_on_hand: number; pickup_enabled: boolean; scan_code?: string | null }[]
+  location_inventory: { location_id: string; quantity_on_hand: number; pickup_enabled: boolean; scan_code?: string | null; pickup_rental_price?: number | null; delivery_rental_price?: number | null; sale_price?: number | null }[]
 }
 
-const SELECT = 'id,name,description,category,sku,monthly_rental_price,pickup_rental_price,delivery_rental_price,sale_price,quantity_on_hand,image_url,is_serialized,is_active,is_rentable,is_purchasable,pickup_enabled,delivery_enabled,same_day_pickup,installation_required,created_at,updated_at,location_id,location_inventory:equipment_location_inventory(location_id,quantity_on_hand,pickup_enabled,scan_code)'
+const SELECT = 'id,name,description,category,sku,pickup_rental_price,delivery_rental_price,sale_price,image_url,is_serialized,is_active,is_rentable,is_purchasable,pickup_enabled,delivery_enabled,same_day_pickup,installation_required,created_at,updated_at,location_id,location_inventory:equipment_location_inventory(location_id,quantity_on_hand,pickup_enabled,scan_code,pickup_rental_price,delivery_rental_price,sale_price)'
 
 export default function Inventory() {
   const qc = useQueryClient()
@@ -260,9 +258,8 @@ function initialForm(item: Partial<InventoryItem>) {
     category: item.category ?? 'mobility',
     sku: item.sku ?? '',
     pickup_rental_price: item.pickup_rental_price?.toString() ?? '',
-    delivery_rental_price: item.delivery_rental_price?.toString() ?? item.monthly_rental_price?.toString() ?? '',
+    delivery_rental_price: item.delivery_rental_price?.toString() ?? '',
     sale_price: item.sale_price?.toString() ?? '',
-    quantity_on_hand: item.quantity_on_hand?.toString() ?? '0',
     is_serialized: item.is_serialized ?? true,
     is_active: item.is_active ?? true,
     is_rentable: item.is_rentable ?? true,
@@ -326,7 +323,6 @@ function ItemModal({ item, onClose }: { item: Partial<InventoryItem>; onClose: (
         sku: f.sku.trim() || null,
         pickup_rental_price: f.is_rentable && f.pickup_enabled && f.pickup_rental_price !== '' ? Number(f.pickup_rental_price) : null,
         delivery_rental_price: f.is_rentable && f.delivery_enabled && f.delivery_rental_price !== '' ? Number(f.delivery_rental_price) : null,
-        monthly_rental_price: f.is_rentable && f.delivery_enabled && f.delivery_rental_price !== '' ? Number(f.delivery_rental_price) : (f.pickup_rental_price !== '' ? Number(f.pickup_rental_price) : null),
         sale_price: f.is_purchasable && f.sale_price !== '' ? Number(f.sale_price) : null,
         is_serialized: f.is_serialized,
         is_active: f.is_active,
@@ -434,14 +430,15 @@ function ItemModal({ item, onClose }: { item: Partial<InventoryItem>; onClose: (
               <input aria-label="SN" value={f.sku} onChange={set('sku')} placeholder="Scan or type the barcode" className={inp} />
             </div>
             <div>
-              <label className="block text-xs text-slate-500 mb-1">Pickup rental ($/mo)</label>
+              <label className="block text-xs text-slate-500 mb-1">Starting pickup price ($/mo)</label>
               <Checked name="pickupPrice"><input aria-label="Pickup rental price" value={f.pickup_rental_price} onChange={set('pickup_rental_price')} inputMode="decimal" disabled={!f.is_rentable || !f.pickup_enabled} className={inp} /></Checked>
             </div>
             <div>
-              <label className="block text-xs text-slate-500 mb-1">Delivery + return pickup rental ($/mo)</label>
+              <label className="block text-xs text-slate-500 mb-1">Starting delivery + return pickup price ($/mo)</label>
               <Checked name="deliveryPrice"><input aria-label="Delivery rental price" value={f.delivery_rental_price} onChange={set('delivery_rental_price')} inputMode="decimal" disabled={!f.is_rentable || !f.delivery_enabled} className={inp} /></Checked>
             </div>
-            <div><label className="block text-xs text-slate-500 mb-1">Sale price ($) {f.is_purchasable ? '' : '— not required'}</label><Checked name="salePrice"><input aria-label="Sale price" value={f.sale_price} onChange={set('sale_price')} inputMode="decimal" disabled={!f.is_purchasable} className={inp} /></Checked></div>
+            <div><label className="block text-xs text-slate-500 mb-1">Starting sale price ($) {f.is_purchasable ? '' : '— not required'}</label><Checked name="salePrice"><input aria-label="Sale price" value={f.sale_price} onChange={set('sale_price')} inputMode="decimal" disabled={!f.is_purchasable} className={inp} /></Checked></div>
+            <p className="text-xs text-slate-500 sm:col-span-2">New pharmacies start at these prices; each pharmacy then sets its own.</p>
             {isNew && stockStore && (
             <div>
               <label className="block text-xs text-slate-500 mb-1">{f.is_serialized ? `Units at ${stockStoreInfo?.name ?? 'this store'}: asset tags, one per unit (optional)` : `Starting stock at ${stockStoreInfo?.name ?? 'this store'} (optional)`}</label>

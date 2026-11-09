@@ -27,7 +27,7 @@ export function startingStockProblems(serialized: boolean, stock: string): Field
   return message ? [{ field: 'stock', message }] : []
 }
 
-/** A store's stock and price overrides. A unit-tracked count is never typed, so never checked. */
+/** A store's own stock and prices (blank: no price there). A unit-tracked count is never typed, so never checked. */
 export function stockProblems(s: { serialized: boolean; quantity: string; pickupPrice: string; deliveryPrice: string }): FieldProblem[] {
   return problems(
     !s.serialized && rules.wholeNumber(s.quantity, 'quantity', 'Enter the quantity on hand.'),

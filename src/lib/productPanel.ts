@@ -19,13 +19,15 @@ export function monthlyIncome(lines: readonly { quantity: number; monthly_rate: 
   return lines.reduce((sum, l) => sum + Number(l.monthly_rate ?? 0) * l.quantity, 0)
 }
 
+type PriceRange = { min: number; max: number } | null
+/** The website's view of a product: prices are the pharmacies' on the website, never the product's starting prices. */
 type ShopItem = {
   storefront_listed: boolean | null
   is_active: boolean
   is_rentable: boolean
   is_purchasable: boolean
-  delivery_rental_price: number | null
-  pickup_rental_price: number | null
+  delivery_price_range: PriceRange
+  pickup_price_range: PriceRange
   sale_price: number | null
 }
 export type ShopStatus = { listed: boolean; reason: string | null }
@@ -34,7 +36,7 @@ export type ShopStatus = { listed: boolean; reason: string | null }
 export function websiteStatus(item: ShopItem, storeOpen: boolean): ShopStatus {
   if (item.storefront_listed) return { listed: true, reason: null }
   if (!item.is_active) return { listed: false, reason: 'Removed from the catalog' }
-  const priced = item.is_rentable ? Number(item.delivery_rental_price ?? item.pickup_rental_price ?? 0) > 0 : Number(item.sale_price ?? 0) > 0
+  const priced = item.is_rentable ? Number(item.delivery_price_range?.max ?? 0) > 0 || Number(item.pickup_price_range?.max ?? 0) > 0 : Number(item.sale_price ?? 0) > 0
   if (!priced) return { listed: false, reason: 'No price set' }
   if (!storeOpen) return { listed: false, reason: 'This pharmacy is not on the website' }
   if (!item.is_rentable) return { listed: false, reason: 'For sale only: needs stock and online retail turned on' }

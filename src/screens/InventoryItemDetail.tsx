@@ -32,11 +32,9 @@ type Item = {
   category: string
   sku: string | null
   image_url: string | null
-  monthly_rental_price: number | null
   pickup_rental_price: number | null
   delivery_rental_price: number | null
   sale_price: number | null
-  quantity_on_hand: number
   location_id?: string | null
   is_serialized: boolean
   is_rentable: boolean
@@ -107,7 +105,7 @@ type ItemNote = {
 }
 
 type Tab = 'overview' | 'units' | 'rentals' | 'pickup' | 'notes'
-const ITEM_SELECT = 'id,location_id,name,description,category,sku,image_url,monthly_rental_price,pickup_rental_price,delivery_rental_price,sale_price,quantity_on_hand,is_serialized,is_rentable,is_purchasable,is_active,created_at,updated_at,pickup_enabled,delivery_enabled,same_day_pickup,installation_required'
+const ITEM_SELECT = 'id,location_id,name,description,category,sku,image_url,pickup_rental_price,delivery_rental_price,sale_price,is_serialized,is_rentable,is_purchasable,is_active,created_at,updated_at,pickup_enabled,delivery_enabled,same_day_pickup,installation_required'
 
 export default function InventoryItemDetail({ itemId }: { itemId: string }) {
   const { profile } = useAuth()
@@ -421,7 +419,7 @@ function PickupLocationsTab({ item, locations, assignments, loading }: {
 
       {!item.pickup_enabled && (
         <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-          The catalog default is delivery only. A store can still offer pickup: tick Pickup for that store below and give it a pickup price.
+          This product starts as delivery only. A store can still offer pickup: tick Pickup for that store below and give it a pickup price.
         </div>
       )}
 
@@ -480,10 +478,10 @@ function LocationInventoryEditor({ item, inventory, onSaved }: { item: Item; inv
     onSuccess: onSaved,
   })
   const input = 'w-full rounded-lg border border-slate-300 px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
-  return <SaveForm aria-label="Stock and price override" onSave={() => save.mutateAsync()}
-    validate={() => stockProblems({ serialized: item.is_serialized, quantity: form.quantity, pickupPrice: form.pickupPrice, deliveryPrice: form.deliveryPrice })} savedMessage="Stock and prices saved for this store." className="grid gap-3 border-t border-slate-200 pt-3 sm:grid-cols-4" errorClassName="sm:col-span-4">{item.is_serialized
+  return <SaveForm aria-label="Stock and prices at this pharmacy" onSave={() => save.mutateAsync()}
+    validate={() => stockProblems({ serialized: item.is_serialized, quantity: form.quantity, pickupPrice: form.pickupPrice, deliveryPrice: form.deliveryPrice })} savedMessage="Stock and prices saved for this pharmacy." className="grid gap-3 border-t border-slate-200 pt-3 sm:grid-cols-4" errorClassName="sm:col-span-4">{item.is_serialized
     ? <div><span className="mb-1 block text-xs text-slate-500">Available units</span><div className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-sm font-medium text-slate-800">{inventory.quantity_on_hand}</div><span className="mt-1 block text-xs text-slate-500">Counted from units. To change it, add a unit or set one to Retired under Serialized units.</span></div>
-    : <label><span className="mb-1 block text-xs text-slate-500">Quantity on hand</span><Checked name="quantity"><input inputMode="numeric" value={form.quantity} onChange={(event) => setForm({ ...form, quantity: event.target.value })} className={input} /></Checked></label>}{item.is_rentable && <><label><span className="mb-1 block text-xs text-slate-500">Pickup price override</span><Checked name="pickupPrice"><input inputMode="decimal" placeholder={item.pickup_rental_price?.toString()} value={form.pickupPrice} onChange={(event) => setForm({ ...form, pickupPrice: event.target.value })} className={input} /></Checked></label><label><span className="mb-1 block text-xs text-slate-500">Delivery price override</span><Checked name="deliveryPrice"><input inputMode="decimal" placeholder={item.delivery_rental_price?.toString()} value={form.deliveryPrice} onChange={(event) => setForm({ ...form, deliveryPrice: event.target.value })} className={input} /></Checked></label></>}<div className="flex items-end gap-2"><label className="mb-2 flex items-center gap-1.5 text-xs"><input type="checkbox" checked={form.pickup} onChange={(event) => setForm({ ...form, pickup: event.target.checked })} /> Pickup</label><SubmitButton className="ml-auto rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white disabled:opacity-50">{(pending) => pending ? 'Saving…' : 'Save stock'}</SubmitButton></div></SaveForm>
+    : <label><span className="mb-1 block text-xs text-slate-500">Quantity on hand</span><Checked name="quantity"><input inputMode="numeric" value={form.quantity} onChange={(event) => setForm({ ...form, quantity: event.target.value })} className={input} /></Checked></label>}{item.is_rentable && <><label><span className="mb-1 block text-xs text-slate-500">Pickup price ($/mo)</span><Checked name="pickupPrice"><input inputMode="decimal" placeholder="No price" value={form.pickupPrice} onChange={(event) => setForm({ ...form, pickupPrice: event.target.value })} className={input} /></Checked></label><label><span className="mb-1 block text-xs text-slate-500">Delivery price ($/mo)</span><Checked name="deliveryPrice"><input inputMode="decimal" placeholder="No price" value={form.deliveryPrice} onChange={(event) => setForm({ ...form, deliveryPrice: event.target.value })} className={input} /></Checked></label></>}<div className="flex items-end gap-2"><label className="mb-2 flex items-center gap-1.5 text-xs"><input type="checkbox" checked={form.pickup} onChange={(event) => setForm({ ...form, pickup: event.target.checked })} /> Pickup</label><SubmitButton className="ml-auto rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white disabled:opacity-50">{(pending) => pending ? 'Saving…' : 'Save stock'}</SubmitButton></div></SaveForm>
 }
 
 type UnitForm = {
@@ -653,9 +651,8 @@ function EditItemForm({ item, onCancel, onSaved }: { item: Item; onCancel: () =>
     category: item.category,
     sku: item.sku ?? '',
     pickupPrice: item.pickup_rental_price?.toString() ?? '',
-    deliveryPrice: item.delivery_rental_price?.toString() ?? item.monthly_rental_price?.toString() ?? '',
+    deliveryPrice: item.delivery_rental_price?.toString() ?? '',
     sale: item.sale_price?.toString() ?? '',
-    quantity: item.quantity_on_hand.toString(),
     rentable: item.is_rentable,
     purchasable: item.is_purchasable,
     active: item.is_active,
@@ -699,7 +696,6 @@ function EditItemForm({ item, onCancel, onSaved }: { item: Item; onCancel: () =>
         sku: form.sku.trim() || null,
         pickup_rental_price: form.rentable && form.pickup ? Number(form.pickupPrice) : null,
         delivery_rental_price: form.rentable && form.delivery ? Number(form.deliveryPrice) : null,
-        monthly_rental_price: form.rentable ? Number(form.delivery ? form.deliveryPrice : form.pickupPrice) : null,
         sale_price: form.purchasable ? Number(form.sale) : null,
         is_rentable: form.rentable,
         is_purchasable: form.purchasable,
@@ -745,9 +741,10 @@ function EditItemForm({ item, onCancel, onSaved }: { item: Item; onCancel: () =>
         <Field label="Product name"><Checked name="name"><input className={input} value={form.name} onChange={(event) => set('name', event.target.value)} /></Checked></Field>
         <Field label="SKU"><input className={input} value={form.sku} onChange={(event) => set('sku', event.target.value)} /></Field>
         <Field label="Category"><select className={input} value={form.category} onChange={(event) => set('category', event.target.value)}>{CATEGORIES.map((category) => <option key={category}>{category}</option>)}</select></Field>
-        <Field label="In-store pickup rental price"><Checked name="pickupPrice"><input className={input} inputMode="decimal" disabled={!form.rentable || !form.pickup} value={form.pickupPrice} onChange={(event) => set('pickupPrice', event.target.value)} /></Checked></Field>
-        <Field label="Delivery + return pickup rental price"><Checked name="deliveryPrice"><input className={input} inputMode="decimal" disabled={!form.rentable || !form.delivery} value={form.deliveryPrice} onChange={(event) => set('deliveryPrice', event.target.value)} /></Checked></Field>
-        <Field label={`Sale price${form.purchasable ? '' : ' — not required'}`}><Checked name="salePrice"><input className={input} inputMode="decimal" disabled={!form.purchasable} value={form.sale} onChange={(event) => set('sale', event.target.value)} /></Checked></Field>
+        <Field label="Starting pickup price ($/mo)"><Checked name="pickupPrice"><input className={input} inputMode="decimal" disabled={!form.rentable || !form.pickup} value={form.pickupPrice} onChange={(event) => set('pickupPrice', event.target.value)} /></Checked></Field>
+        <Field label="Starting delivery + return pickup price ($/mo)"><Checked name="deliveryPrice"><input className={input} inputMode="decimal" disabled={!form.rentable || !form.delivery} value={form.deliveryPrice} onChange={(event) => set('deliveryPrice', event.target.value)} /></Checked></Field>
+        <Field label={`Starting sale price ($)${form.purchasable ? '' : ' — not required'}`}><Checked name="salePrice"><input className={input} inputMode="decimal" disabled={!form.purchasable} value={form.sale} onChange={(event) => set('sale', event.target.value)} /></Checked></Field>
+        <p className="text-xs text-slate-500 md:col-span-2">New pharmacies start at these prices; each pharmacy then sets its own.</p>
         <div className="md:col-span-2"><Field label="Description"><textarea className={input} rows={3} value={form.description} onChange={(event) => set('description', event.target.value)} /></Field></div>
         <fieldset className="rounded-xl border border-slate-200 p-4 md:col-span-2">
           <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Availability and fulfillment</legend>

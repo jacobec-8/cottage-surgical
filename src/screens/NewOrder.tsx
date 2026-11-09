@@ -23,23 +23,19 @@ type Item = {
   name: string
   image_url: string | null
   category: string
-  delivery_rental_price: number | null
-  pickup_rental_price: number | null
-  sale_price: number | null
   is_rentable: boolean
   is_purchasable: boolean
   delivery_enabled: boolean
   location_inventory: { location_id: string; quantity_on_hand: number; pickup_enabled: boolean; pickup_rental_price: number | null; delivery_rental_price: number | null; sale_price: number | null }[]
 }
 type Method = 'delivery' | 'pickup'
-// Mirrors create_staff_order: the selected store's price overrides the catalog,
-// and a counter pickup charges the pickup price.
+// Mirrors create_staff_order: only the selected store's own price counts (none
+// means it can't be ordered there), and a counter pickup charges the pickup price.
 const itemRate = (it: Item, mode: 'rental' | 'purchase', method: Method): number | null => {
   const store = it.location_inventory[0]
-  if (mode === 'purchase') return store?.sale_price ?? it.sale_price
-  return method === 'pickup'
-    ? store?.pickup_rental_price ?? it.pickup_rental_price
-    : store?.delivery_rental_price ?? it.delivery_rental_price
+  if (!store) return null
+  if (mode === 'purchase') return store.sale_price
+  return method === 'pickup' ? store.pickup_rental_price : store.delivery_rental_price
 }
 // The store must offer the item the way the customer is getting it (104).
 const offered = (it: Item, method: Method): boolean =>
@@ -125,7 +121,7 @@ export default function NewOrder() {
     refetchInterval: 20_000,
     queryFn: async () => {
       const { data, error } = await supabase.from('equipment_items')
-        .select('id,name,image_url,category,delivery_rental_price,pickup_rental_price,sale_price,is_rentable,is_purchasable,delivery_enabled,location_inventory:equipment_location_inventory!inner(location_id,quantity_on_hand,pickup_enabled,pickup_rental_price,delivery_rental_price,sale_price)')
+        .select('id,name,image_url,category,is_rentable,is_purchasable,delivery_enabled,location_inventory:equipment_location_inventory!inner(location_id,quantity_on_hand,pickup_enabled,pickup_rental_price,delivery_rental_price,sale_price)')
         .eq('is_active', true).eq('location_inventory.location_id', selectedLocationId!).order('name')
       if (error) throw error
       return data as unknown as Item[]

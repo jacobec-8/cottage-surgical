@@ -33,8 +33,8 @@ export function ReviewCard({ title, edit, children }: { title: string; edit: () 
   )
 }
 
-export function pricePlaceholder(value: number | null) { return value == null ? 'No catalog price' : `Catalog: $${Number(value).toFixed(2)}` }
+export function pricePlaceholder(value: number | null) { return value == null ? 'No starting price' : `Starting: $${Number(value).toFixed(2)}` }
 export function priceText(override: string, fallback?: number | null) {
   const value = override === '' ? fallback : Number(override)
-  return value == null ? 'price not set' : `$${Number(value).toFixed(2)}/mo${override === '' ? ' (catalog)' : ''}`
+  return value == null ? 'price not set' : `$${Number(value).toFixed(2)}/mo${override === '' ? ' (starting price)' : ''}`
 }

@@ -100,7 +100,7 @@ export function locationProblem(draft: OnboardingDraft, index: number): string |
   if (new Set(location.stock.map((item) => item.itemId)).size !== location.stock.length) return prefix + 'each product can only appear once.'
   if (location.stock.some((item) => !/^\d+$/.test(item.quantity) || Number(item.quantity) > 500)) return prefix + 'enter a whole quantity from 0 to 500 for each selected product.'
   if (location.stock.reduce((sum, item) => sum + Number(item.quantity), 0) > 2000) return prefix + 'add up to 2,000 units now; more stock can be added later.'
-  if (location.stock.some((item) => !priceValid(item.pickupPrice) || !priceValid(item.deliveryPrice))) return prefix + 'prices must be zero or more, with at most two decimal places. Leave blank to use the catalog price.'
+  if (location.stock.some((item) => !priceValid(item.pickupPrice) || !priceValid(item.deliveryPrice))) return prefix + 'prices must be zero or more, with at most two decimal places. Leave blank to start at the product’s starting price.'
   if (location.staff.length > MAX_STAFF_PER_LOCATION) return prefix + `add up to ${MAX_STAFF_PER_LOCATION} staff now; more can be added later.`
   for (const [i, person] of location.staff.entries()) {
     const who = `${prefix}staff member ${i + 1}: `

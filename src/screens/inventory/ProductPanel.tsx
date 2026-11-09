@@ -21,7 +21,8 @@ type Props = {
   startField?: DetailField | null
 }
 
-const SHOP_SELECT = 'storefront_listed,is_active,is_rentable,is_purchasable,delivery_rental_price,pickup_rental_price,sale_price:sale_price_shown'
+// What the website shows: the pharmacies' prices (136), never the product's starting prices.
+const SHOP_SELECT = 'storefront_listed,is_active,is_rentable,is_purchasable,delivery_price_range,pickup_price_range,sale_price:sale_price_shown'
 
 /** The expanded inventory row: stock position, rental income, online shop status, and product details. */
 export default function ProductPanel({ item, stock, locationId, storeName, storeOpen, startField = null }: Props) {
@@ -67,9 +68,8 @@ export default function ProductPanel({ item, stock, locationId, storeName, store
   const store = edits.store
   const steps = status && !status.listed && store ? liveChecklist({
     active: shop.data?.is_active ?? true, rentable: item.is_rentable, purchasable: item.is_purchasable, storeOpen,
-    stock: store.quantity_on_hand, salePrice: store.sale_price ?? item.sale_price,
-    rentalPrice: (item.delivery_enabled ? store.delivery_rental_price ?? item.delivery_rental_price : null)
-      ?? (store.pickup_enabled ? store.pickup_rental_price ?? item.pickup_rental_price : null),
+    stock: store.quantity_on_hand, salePrice: store.sale_price,
+    rentalPrice: (item.delivery_enabled ? store.delivery_rental_price : null) ?? (store.pickup_enabled ? store.pickup_rental_price : null),
     retailOn: edits.retailOn,
   }) : null
   const [turningOn, setTurningOn] = useState(false)

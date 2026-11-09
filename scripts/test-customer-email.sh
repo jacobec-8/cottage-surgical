@@ -51,6 +51,7 @@ echo "PASS product-pairings (goes well with: who picks, what, who reads)"
 psql_orders() { "$qa_pg/psql" -X -h "$qa_cluster/socket" -p 55451 -d staff_order_tests -v ON_ERROR_STOP=1 "$@"; }
 if ! psql_orders -f "$qa_cluster/schema.sql" > "$qa_cluster/orders-bootstrap.log" 2>&1; then cat "$qa_cluster/orders-bootstrap.log"; exit 1; fi
 if ! psql_orders -f supabase/migrations/130_staff_order_payment.sql > "$qa_cluster/orders-rerun.log" 2>&1; then cat "$qa_cluster/orders-rerun.log"; exit 1; fi
+if ! psql_orders -f supabase/migrations/136_prices_once.sql > "$qa_cluster/orders-rerun.log" 2>&1; then cat "$qa_cluster/orders-rerun.log"; exit 1; fi
 if ! psql_orders -f tests/sql/staff-order-payment.sql > "$qa_cluster/orders.log" 2>&1; then cat "$qa_cluster/orders.log"; exit 1; fi
 echo "PASS staff-order-payment (a delivery is paid before it is saved; pickups pay at the counter)"
 
@@ -61,6 +62,8 @@ if ! psql_checkout -f "$qa_cluster/schema.sql" > "$qa_cluster/checkout-bootstrap
 # The runner has no ledger, so 128 and 129 must be safe to apply twice: run them again before the test.
 if ! psql_checkout -f supabase/migrations/128_one_payment_checkout.sql > "$qa_cluster/checkout-rerun.log" 2>&1; then cat "$qa_cluster/checkout-rerun.log"; exit 1; fi
 if ! psql_checkout -f supabase/migrations/129_store_collects_payment.sql > "$qa_cluster/checkout-rerun.log" 2>&1; then cat "$qa_cluster/checkout-rerun.log"; exit 1; fi
+# 136 replaced their checkout functions (prices at each pharmacy); re-running it restores the latest, as the full sequence would.
+if ! psql_checkout -f supabase/migrations/136_prices_once.sql > "$qa_cluster/checkout-rerun.log" 2>&1; then cat "$qa_cluster/checkout-rerun.log"; exit 1; fi
 if ! psql_checkout -f tests/sql/one-payment-checkout.sql > "$qa_cluster/checkout.log" 2>&1; then cat "$qa_cluster/checkout.log"; exit 1; fi
 echo "PASS one-payment-checkout (a rental and a purchase on one Stripe session, fake HTTP)"
 

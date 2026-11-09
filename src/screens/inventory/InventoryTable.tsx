@@ -7,6 +7,7 @@ import ItemThumb from '../../components/ItemThumb'
 import StockStatusBadges, { LOW_STOCK_THRESHOLD } from '../../components/StockStatusBadges'
 import { fulfillmentLabel } from '../../lib/fulfillment'
 import { stockTone, storesStockTone, TONE_CARD, TONE_TEXT } from '../../lib/status'
+import { rentPriceLabels, salePriceLabel } from '../../lib/storePrices'
 import type { InventoryItem } from '../Inventory'
 import ProductPanel from './ProductPanel'
 
@@ -26,18 +27,6 @@ type Props = {
 // Below xl the product's cell carries everything the hidden columns show.
 const COLUMNS =
   'items-center gap-x-4 px-3 grid-cols-[minmax(0,1fr)_auto] xl:grid-cols-[minmax(0,1fr)_9.5rem_10.5rem_7.5rem_5.5rem] 2xl:grid-cols-[minmax(0,1fr)_8rem_10rem_11rem_8rem_5.5rem]'
-
-const money = (value: number | null) => `$${Number(value).toFixed(0)}`
-
-function rentLabels(it: InventoryItem): string[] {
-  if (!it.is_rentable) return ['Not rentable']
-  return [
-    it.pickup_enabled && it.pickup_rental_price != null ? `${money(it.pickup_rental_price)} pickup` : null,
-    it.delivery_enabled && it.delivery_rental_price != null ? `${money(it.delivery_rental_price)} delivered` : null,
-  ].filter((label): label is string => Boolean(label))
-}
-
-const saleLabel = (it: InventoryItem) => (it.is_purchasable && it.sale_price != null ? `${money(it.sale_price)} sale` : 'Not for sale')
 
 function Offered({ it }: { it: InventoryItem }) {
   const Icon = it.pickup_enabled ? MapPin : Truck
@@ -118,8 +107,8 @@ export default function InventoryTable({ items, expandedId, onToggle, editTarget
                       <span className={`font-medium tabular-nums ${TONE_TEXT[tone]}`}>{stock} in stock{locationId ? '' : ' across stores'}</span>
                       <StockFlags it={it} stock={stock} locationId={locationId} />
                       <Offered it={it} />
-                      <span className="font-medium text-slate-700">{rentLabels(it).join(' · ')}</span>
-                      <span className="text-slate-500">{saleLabel(it)}</span>
+                      <span className="font-medium text-slate-700">{rentPriceLabels(it, locationId).join(' · ')}</span>
+                      <span className="text-slate-500">{salePriceLabel(it, locationId)}</span>
                     </div>
                   </div>
                 </div>
@@ -130,8 +119,8 @@ export default function InventoryTable({ items, expandedId, onToggle, editTarget
                   <div className="flex flex-wrap gap-1"><StockFlags it={it} stock={stock} locationId={locationId} /></div>
                 </div>
                 <div className="hidden text-right xl:block">
-                  {rentLabels(it).map((label) => <div key={label} className="whitespace-nowrap text-sm font-medium text-slate-900">{label}</div>)}
-                  <div className="whitespace-nowrap text-sm text-slate-500">{saleLabel(it)}</div>
+                  {rentPriceLabels(it, locationId).map((label) => <div key={label} className="whitespace-nowrap text-sm font-medium text-slate-900">{label}</div>)}
+                  <div className="whitespace-nowrap text-sm text-slate-500">{salePriceLabel(it, locationId)}</div>
                 </div>
                 <div className="flex shrink-0 items-center justify-end gap-1">{actions(it)}</div>
               </div>

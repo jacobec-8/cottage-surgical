@@ -10,7 +10,7 @@ QA records. Line numbers drift; search by file.
 | Save | File | Checks | On screen |
 |---|---|---|---|
 | Edit product | `src/screens/InventoryItemDetail.tsx` | yes | yes |
-| Store stock and price override | `src/screens/InventoryItemDetail.tsx` | yes | yes |
+| Store stock and prices at this pharmacy | `src/screens/InventoryItemDetail.tsx` | yes | yes |
 | Unit editor | `src/screens/InventoryItemDetail.tsx` | yes | yes |
 | Inventory note | `src/screens/InventoryItemDetail.tsx` | yes | yes |
 | New product | `src/screens/Inventory.tsx` | yes | yes |
