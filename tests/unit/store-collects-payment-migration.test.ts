@@ -13,10 +13,11 @@ const REBUILT = [
 ]
 
 test('129 rebuilds exactly the functions it says it does', () => {
-  // 136 (prices once) rebuilt submit_rental_request_with_fulfillment again.
+  // 136 (prices once) rebuilt submit_rental_request_with_fulfillment again; 139 (section switches) set_order_payment_state.
   const rebuilt = [...latestFunctions()].filter(([, d]) => d.file === MIGRATION).map(([n]) => n).sort()
-  assert.deepEqual(rebuilt, REBUILT.filter((name) => name !== 'submit_rental_request_with_fulfillment'))
+  assert.deepEqual(rebuilt, REBUILT.filter((name) => !['submit_rental_request_with_fulfillment', 'set_order_payment_state'].includes(name)))
   assert.equal(latestFunctions().get('submit_rental_request_with_fulfillment')?.file, '136_prices_once.sql')
+  assert.equal(latestFunctions().get('set_order_payment_state')?.file, '139_section_switches.sql')
 })
 
 test('rebuilt functions keep their search_path and grants', () => {

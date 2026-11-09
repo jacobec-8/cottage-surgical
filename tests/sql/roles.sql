@@ -910,5 +910,104 @@ DO $$ BEGIN
 EXCEPTION WHEN insufficient_privilege THEN NULL; END $$;
 RESET ROLE;
 
+-- ── Section switches hold in the database (139) ───────────────────────────
+SELECT test_as('');
+UPDATE staff_module_access SET enabled = false WHERE location_id = 'a1000000-0000-0000-0000-0000000000a1' AND module_key = 'customers';
+SELECT test_as('a2000000-0000-0000-0000-000000000003'); SET ROLE authenticated;
+DO $$ BEGIN
+  UPDATE customers SET notes = 'x' WHERE id = 'a4000000-0000-0000-0000-0000000000a1';
+  RAISE EXCEPTION 'FAILED: staff saved a customer with Customers off';
+EXCEPTION WHEN insufficient_privilege THEN NULL; END $$;
+RESET ROLE;
+SELECT test_as('a2000000-0000-0000-0000-000000000002'); SET ROLE authenticated;
+UPDATE customers SET notes = 'owner note' WHERE id = 'a4000000-0000-0000-0000-0000000000a1';
+RESET ROLE;
+SELECT test_as('');
+SELECT test_assert((SELECT notes = 'owner note' FROM customers WHERE id = 'a4000000-0000-0000-0000-0000000000a1'), 'owners are never held by section switches');
+UPDATE equipment_location_inventory SET quantity_on_hand = 5 WHERE equipment_item_id = 'a7000000-0000-0000-0000-0000000000e1' AND location_id = 'a1000000-0000-0000-0000-0000000000a1';
+SELECT test_as('a2000000-0000-0000-0000-000000000003'); SET ROLE authenticated;
+CREATE TEMP TABLE sec_order AS SELECT create_staff_order(NULL, 'rental', '[{"item_id": "a7000000-0000-0000-0000-0000000000e1", "quantity": 1}]',
+  jsonb_build_object('location_id', 'a1000000-0000-0000-0000-0000000000a1', 'method', 'pickup'), NULL,
+  jsonb_build_object('full_name', 'Section Walkin', 'phone', '5165550111', 'line1', '2 Oak St', 'city', 'Woodbury', 'state', 'NY', 'zip', '11797')) AS r;
+RESET ROLE;
+SELECT test_as('');
+SELECT test_assert((SELECT (r->>'ok')::boolean FROM sec_order) AND EXISTS (SELECT 1 FROM customers WHERE full_name = 'Section Walkin'),
+  'a new order may create its customer though Customers is off: ' || (SELECT r::text FROM sec_order));
+UPDATE staff_module_access SET enabled = true WHERE location_id = 'a1000000-0000-0000-0000-0000000000a1' AND module_key = 'customers';
+UPDATE staff_module_access SET enabled = false WHERE location_id = 'a1000000-0000-0000-0000-0000000000a1' AND module_key = 'new_order';
+SELECT test_as('a2000000-0000-0000-0000-000000000003'); SET ROLE authenticated;
+DO $$ BEGIN
+  PERFORM create_staff_order(NULL, 'rental', '[{"item_id": "a7000000-0000-0000-0000-0000000000e1", "quantity": 1}]',
+    jsonb_build_object('location_id', 'a1000000-0000-0000-0000-0000000000a1', 'method', 'pickup'), NULL,
+    jsonb_build_object('full_name', 'Locked Walkin', 'phone', '5165550112', 'line1', '2 Oak St', 'city', 'Woodbury', 'state', 'NY', 'zip', '11797'));
+  RAISE EXCEPTION 'FAILED: staff placed a new order with New Order off';
+EXCEPTION WHEN insufficient_privilege THEN NULL; END $$;
+RESET ROLE;
+SELECT test_as('');
+UPDATE staff_module_access SET enabled = true WHERE location_id = 'a1000000-0000-0000-0000-0000000000a1' AND module_key = 'new_order';
+SELECT test_assert(NOT EXISTS (SELECT 1 FROM customers WHERE full_name = 'Locked Walkin'), 'a refused new order leaves no customer behind');
+UPDATE staff_module_access SET enabled = false WHERE location_id = 'a1000000-0000-0000-0000-0000000000a1' AND module_key = 'delivery';
+SELECT test_as('a2000000-0000-0000-0000-000000000003'); SET ROLE authenticated;
+DO $$ BEGIN
+  UPDATE deliveries SET notes = 'x' WHERE id = 'a6000000-0000-0000-0000-0000000000a1';
+  RAISE EXCEPTION 'FAILED: staff rescheduled a stop with Delivery off';
+EXCEPTION WHEN insufficient_privilege THEN NULL; END $$;
+RESET ROLE;
+SELECT test_as('');
+UPDATE deliveries SET address_line1 = '1 Main St', address_city = 'Woodbury' WHERE id = 'a6000000-0000-0000-0000-0000000000a1';
+SELECT test_as('a2000000-0000-0000-0000-000000000004'); SET ROLE authenticated;
+CREATE TEMP TABLE sec_drive AS SELECT start_delivery('a6000000-0000-0000-0000-0000000000a1') AS r;
+RESET ROLE;
+SELECT test_as('');
+SELECT test_assert((SELECT status FROM deliveries WHERE id = 'a6000000-0000-0000-0000-0000000000a1') = 'en_route',
+  'drivers are never held by staff section switches: ' || (SELECT r::text FROM sec_drive));
+UPDATE deliveries SET status = 'scheduled' WHERE id = 'a6000000-0000-0000-0000-0000000000a1';
+SELECT test_as('');
+UPDATE staff_module_access SET enabled = true WHERE location_id = 'a1000000-0000-0000-0000-0000000000a1' AND module_key = 'delivery';
+UPDATE staff_module_access SET enabled = false WHERE location_id = 'a1000000-0000-0000-0000-0000000000a1' AND module_key = 'inventory';
+SELECT test_as('a2000000-0000-0000-0000-000000000003'); SET ROLE authenticated;
+DO $$ BEGIN
+  UPDATE equipment_location_inventory SET quantity_on_hand = 9 WHERE equipment_item_id = 'a7000000-0000-0000-0000-0000000000e1' AND location_id = 'a1000000-0000-0000-0000-0000000000a1';
+  RAISE EXCEPTION 'FAILED: staff counted stock with Inventory off';
+EXCEPTION WHEN insufficient_privilege THEN NULL; END $$;
+RESET ROLE;
+SELECT test_as('');
+UPDATE staff_module_access SET enabled = true WHERE location_id = 'a1000000-0000-0000-0000-0000000000a1' AND module_key = 'inventory';
+UPDATE staff_module_access SET enabled = false WHERE location_id = 'a1000000-0000-0000-0000-0000000000a1' AND module_key = 'drivers';
+SELECT test_as('a2000000-0000-0000-0000-000000000003'); SET ROLE authenticated;
+DO $$ BEGIN
+  UPDATE drivers SET phone = '5165550199' WHERE id = 'a3000000-0000-0000-0000-000000000001';
+  RAISE EXCEPTION 'FAILED: staff edited a driver with Drivers off';
+EXCEPTION WHEN insufficient_privilege THEN NULL; END $$;
+RESET ROLE;
+SELECT test_as('');
+UPDATE staff_module_access SET enabled = true WHERE location_id = 'a1000000-0000-0000-0000-0000000000a1' AND module_key = 'drivers';
+SELECT test_as('');
+INSERT INTO rental_orders (id, customer_id, location_id, status, source) VALUES ('a5000000-0000-0000-0000-0000000000e1', 'a4000000-0000-0000-0000-0000000000a1', 'a1000000-0000-0000-0000-0000000000a1', 'requested', 'storefront');
+UPDATE staff_module_access SET enabled = false WHERE location_id = 'a1000000-0000-0000-0000-0000000000a1' AND module_key = 'requests';
+SELECT test_as('a2000000-0000-0000-0000-000000000003'); SET ROLE authenticated;
+DO $$ BEGIN
+  PERFORM cancel_order('a5000000-0000-0000-0000-0000000000e1', 'test');
+  RAISE EXCEPTION 'FAILED: staff declined a request with Requests off';
+EXCEPTION WHEN insufficient_privilege THEN NULL; END $$;
+RESET ROLE;
+SELECT test_as('');
+UPDATE staff_module_access SET enabled = true WHERE location_id = 'a1000000-0000-0000-0000-0000000000a1' AND module_key = 'requests';
+UPDATE staff_module_access SET enabled = false WHERE location_id = 'a1000000-0000-0000-0000-0000000000a1' AND module_key = 'orders';
+SELECT test_as('a2000000-0000-0000-0000-000000000003'); SET ROLE authenticated;
+SELECT cancel_order('a5000000-0000-0000-0000-0000000000e1', 'test');
+RESET ROLE;
+SELECT test_as('');
+SELECT test_assert((SELECT status = 'cancelled' FROM rental_orders WHERE id = 'a5000000-0000-0000-0000-0000000000e1'),
+  'declining a request is Requests'' work, not Orders''');
+UPDATE staff_module_access SET enabled = true WHERE location_id = 'a1000000-0000-0000-0000-0000000000a1' AND module_key = 'orders';
+UPDATE staff_module_access SET enabled = true WHERE location_id = 'a1000000-0000-0000-0000-0000000000a1';
+UPDATE staff_module_access SET enabled = false WHERE location_id = 'a1000000-0000-0000-0000-0000000000a1' AND module_key IN ('edit_prices', 'edit_products');
+SELECT test_as('a2000000-0000-0000-0000-000000000003'); SET ROLE authenticated;
+UPDATE customers SET notes = 'all open' WHERE id = 'a4000000-0000-0000-0000-0000000000a1';
+RESET ROLE;
+SELECT test_as('');
+SELECT test_assert((SELECT notes = 'all open' FROM customers WHERE id = 'a4000000-0000-0000-0000-0000000000a1'), 'with the section on, staff work as before');
+
 SELECT test_as('');
 SELECT 'roles assertions passed' AS result;
