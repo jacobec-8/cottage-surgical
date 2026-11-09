@@ -28,7 +28,6 @@ const CHECK_RULES: ReadonlyArray<[RegExp, string]> = [
 const UNIQUE_RULES: ReadonlyArray<[RegExp, string]> = [
   [/asset_tag/, 'That asset tag is already used by another unit at this store.'],
   [/_sku/, 'That SN is already used by another product at this store.'],
-  [/pickup_locations_name/, 'Another location already has that name.'],
   [/drivers_user_id/, 'That login is already linked to another driver.'],
 ]
 

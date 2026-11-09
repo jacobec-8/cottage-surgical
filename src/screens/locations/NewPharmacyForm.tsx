@@ -48,7 +48,7 @@ export default function NewPharmacyForm({ onDone }: NewPharmacyFormProps) {
         delivery_zips: form.fulfillmentMode === 'pickup_and_delivery' ? zips : [],
         delivers_anywhere: form.fulfillmentMode === 'pickup_and_delivery' && form.deliversAnywhere,
       }).select('id').single()
-      if (error) throw new Error(error.code === '23505' ? 'A pharmacy with that name already exists.' : 'Couldn’t add the pharmacy. Please try again.')
+      if (error) throw new Error('Couldn’t add the pharmacy. Please try again.')
       if (!data?.id) throw new Error('Couldn’t add the pharmacy. Please try again.')
     },
     onSuccess: () => {

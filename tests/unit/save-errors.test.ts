@@ -41,7 +41,6 @@ test('duplicates name the field that clashes', () => {
   const dup = (name: string) => ({ code: '23505', message: `duplicate key value violates unique constraint "${name}"` })
   assert.equal(saveErrorMessage(dup('uq_equipment_units_store_asset_tag')), 'That asset tag is already used by another unit at this store.')
   assert.equal(saveErrorMessage(dup('uq_equipment_items_store_sku')), 'That SN is already used by another product at this store.')
-  assert.equal(saveErrorMessage(dup('uq_pickup_locations_name_lower')), 'Another location already has that name.')
   assert.equal(saveErrorMessage(dup('drivers_user_id_key')), 'That login is already linked to another driver.')
   assert.equal(saveErrorMessage(dup('anything_else')), 'That already exists. Use a different value.')
 })
