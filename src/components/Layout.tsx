@@ -168,7 +168,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen min-h-dvh flex bg-slate-50">
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-slate-200 bg-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:h-dvh">
+      <aside className="hidden print:hidden w-64 shrink-0 flex-col border-r border-slate-200 bg-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:h-dvh">
         <div className="flex h-[72px] shrink-0 items-center gap-2.5 border-b border-slate-200 px-4">
           <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-blue-600 text-white">
             <Shield size={18} />
@@ -224,7 +224,7 @@ export default function Layout({ children }: { children: ReactNode }) {
       )}
 
       <div className="flex-1 min-w-0 flex flex-col">
-        <header data-sticky-header className="sticky top-0 z-20 flex items-center gap-3 border-b border-slate-200 bg-white px-3 py-3 sm:px-6 lg:static lg:h-[72px] lg:shrink-0 lg:justify-end lg:gap-4 lg:py-0 2xl:gap-6">
+        <header data-sticky-header className="sticky top-0 z-20 print:hidden flex items-center gap-3 border-b border-slate-200 bg-white px-3 py-3 sm:px-6 lg:static lg:h-[72px] lg:shrink-0 lg:justify-end lg:gap-4 lg:py-0 2xl:gap-6">
           <div className="flex min-w-0 items-center gap-2 lg:hidden">
             <button
               type="button"
@@ -295,7 +295,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         </header>
         <main className="flex-1 overflow-x-hidden p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:p-6 lg:p-8">
           {activeWorkspace && !isDriver && (
-            <div className="mb-6">
+            <div className="mb-6 print:hidden">
               {activeWorkspace.tabs.some((tab) => pathname === tab.to) && (
                 <h1 className="mb-4 text-2xl font-semibold">{activeWorkspace.label}</h1>
               )}

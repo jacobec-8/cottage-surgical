@@ -1070,5 +1070,43 @@ SELECT test_as('');
 SELECT test_assert((SELECT driver_id = 'a3000000-0000-0000-0000-000000000001' FROM deliveries WHERE id = 'a6000000-0000-0000-0000-0000000000f1'), 'once paid, a driver is assigned');
 SELECT test_assert((SELECT (r->>'ok')::boolean FROM paid_pickup), 'once paid, the counter pickup is done: ' || (SELECT r::text FROM paid_pickup));
 
+-- ── Order receipts (141): the whole story, money included, for the order's pharmacy ─
+SELECT test_as('');
+INSERT INTO money_records (location_id, order_id, customer_id, kind, cash_amount, revenue_amount, method, note)
+VALUES ('a1000000-0000-0000-0000-0000000000a1', 'a5000000-0000-0000-0000-0000000000f1', 'a4000000-0000-0000-0000-0000000000a1', 'payment', 25, 25, 'in_store', 'Paid at the counter');
+SELECT test_as('a2000000-0000-0000-0000-000000000003'); SET ROLE authenticated;
+CREATE TEMP TABLE staff_receipt AS SELECT order_receipt('a5000000-0000-0000-0000-0000000000f1') AS r;
+RESET ROLE;
+SELECT test_as('');
+SELECT test_assert((SELECT (r->>'ok')::boolean AND jsonb_array_length(r->'receipt'->'money') > 0 AND jsonb_array_length(r->'receipt'->'stops') = 3 FROM staff_receipt),
+  'staff read their pharmacy''s receipt, money included: ' || left((SELECT r::text FROM staff_receipt), 300));
+SELECT test_assert((SELECT bool_or(st->>'completed_by' IS NOT NULL AND st->>'status' = 'completed') FROM staff_receipt, jsonb_array_elements(r->'receipt'->'stops') st),
+  'the receipt says who handed a counter pickup over');
+SELECT test_assert((SELECT NOT (r->'receipt'->'customer' ? 'coverage_type') FROM staff_receipt), 'the receipt shows no insurance');
+SELECT test_as('a2000000-0000-0000-0000-000000000002'); SET ROLE authenticated;
+SELECT test_assert((order_receipt('a5000000-0000-0000-0000-0000000000f1'))->>'ok' = 'true', 'the owner reads it');
+RESET ROLE;
+SELECT test_as('a2000000-0000-0000-0000-000000000005'); SET ROLE authenticated;
+SELECT test_assert((order_receipt('a5000000-0000-0000-0000-0000000000f1'))->>'reason' = 'not_found', 'staff of another pharmacy can''t');
+RESET ROLE;
+SELECT test_as('a2000000-0000-0000-0000-000000000006'); SET ROLE authenticated;
+SELECT test_assert((order_receipt('a5000000-0000-0000-0000-0000000000f1'))->>'reason' = 'not_found', 'another owner can''t');
+RESET ROLE;
+SELECT test_as('a2000000-0000-0000-0000-000000000004'); SET ROLE authenticated;
+SELECT test_assert((order_receipt('a5000000-0000-0000-0000-0000000000f1'))->>'reason' = 'not_found', 'a driver can''t');
+RESET ROLE;
+SELECT test_as(''); SET ROLE anon;
+DO $$ BEGIN
+  PERFORM order_receipt('a5000000-0000-0000-0000-0000000000f1');
+  RAISE EXCEPTION 'FAILED: the public key read a receipt';
+EXCEPTION WHEN insufficient_privilege THEN NULL; END $$;
+RESET ROLE;
+SELECT test_as('a2000000-0000-0000-0000-000000000003'); SET ROLE authenticated;
+DO $$ BEGIN
+  PERFORM count(*) FROM money_records;
+  IF (SELECT count(*) FROM money_records) > 0 THEN RAISE EXCEPTION 'FAILED: staff read money records outside the receipt'; END IF;
+EXCEPTION WHEN insufficient_privilege THEN NULL; END $$;
+RESET ROLE;
+
 SELECT test_as('');
 SELECT 'roles assertions passed' AS result;
