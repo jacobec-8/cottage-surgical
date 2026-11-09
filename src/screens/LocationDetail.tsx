@@ -17,6 +17,7 @@ import { locationProblems, locationUserProblems } from '../lib/formChecks/people
 import { FieldRefusal, ensureChanged } from '../lib/saveErrors'
 import StockStatusBadges from '../components/StockStatusBadges'
 import BusinessContact from '../components/BusinessContact'
+import WebsiteSwitch from './locations/WebsiteSwitch'
 
 type UserRole = 'admin' | 'owner' | 'staff' | 'driver'
 type LocationUser = {
@@ -44,6 +45,7 @@ type Location = {
   delivers_anywhere: boolean
   email_display_name: string | null
   reply_to_email: string | null
+  on_website: boolean
   business: { id: string; name: string } | null
   users: LocationUser[]
 }
@@ -84,7 +86,7 @@ export default function LocationDetail({ locationId }: { locationId: string }) {
     queryFn: async () => {
       const { data, error } = await supabase.from('pickup_locations').select(
         'id,name,address_line1,address_line2,address_city,address_state,address_zip,phone,instructions,' +
-        'fulfillment_mode,partner_type,is_active,delivery_zips,delivers_anywhere,email_display_name,reply_to_email,business:businesses(id,name),' +
+        'fulfillment_mode,partner_type,is_active,delivery_zips,delivers_anywhere,email_display_name,reply_to_email,on_website,business:businesses(id,name),' +
         'users:profiles!profiles_location_id_fkey(id,email,full_name,phone,role,is_active)',
       ).eq('id', locationId).maybeSingle()
       if (error) throw error
@@ -199,6 +201,7 @@ export default function LocationDetail({ locationId }: { locationId: string }) {
       </header>
 
       {location.data.business && <BusinessContact businessId={location.data.business.id} businessName={location.data.business.name} />}
+      <WebsiteSwitch locationId={location.data.id} onWebsite={location.data.on_website} active={location.data.is_active} />
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(340px,0.85fr)]">
         <SaveForm aria-label="Pharmacy details" onSave={() => save.mutateAsync()}

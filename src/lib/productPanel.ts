@@ -36,7 +36,7 @@ export function websiteStatus(item: ShopItem, storeOpen: boolean): ShopStatus {
   if (!item.is_active) return { listed: false, reason: 'Removed from the catalog' }
   const priced = item.is_rentable ? Number(item.delivery_rental_price ?? item.pickup_rental_price ?? 0) > 0 : Number(item.sale_price ?? 0) > 0
   if (!priced) return { listed: false, reason: 'No price set' }
-  if (!storeOpen) return { listed: false, reason: 'This store is not open to customers yet' }
+  if (!storeOpen) return { listed: false, reason: 'This pharmacy is not on the website' }
   if (!item.is_rentable) return { listed: false, reason: 'For sale only: needs stock and online retail turned on' }
   return { listed: false, reason: 'No open store carries it' }
 }
@@ -56,7 +56,7 @@ export type LiveFacts = {
 export function liveChecklist(f: LiveFacts): string[] {
   if (!f.active) return ['Restore it to the catalog']
   const steps: string[] = []
-  if (!f.storeOpen) steps.push('Open this store to customers')
+  if (!f.storeOpen) steps.push('Put this pharmacy on the website (owner: Locations)')
   if (f.rentable) {
     if (!(Number(f.rentalPrice) > 0)) steps.push('Set a rental price')
     return steps

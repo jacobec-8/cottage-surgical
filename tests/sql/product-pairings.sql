@@ -20,6 +20,9 @@ INSERT INTO public.pickup_locations (id, name, business_id, slug, address_line1,
  ('b1000000-0000-0000-0000-0000000000a2', 'Pharmacy A2', 'b0000000-0000-0000-0000-00000000000a', 'pa2', '2 A St', 'Woodbury', '11797'),
  ('b1000000-0000-0000-0000-0000000000b1', 'Pharmacy B1', 'b0000000-0000-0000-0000-00000000000b', 'pb1', '1 B St', 'Huntington', '11743');
 INSERT INTO public.storefronts (business_id, slug, is_default) VALUES ('b0000000-0000-0000-0000-00000000000a', 'pair-site', true);
+-- The website carries these pharmacies (132).
+INSERT INTO public.storefront_pharmacies (location_id, storefront_id)
+SELECT l.id, s.id FROM public.pickup_locations l, public.storefronts s WHERE s.slug = 'pair-site' AND l.id IN ('b1000000-0000-0000-0000-0000000000a1', 'b1000000-0000-0000-0000-0000000000a2');
 
 SELECT set_config('cottage.login_create', '1', false);
 INSERT INTO auth.users (id, email) VALUES
