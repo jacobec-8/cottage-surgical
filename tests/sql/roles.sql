@@ -878,5 +878,37 @@ UPDATE equipment_location_inventory SET delivery_rental_price = 35 WHERE equipme
 SELECT test_assert((validate_storefront_fulfillment('[{"item_id":"a7000000-0000-0000-0000-0000000000e1","quantity":1}]', '{"method":"delivery","delivery_zip":"11746"}'))->>'pickup_location_id' = 'a1000000-0000-0000-0000-0000000000a2',
   'once priced, the nearer pharmacy delivers');
 
+-- ── Product photos are filed by owner (138) ─────────────────────────────────
+SELECT test_as('a2000000-0000-0000-0000-000000000002'); SET ROLE authenticated;
+SELECT test_assert(can_write_product_photo('a0000000-0000-0000-0000-00000000000a/x/catalog.jpg') AND can_write_product_photo('a1000000-0000-0000-0000-0000000000a1/x/catalog.jpg'),
+  'an owner writes photos in their own folder and their pharmacies''');
+SELECT test_assert(NOT can_write_product_photo('a0000000-0000-0000-0000-00000000000b/x/catalog.jpg') AND NOT can_write_product_photo('a1000000-0000-0000-0000-0000000000b1/x/catalog.jpg'),
+  'an owner can''t replace or delete another owner''s photos');
+SELECT test_assert(NOT can_write_product_photo('catalog/x.jpg') AND NOT can_write_product_photo('x.jpg') AND NOT can_write_product_photo('../a0000000-0000-0000-0000-00000000000a/x.jpg'),
+  'only admins change the starter photos or anything outside an owner''s folder');
+RESET ROLE;
+SELECT test_as('a2000000-0000-0000-0000-000000000006'); SET ROLE authenticated;
+SELECT test_assert(NOT can_write_product_photo('a0000000-0000-0000-0000-00000000000a/x/catalog.jpg') AND can_write_product_photo('a0000000-0000-0000-0000-00000000000b/x/catalog.jpg'),
+  'the other owner is walled the same way');
+RESET ROLE;
+UPDATE staff_module_access SET enabled = true WHERE location_id = 'a1000000-0000-0000-0000-0000000000a1' AND module_key = 'edit_products';
+SELECT test_as('a2000000-0000-0000-0000-000000000003'); SET ROLE authenticated;
+SELECT test_assert(can_write_product_photo('a1000000-0000-0000-0000-0000000000a1/x/catalog.jpg') AND NOT can_write_product_photo('a0000000-0000-0000-0000-00000000000a/x/catalog.jpg') AND NOT can_write_product_photo('a1000000-0000-0000-0000-0000000000a2/x/catalog.jpg'),
+  'staff with products open write their pharmacy''s photos only');
+RESET ROLE;
+UPDATE staff_module_access SET enabled = false WHERE location_id = 'a1000000-0000-0000-0000-0000000000a1' AND module_key = 'edit_products';
+SELECT test_as('a2000000-0000-0000-0000-000000000003'); SET ROLE authenticated;
+SELECT test_assert(NOT can_write_product_photo('a1000000-0000-0000-0000-0000000000a1/x/catalog.jpg'), 'staff with products locked write no photos');
+RESET ROLE;
+SELECT test_as('a2000000-0000-0000-0000-000000000001'); SET ROLE authenticated;
+SELECT test_assert(can_write_product_photo('catalog/x.jpg') AND can_write_product_photo('a0000000-0000-0000-0000-00000000000b/x.jpg'), 'admins write any photo');
+RESET ROLE;
+SELECT test_as(''); SET ROLE anon;
+DO $$ BEGIN
+  PERFORM can_write_product_photo('catalog/x.jpg');
+  RAISE EXCEPTION 'FAILED: the public key asked about photo rights';
+EXCEPTION WHEN insufficient_privilege THEN NULL; END $$;
+RESET ROLE;
+
 SELECT test_as('');
 SELECT 'roles assertions passed' AS result;

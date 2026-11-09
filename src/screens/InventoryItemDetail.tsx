@@ -36,6 +36,7 @@ type Item = {
   delivery_rental_price: number | null
   sale_price: number | null
   location_id?: string | null
+  business_id?: string | null
   is_serialized: boolean
   is_rentable: boolean
   is_purchasable: boolean
@@ -105,7 +106,7 @@ type ItemNote = {
 }
 
 type Tab = 'overview' | 'units' | 'rentals' | 'pickup' | 'notes'
-const ITEM_SELECT = 'id,location_id,name,description,category,sku,image_url,pickup_rental_price,delivery_rental_price,sale_price,is_serialized,is_rentable,is_purchasable,is_active,created_at,updated_at,pickup_enabled,delivery_enabled,same_day_pickup,installation_required'
+const ITEM_SELECT = 'id,location_id,business_id,name,description,category,sku,image_url,pickup_rental_price,delivery_rental_price,sale_price,is_serialized,is_rentable,is_purchasable,is_active,created_at,updated_at,pickup_enabled,delivery_enabled,same_day_pickup,installation_required'
 
 export default function InventoryItemDetail({ itemId }: { itemId: string }) {
   const { profile } = useAuth()
@@ -708,7 +709,8 @@ function EditItemForm({ item, onCancel, onSaved }: { item: Item; onCancel: () =>
       let uploadedPath: string | null = null
       if (imageFile) {
         const ext = imageFile.name.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg'
-        uploadedPath = `${item.location_id ? `${item.location_id}/` : ''}${crypto.randomUUID()}/catalog.${ext}`
+        // Photos are filed by owner (138): a store's own product under the store, else under its owner's business.
+        uploadedPath = `${item.location_id ?? item.business_id ?? 'catalog'}/${crypto.randomUUID()}/catalog.${ext}`
         const upload = await supabase.storage.from('equipment-images').upload(uploadedPath, imageFile, { cacheControl: '3600', contentType: imageFile.type, upsert: false })
         if (upload.error) throw upload.error
         payload.image_url = supabase.storage.from('equipment-images').getPublicUrl(uploadedPath).data.publicUrl

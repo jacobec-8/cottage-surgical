@@ -337,7 +337,8 @@ function ItemModal({ item, onClose }: { item: Partial<InventoryItem>; onClose: (
       let uploadedPath: string | null = null
       if (imageFile) {
         const ext = imageFile.name.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg'
-        uploadedPath = `${storeOwner ? `${storeOwner}/` : ''}${crypto.randomUUID()}/catalog.${ext}`
+        // Photos are filed by owner (138): a store's own product under the store, else under the owner's business.
+        uploadedPath = `${storeOwner ?? profile?.business_id ?? 'catalog'}/${crypto.randomUUID()}/catalog.${ext}`
         const upload = await supabase.storage.from('equipment-images').upload(uploadedPath, imageFile, {
           cacheControl: '3600',
           contentType: imageFile.type,
