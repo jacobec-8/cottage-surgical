@@ -142,7 +142,7 @@ function Stock({ location, hasOwner, others, catalog, onChange }: Omit<Props, 'i
                     {item.pickup_enabled && <label className="flex items-center gap-2 sm:col-span-2"><input type="checkbox" checked={row.pickup} onChange={(e) => update(item.id, { pickup: e.target.checked })} /> Offer pickup at this business</label>}
                     {item.pickup_enabled && <TextField label="Pickup rental / month ($)" type="number" min="0" step="0.01" placeholder={pricePlaceholder(item.pickup_rental_price)} value={row.pickupPrice} onChange={(pickupPrice) => update(item.id, { pickupPrice })} />}
                     {item.delivery_enabled && location.fulfillmentMode !== 'pickup_only' && <TextField label="Delivery rental / month ($)" type="number" min="0" step="0.01" placeholder={pricePlaceholder(item.delivery_rental_price)} value={row.deliveryPrice} onChange={(deliveryPrice) => update(item.id, { deliveryPrice })} />}
-                    <p className="text-xs text-slate-500 sm:col-span-2">Leave prices blank to use the catalog defaults.</p>
+                    <p className="text-xs text-slate-500 sm:col-span-2">Leave prices blank to start at the product’s starting prices.</p>
                   </div>
                 </details>
               )}

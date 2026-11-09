@@ -24,7 +24,7 @@ export function removeProductMessage(reason: string | undefined, store: string):
   return (reason && MESSAGES[reason]?.(store)) || 'Couldn’t remove it. Please try again.'
 }
 
-/** '' → null (use the catalog price); a valid price → number; anything else → undefined. */
+/** '' → null (no price at this pharmacy); a valid price → number; anything else → undefined. */
 export function parsePrice(value: string): number | null | undefined {
   const text = value.trim()
   if (text === '') return null
@@ -32,10 +32,10 @@ export function parsePrice(value: string): number | null | undefined {
 }
 
 /** Null when a store's pickup setting can be saved; otherwise what to fix. */
-export function pickupEditProblem(enabled: boolean, price: string, catalogPrice: number | null): string | null {
+export function pickupEditProblem(enabled: boolean, price: string): string | null {
   const parsed = parsePrice(price)
   if (parsed === undefined) return 'Enter a valid price, like 45 or 45.50.'
-  if (enabled && parsed == null && catalogPrice == null) return 'Enter a pickup price.'
+  if (enabled && parsed == null) return 'Enter a pickup price.'
   return null
 }
 

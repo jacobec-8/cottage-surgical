@@ -14,11 +14,13 @@ test('monthly income adds every active rental line', () => {
 })
 
 test('online shop status says plainly whether customers can see it, and why not', () => {
-  const base = { storefront_listed: true, is_active: true, is_rentable: true, is_purchasable: false, delivery_rental_price: 200, pickup_rental_price: null, sale_price: null }
+  const base = { storefront_listed: true, is_active: true, is_rentable: true, is_purchasable: false, delivery_price_range: { min: 180, max: 200 }, pickup_price_range: null, sale_price: null }
   assert.deepEqual(websiteStatus(base, true), { listed: true, reason: null })
   assert.equal(onlineShopLabel(websiteStatus(base, true)), 'Customers can see it in the online shop')
   assert.match(websiteStatus({ ...base, storefront_listed: false, is_active: false }, true).reason!, /removed/i)
-  assert.match(websiteStatus({ ...base, storefront_listed: false, delivery_rental_price: null }, true).reason!, /price/i)
+  // Priced means a pharmacy on the website prices it; the product's starting prices don't count.
+  assert.match(websiteStatus({ ...base, storefront_listed: false, delivery_price_range: null }, true).reason!, /no price set/i)
+  assert.doesNotMatch(websiteStatus({ ...base, storefront_listed: false, delivery_price_range: null, pickup_price_range: { min: 40, max: 40 } }, true).reason!, /price/i)
   assert.match(websiteStatus({ ...base, storefront_listed: false }, false).reason!, /not on the website/i)
   const hidden = websiteStatus({ ...base, storefront_listed: false }, true)
   assert.equal(onlineShopLabel(hidden), 'Hidden from the online shop: no open store carries it')

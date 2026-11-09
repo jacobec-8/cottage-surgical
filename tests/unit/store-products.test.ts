@@ -23,18 +23,17 @@ test('every refusal reads as a plain next step', () => {
   assert.match(removeProductMessage(undefined, 'Cottage Surgical'), /try again/)
 })
 
-test('store price edits: blank keeps the catalog price; pickup needs some price', async () => {
+test('store price edits: blank means no price at this pharmacy; pickup needs its own price', async () => {
   const { pickupEditProblem, parsePrice } = await import('../../src/lib/storeProducts.ts')
   assert.equal(parsePrice(''), null)
   assert.equal(parsePrice('45'), 45)
   assert.equal(parsePrice('45.5'), 45.5)
   assert.equal(parsePrice('-1'), undefined)
   assert.equal(parsePrice('4.555'), undefined)
-  assert.equal(pickupEditProblem(true, '', null), 'Enter a pickup price.')
-  assert.equal(pickupEditProblem(true, '', 30), null)
-  assert.equal(pickupEditProblem(true, '40', null), null)
-  assert.equal(pickupEditProblem(false, '', null), null)
-  assert.match(pickupEditProblem(true, 'abc', null)!, /valid price/)
+  assert.equal(pickupEditProblem(true, ''), 'Enter a pickup price.')
+  assert.equal(pickupEditProblem(true, '40'), null)
+  assert.equal(pickupEditProblem(false, ''), null)
+  assert.match(pickupEditProblem(true, 'abc')!, /valid price/)
 })
 
 test('an edit is judged on what it changes, not on the rest of the product', async () => {

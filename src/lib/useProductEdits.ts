@@ -91,10 +91,9 @@ export function useProductEdits(item: ProductDetailsItem & { id: string; locatio
       refresh()
     },
     saveProduct: async (patch) => {
-      // The store's own prices count: a store price is enough to turn on selling or delivery.
-      const effective = store.data ? { ...item, sale_price: store.data.sale_price ?? item.sale_price,
-        pickup_rental_price: store.data.pickup_rental_price ?? item.pickup_rental_price,
-        delivery_rental_price: store.data.delivery_rental_price ?? item.delivery_rental_price } : item
+      // At a store only the store's own prices count; the product's are just starting prices.
+      const effective = store.data ? { ...item, sale_price: store.data.sale_price,
+        pickup_rental_price: store.data.pickup_rental_price, delivery_rental_price: store.data.delivery_rental_price } : item
       const problem = productEditProblem(effective, patch)
       if (problem) throw new Error(problem)
       if (locationId) {

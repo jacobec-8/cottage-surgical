@@ -778,5 +778,68 @@ SELECT test_as('');
 SELECT test_assert((SELECT count(*) = 2 AND count(DISTINCT business_id) = 2 FROM pickup_locations WHERE name = 'Pharmacy B1'),
   'an owner adds a pharmacy named like another owner''s');
 
+-- ── Prices and stock are stored once, at each pharmacy (136) ──────────────
+SELECT test_as('');
+INSERT INTO equipment_items (id, name, category, business_id, is_rentable, is_purchasable, is_serialized,
+                             pickup_enabled, delivery_enabled, pickup_rental_price, delivery_rental_price, sale_price)
+VALUES ('a7000000-0000-0000-0000-0000000000e1', 'Cane A', 'mobility', 'a0000000-0000-0000-0000-00000000000a', true, true, false, true, true, 20, 30, 90);
+SELECT test_as('a2000000-0000-0000-0000-000000000002'); SET ROLE authenticated;
+INSERT INTO equipment_location_inventory (equipment_item_id, location_id, quantity_on_hand) VALUES ('a7000000-0000-0000-0000-0000000000e1', 'a1000000-0000-0000-0000-0000000000a1', 2);
+RESET ROLE;
+SELECT test_as('');
+SELECT test_assert((SELECT pickup_rental_price = 20 AND delivery_rental_price = 30 AND sale_price = 90
+                      FROM equipment_location_inventory WHERE equipment_item_id = 'a7000000-0000-0000-0000-0000000000e1' AND location_id = 'a1000000-0000-0000-0000-0000000000a1'),
+  'a pharmacy that starts stocking a product starts at the product''s prices');
+UPDATE equipment_items SET pickup_rental_price = 99, delivery_rental_price = 99, sale_price = 999 WHERE id = 'a7000000-0000-0000-0000-0000000000e1';
+SELECT test_assert((SELECT pickup_rental_price = 20 AND delivery_rental_price = 30 AND sale_price = 90
+                      FROM equipment_location_inventory WHERE equipment_item_id = 'a7000000-0000-0000-0000-0000000000e1' AND location_id = 'a1000000-0000-0000-0000-0000000000a1'),
+  'changing the product''s price leaves the pharmacy''s alone');
+SELECT test_assert(store_sale_price('a7000000-0000-0000-0000-0000000000e1', 'a1000000-0000-0000-0000-0000000000a1') = 90, 'a sale is charged at the pharmacy''s price');
+SELECT test_assert((SELECT pickup_price_range(i) = '{"min": 20, "max": 20}'::jsonb AND delivery_price_range(i) = '{"min": 30, "max": 30}'::jsonb
+                           AND pickup_price_shown(i) = 20 AND sale_price_shown(i) = 90
+                      FROM equipment_items i WHERE i.id = 'a7000000-0000-0000-0000-0000000000e1'),
+  'the website shows the pharmacy''s prices, never the product''s');
+SELECT test_assert((SELECT pickup_rental_price = 20 AND delivery_rental_price = 30 AND monthly_rental_price = 20 AND sale_price = 90
+                      FROM website_products WHERE id = 'a7000000-0000-0000-0000-0000000000e1'),
+  'the website view''s delivery and "from" prices come from the pharmacies too');
+UPDATE equipment_location_inventory SET pickup_rental_price = NULL, sale_price = NULL WHERE equipment_item_id = 'a7000000-0000-0000-0000-0000000000e1' AND location_id = 'a1000000-0000-0000-0000-0000000000a1';
+SELECT test_assert((SELECT pickup_price_range(i) IS NULL AND sale_price_shown(i) IS NULL AND NOT can_buy(i) FROM equipment_items i WHERE i.id = 'a7000000-0000-0000-0000-0000000000e1')
+                   AND store_sale_price('a7000000-0000-0000-0000-0000000000e1', 'a1000000-0000-0000-0000-0000000000a1') IS NULL,
+  'a pharmacy with no price offers nothing at that price; the product''s price never stands in');
+SELECT test_assert((quote_storefront_rentals('[{"item_id":"a7000000-0000-0000-0000-0000000000e1","quantity":1}]',
+                    '{"method":"pickup","pickup_location_id":"a1000000-0000-0000-0000-0000000000a1"}'))->'prices'->>'a7000000-0000-0000-0000-0000000000e1' IS DISTINCT FROM '99.00',
+  'checkout never charges the product''s price');
+DELETE FROM equipment_location_inventory WHERE equipment_item_id = 'a7000000-0000-0000-0000-0000000000e1' AND location_id = 'a1000000-0000-0000-0000-0000000000a1';
+
+UPDATE staff_module_access SET enabled = false WHERE location_id = 'a1000000-0000-0000-0000-0000000000a1' AND module_key = 'edit_prices';
+SELECT test_as('a2000000-0000-0000-0000-000000000003'); SET ROLE authenticated;
+INSERT INTO equipment_location_inventory (equipment_item_id, location_id, quantity_on_hand, pickup_rental_price, sale_price)
+VALUES ('a7000000-0000-0000-0000-0000000000e1', 'a1000000-0000-0000-0000-0000000000a1', 1, 1, 1);
+RESET ROLE;
+SELECT test_as('');
+SELECT test_assert((SELECT pickup_rental_price = 99 AND sale_price = 999
+                      FROM equipment_location_inventory WHERE equipment_item_id = 'a7000000-0000-0000-0000-0000000000e1' AND location_id = 'a1000000-0000-0000-0000-0000000000a1'),
+  'staff with prices locked can''t choose prices when they first stock a product');
+DELETE FROM equipment_location_inventory WHERE equipment_item_id = 'a7000000-0000-0000-0000-0000000000e1' AND location_id = 'a1000000-0000-0000-0000-0000000000a1';
+UPDATE staff_module_access SET enabled = true WHERE location_id = 'a1000000-0000-0000-0000-0000000000a1' AND module_key = 'edit_prices';
+SELECT test_as('a2000000-0000-0000-0000-000000000003'); SET ROLE authenticated;
+INSERT INTO equipment_location_inventory (equipment_item_id, location_id, quantity_on_hand, pickup_rental_price)
+VALUES ('a7000000-0000-0000-0000-0000000000e1', 'a1000000-0000-0000-0000-0000000000a1', 1, 25);
+RESET ROLE;
+SELECT test_as('');
+SELECT test_assert((SELECT pickup_rental_price = 25 AND delivery_rental_price = 99
+                      FROM equipment_location_inventory WHERE equipment_item_id = 'a7000000-0000-0000-0000-0000000000e1' AND location_id = 'a1000000-0000-0000-0000-0000000000a1'),
+  'staff who may edit prices set their own, and the rest start at the product''s');
+
+UPDATE equipment_location_inventory SET sale_price = 80, quantity_on_hand = 3 WHERE equipment_item_id = 'a7000000-0000-0000-0000-0000000000e1' AND location_id = 'a1000000-0000-0000-0000-0000000000a1';
+SELECT test_as(''); SET ROLE anon;
+CREATE TEMP TABLE pay_later AS SELECT submit_rental_request_with_fulfillment('purchase', '[{"item_id":"a7000000-0000-0000-0000-0000000000e1","quantity":1}]',
+  '{"full_name":"Pay Later","phone":"5165550100"}', '{"line1":"1 Main St","city":"Woodbury","state":"NY","zip":"11797"}', NULL,
+  '{"method":"pickup","pickup_location_id":"a1000000-0000-0000-0000-0000000000a1","payment_method":"in_store"}') AS r;
+RESET ROLE;
+SELECT test_assert((SELECT (r->>'ok')::boolean FROM pay_later), 'a pay-later purchase request goes through: ' || (SELECT r::text FROM pay_later));
+SELECT test_assert((SELECT li.sale_price = 80 FROM rental_line_items li WHERE li.order_id = (SELECT (r->>'order_id')::uuid FROM pay_later)),
+  'a pay-later purchase request is priced at the pharmacy, not the product');
+
 SELECT test_as('');
 SELECT 'roles assertions passed' AS result;

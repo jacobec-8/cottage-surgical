@@ -11,7 +11,7 @@ const REQUEST_SELECT =
   'location:pickup_locations!rental_orders_location_id_fkey(name),' +
   'pickup_location:pickup_locations!rental_orders_pickup_location_id_fkey(name,address_line1,address_line2,address_city,address_state,address_zip),' +
   'customer:customers(full_name,phone,email),' +
-  'rental_line_items(quantity,is_active,equipment_unit_id,bulk_stock,equipment:equipment_items(id,name,image_url,quantity_on_hand,is_serialized,location_inventory:equipment_location_inventory(location_id,quantity_on_hand)))'
+  'rental_line_items(quantity,is_active,equipment_unit_id,bulk_stock,equipment:equipment_items(id,name,image_url,is_serialized,location_inventory:equipment_location_inventory(location_id,quantity_on_hand)))'
 
 type Place = { name: string; address_line1?: string | null; address_line2?: string | null; address_city?: string | null; address_state?: string | null; address_zip?: string | null }
 
