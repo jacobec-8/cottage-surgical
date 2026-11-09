@@ -11,6 +11,7 @@ import { useLocationScope } from '../contexts/LocationContext'
 import StoreOverview from './dashboard/StoreOverview'
 import RetailSalesSwitch from './dashboard/RetailSalesSwitch'
 import ActiveRentals, { ACTIVE_RENTAL_STATUSES } from './dashboard/ActiveRentals'
+import StaffToDo from './dashboard/StaffToDo'
 import OrderDetailPanel from './orders/OrderDetailPanel'
 import { useSelectedOrder } from './orders/useSelectedOrder'
 
@@ -91,6 +92,9 @@ export default function Dashboard() {
         <>
           {!selectedLocationId && (profile?.role === 'owner' || profile?.role === 'admin') && <StoreOverview />}
           {selectedLocationId && (profile?.role === 'owner' || profile?.role === 'admin') && <RetailSalesSwitch locationId={selectedLocationId} />}
+
+          {/* First thing at login: payments to collect and pickups coming up. */}
+          <StaffToDo locationId={selectedLocationId} onOpen={setSelected} />
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
             {tiles.map((t) => {

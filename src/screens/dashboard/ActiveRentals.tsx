@@ -1,17 +1,14 @@
 'use client'
 
-import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronRight, Loader2, Package, Truck } from 'lucide-react'
+import { ChevronRight, Package } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { TONE_EDGE, TONE_PILL } from '../../lib/status'
 import { businessToday } from '../delivery/stopStatus'
-import { useSchedulePickup } from '../orders/useSchedulePickup'
-import { nextStepChip, pickupBooked, rentalNextStep, rentalSortKey, type ActiveRental } from './nextStep'
+import { nextStepChip, rentalNextStep, rentalSortKey, type ActiveRental } from './nextStep'
 
 /** Out with a customer: the same set as the "Out with customers" tile. */
 export const ACTIVE_RENTAL_STATUSES = ['active', 'delivered', 'overdue', 'pickup_scheduled'] as const
-const PICKUP_ELIGIBLE = new Set(['active', 'delivered', 'overdue'])
 
 type Row = ActiveRental & {
   id: string
@@ -50,13 +47,11 @@ function useActiveRentals(locationId: string | null) {
 }
 
 /**
- * Rentals out with customers, each with its next step (renew or pickup), so
- * staff can book a pickup or open the rental to end it without leaving home.
+ * Rentals out with customers, each with its next step (renew or pickup). A card
+ * opens the rental, where a pickup is booked or the rental ended.
  */
 export default function ActiveRentals({ locationId, onOpen }: { locationId: string | null; onOpen: (orderId: string) => void }) {
   const rentals = useActiveRentals(locationId)
-  const [msg, setMsg] = useState('')
-  const schedulePickup = useSchedulePickup(setMsg)
   const today = businessToday()
   const rows = [...(rentals.data ?? [])].sort((a, b) => rentalSortKey(a, today).localeCompare(rentalSortKey(b, today)))
 
@@ -64,7 +59,6 @@ export default function ActiveRentals({ locationId, onOpen }: { locationId: stri
     <section aria-labelledby="active-rentals-heading" className="mb-8">
       <div className="mb-3 flex items-center justify-between">
         <h3 id="active-rentals-heading" className="text-sm font-semibold text-slate-700">Active rentals <span className="text-slate-400">({rows.length})</span></h3>
-        {msg && <span role="status" className="text-sm text-slate-600">{msg}</span>}
       </div>
       {rentals.isLoading && <div className="text-sm text-slate-500">Loading…</div>}
       {rentals.error && <div role="alert" className="text-sm text-red-600">Couldn’t load active rentals. Please refresh.</div>}
@@ -73,24 +67,19 @@ export default function ActiveRentals({ locationId, onOpen }: { locationId: stri
       )}
       <ul className="grid gap-2 lg:grid-cols-2">
         {rows.map((r) => (
-          <RentalCard key={r.id} r={r} today={today} onOpen={() => onOpen(r.id)}
-            scheduling={schedulePickup.isPending && schedulePickup.variables?.orderId === r.id}
-            onSchedulePickup={() => (r.address_line1?.trim() && r.address_city?.trim() ? schedulePickup.mutate({ orderId: r.id }) : onOpen(r.id))} />
+          <RentalCard key={r.id} r={r} today={today} onOpen={() => onOpen(r.id)} />
         ))}
       </ul>
     </section>
   )
 }
 
-function RentalCard({ r, today, onOpen, onSchedulePickup, scheduling }: {
-  r: Row; today: string; onOpen: () => void; onSchedulePickup: () => void; scheduling: boolean
-}) {
+function RentalCard({ r, today, onOpen }: { r: Row; today: string; onOpen: () => void }) {
   const step = rentalNextStep(r, today)
   const chip = nextStepChip(step)
   const lines = r.rental_line_items ?? []
   const first = lines[0]?.equipment
   const units = lines.reduce((sum, l) => sum + Math.max(1, l.quantity), 0)
-  const canPickup = PICKUP_ELIGIBLE.has(r.status) && !pickupBooked(r)
   const name = r.customer?.full_name ?? 'Customer'
   return (
     <li className={`flex items-center gap-3 rounded-xl border border-slate-200 border-l-4 bg-white p-3 ${TONE_EDGE[chip?.tone ?? 'gray']}`}>
@@ -109,14 +98,7 @@ function RentalCard({ r, today, onOpen, onSchedulePickup, scheduling }: {
           ${Number(r.monthly_rate ?? 0).toFixed(0)}<span className="text-xs font-medium text-slate-400">/mo</span>
         </span>
       </button>
-      {canPickup ? (
-        <button type="button" onClick={onSchedulePickup} disabled={scheduling} aria-label={`Schedule pickup for ${name}`}
-          className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 px-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-          {scheduling ? <Loader2 size={14} className="animate-spin" /> : <Truck size={14} />}<span className="hidden sm:inline">Pickup</span>
-        </button>
-      ) : (
-        <ChevronRight size={16} className="shrink-0 text-slate-300" aria-hidden="true" />
-      )}
+      <ChevronRight size={16} className="shrink-0 text-slate-300" aria-hidden="true" />
     </li>
   )
 }
