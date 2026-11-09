@@ -66,6 +66,10 @@ export default function ProductDetailsList({ item, edits, openField }: { item: P
 
   // Prices typed while turning something on become the store's prices too, so
   // what staff typed is what their customers see.
+  // In a pharmacy's view a typed price is that pharmacy's; the product's starting price is only filled when blank (136).
+  const startingOnly = <T extends Record<string, unknown>>(patch: T): Partial<T> => (store
+    ? Object.fromEntries(Object.entries(patch).filter(([key, value]) => !key.endsWith('price') || value == null || (item as Record<string, unknown>)[key] == null)) as Partial<T>
+    : patch)
   const savePrices = async (prices: { pickup?: number | null; delivery?: number | null; sale?: number | null }) => {
     if (!store) return
     await edits!.saveStore({
@@ -113,14 +117,14 @@ export default function ProductDetailsList({ item, edits, openField }: { item: P
           pickupPrice={text(pickupPrice)} deliveryPrice={text(deliveryPrice)} done={done}
           save={async (on, pickup, delivery) => {
             if (!on) { await edits!.saveProduct({ is_rentable: false }); return }
-            await edits!.saveProduct({ is_rentable: true, pickup_rental_price: pickup, delivery_rental_price: delivery })
+            await edits!.saveProduct(startingOnly({ is_rentable: true, pickup_rental_price: pickup, delivery_rental_price: delivery }))
             await savePrices({ pickup, delivery })
           }} /> : undefined} />
       <Row locked={productLocked} label="Purchase enabled" value={item.is_purchasable ? 'Yes' : 'No'}
         editor={productEdit ? (done) => <PurchaseEditor initialOn={item.is_purchasable} price={Number(salePrice) > 0 ? text(salePrice) : ''} done={done}
           save={async (on, price) => {
             if (!on) { await edits!.saveProduct({ is_purchasable: false }); return }
-            await edits!.saveProduct({ is_purchasable: true, sale_price: price })
+            await edits!.saveProduct(startingOnly({ is_purchasable: true, sale_price: price }))
             await savePrices({ sale: price })
           }} /> : undefined} />
       <Row locked={productLocked} label="Fulfillment" value={fulfillmentLabel({ pickup_enabled: pickupOn, delivery_enabled: item.delivery_enabled })}
@@ -128,7 +132,7 @@ export default function ProductDetailsList({ item, edits, openField }: { item: P
           pickupPrice={text(pickupPrice)} deliveryPrice={text(deliveryPrice)} done={done}
           save={async (pickup, delivery, pickupP, deliveryP) => {
             const prices = item.is_rentable ? { pickup_rental_price: pickup ? pickupP : null, delivery_rental_price: delivery ? deliveryP : null } : {}
-            await edits!.saveProduct({ pickup_enabled: pickup, delivery_enabled: delivery, ...prices })
+            await edits!.saveProduct(startingOnly({ pickup_enabled: pickup, delivery_enabled: delivery, ...prices }))
             if (store) await edits!.saveStore({ pickup_enabled: pickup, ...(item.is_rentable ? { pickup_rental_price: pickup ? pickupP : null, delivery_rental_price: delivery ? deliveryP : null } : {}) })
           }} /> : undefined} />
       <Row locked={productLocked} label="Same-day pickup" value={pickupOn && item.same_day_pickup ? 'May be available' : 'No'}

@@ -350,7 +350,7 @@ BEGIN
 END;
 $function$;
 
--- create_stripe_cart_checkout(jsonb,jsonb,jsonb,jsonb,text,text,jsonb): 2 product-price fallback(s) removed
+-- create_stripe_cart_checkout(jsonb,jsonb,jsonb,jsonb,text,text,jsonb): 2 product-price fallback(s) removed; lines tagged for routing
 CREATE OR REPLACE FUNCTION public.create_stripe_cart_checkout(p_rentals jsonb, p_purchases jsonb, p_customer jsonb, p_address jsonb, p_notes text, p_redirect_base text, p_fulfillment jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -378,7 +378,9 @@ BEGIN
     RETURN jsonb_build_object('ok', false, 'reason', 'too_many_items'); END IF;
 
   -- Validating the whole cart picks one pharmacy that can fill all of it.
-  v_check := public.validate_storefront_fulfillment(v_rentals || v_purchases,
+  v_check := public.validate_storefront_fulfillment(
+    (SELECT COALESCE(jsonb_agg(e.item || '{"line": "rental"}'::jsonb), '[]'::jsonb) FROM jsonb_array_elements(v_rentals) AS e(item))
+    || (SELECT COALESCE(jsonb_agg(e.item || '{"line": "purchase"}'::jsonb), '[]'::jsonb) FROM jsonb_array_elements(v_purchases) AS e(item)),
     CASE WHEN jsonb_array_length(v_purchases) > 0
       THEN jsonb_set(public.with_delivery_zip(p_fulfillment, p_address), '{order_type}', '"purchase"')
       ELSE public.with_delivery_zip(p_fulfillment, p_address) END);
@@ -760,7 +762,7 @@ AS $function$
    WHERE p IS NOT NULL;
 $function$;
 
--- quote_storefront_cart(jsonb,jsonb,jsonb): 2 product-price fallback(s) removed
+-- quote_storefront_cart(jsonb,jsonb,jsonb): 2 product-price fallback(s) removed; lines tagged for routing
 CREATE OR REPLACE FUNCTION public.quote_storefront_cart(p_rentals jsonb, p_purchases jsonb, p_fulfillment jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -774,7 +776,9 @@ DECLARE
 BEGIN
   IF jsonb_typeof(v_rentals) IS DISTINCT FROM 'array' OR jsonb_typeof(v_purchases) IS DISTINCT FROM 'array' THEN
     RETURN jsonb_build_object('ok', false, 'reason', 'no_items'); END IF;
-  v_check := public.validate_storefront_fulfillment(v_rentals || v_purchases,
+  v_check := public.validate_storefront_fulfillment(
+    (SELECT COALESCE(jsonb_agg(e.item || '{"line": "rental"}'::jsonb), '[]'::jsonb) FROM jsonb_array_elements(v_rentals) AS e(item))
+    || (SELECT COALESCE(jsonb_agg(e.item || '{"line": "purchase"}'::jsonb), '[]'::jsonb) FROM jsonb_array_elements(v_purchases) AS e(item)),
     CASE WHEN jsonb_array_length(v_purchases) > 0
       THEN jsonb_set(COALESCE(p_fulfillment, '{}'::jsonb), '{order_type}', '"purchase"') ELSE p_fulfillment END);
   IF NOT COALESCE((v_check->>'ok')::boolean, false) THEN RETURN v_check; END IF;
@@ -967,7 +971,7 @@ AS $function$
   SELECT li.sale_price FROM public.equipment_location_inventory li WHERE li.equipment_item_id = p_item AND li.location_id = p_location;
 $function$;
 
--- storefront_listed(equipment_items): a rental is listed when a pharmacy on the website prices it, not the product
+-- storefront_listed(equipment_items): a rental is listed when a pharmacy on the website offers it at a price (pickup it offers, or delivery where it delivers), not the product
 CREATE OR REPLACE FUNCTION public.storefront_listed(i public.equipment_items)
  RETURNS boolean
  LANGUAGE sql
@@ -979,7 +983,8 @@ AS $function$
                         JOIN public.pickup_locations l ON l.id = li.location_id AND l.is_active AND public.on_storefront(l.id)
                        WHERE li.equipment_item_id = i.id
                          AND (i.location_id IS NULL OR i.location_id = l.id)
-                         AND COALESCE(li.delivery_rental_price, li.pickup_rental_price, 0) > 0)
+                         AND ((li.pickup_enabled AND li.pickup_rental_price > 0)
+                           OR (l.fulfillment_mode = 'pickup_and_delivery' AND li.delivery_rental_price > 0)))
           AND (i.list_when_out_of_stock OR public.in_stock(i))
           AND i.is_rentable)
       OR public.can_buy(i));
@@ -1030,8 +1035,8 @@ BEGIN
       INTO v_item_rate FROM public.equipment_items i
       JOIN public.equipment_location_inventory li ON li.equipment_item_id = i.id AND li.location_id = v_location
      WHERE i.id = v_iid AND i.is_active
-       AND ((p_order_type = 'rental' AND i.is_rentable AND COALESCE(li.delivery_rental_price, li.pickup_rental_price) IS NOT NULL)
-         OR (p_order_type = 'purchase' AND i.is_purchasable AND li.sale_price IS NOT NULL));
+       AND ((p_order_type = 'rental' AND i.is_rentable AND COALESCE(li.delivery_rental_price, li.pickup_rental_price) > 0)
+         OR (p_order_type = 'purchase' AND i.is_purchasable AND li.sale_price > 0));
     IF NOT FOUND THEN RETURN jsonb_build_object('ok', false, 'reason', 'invalid_item'); END IF;
     v_validated := v_validated || jsonb_build_array(
       jsonb_build_object('iid', v_iid, 'qty', v_qty, 'rate', v_item_rate));
@@ -1067,6 +1072,115 @@ BEGIN
   END LOOP;
 
   RETURN jsonb_build_object('ok', true, 'order_id', v_order, 'order_no', v_no);
+END;
+$function$;
+
+-- validate_storefront_fulfillment(jsonb,jsonb): a pharmacy offers only what it has priced; delivery routes past unpriced pharmacies.
+-- Each item may say its "line" (rental or purchase); mixed carts tag theirs, single carts take the order's type.
+CREATE OR REPLACE FUNCTION public.validate_storefront_fulfillment(p_items jsonb, p_fulfillment jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_method TEXT := p_fulfillment->>'method';
+  v_location UUID; v_item JSONB; v_item_id UUID; v_qty INTEGER;
+  v_item_ids UUID[] := ARRAY[]::UUID[];
+  v_zip TEXT; v_in_stock BOOLEAN; v_short JSONB; v_covered BOOLEAN := false;
+  v_purchase BOOLEAN := COALESCE(p_fulfillment->>'order_type', '') = 'purchase';
+BEGIN
+  IF v_method NOT IN ('pickup', 'delivery') THEN
+    RETURN jsonb_build_object('ok', false, 'reason', 'invalid_fulfillment'); END IF;
+  IF p_items IS NULL OR jsonb_typeof(p_items) <> 'array' OR jsonb_array_length(p_items) = 0 THEN
+    RETURN jsonb_build_object('ok', false, 'reason', 'no_items'); END IF;
+
+  FOR v_item IN SELECT * FROM jsonb_array_elements(p_items) LOOP
+    BEGIN
+      v_item_id := (v_item->>'item_id')::uuid;
+      v_qty := COALESCE(NULLIF(v_item->>'quantity', '')::integer, 1);
+    EXCEPTION WHEN others THEN v_item_id := NULL; v_qty := NULL; END;
+    IF v_item_id IS NULL OR v_qty IS NULL OR v_qty < 1 OR v_qty > 50 THEN
+      RETURN jsonb_build_object('ok', false, 'reason', 'invalid_item'); END IF;
+    v_item_ids := array_append(v_item_ids, v_item_id);
+  END LOOP;
+
+  IF v_method = 'pickup' THEN
+    BEGIN v_location := (p_fulfillment->>'pickup_location_id')::uuid;
+    EXCEPTION WHEN others THEN v_location := NULL; END;
+    IF v_location IS NULL OR NOT public.on_storefront(v_location)
+    THEN RETURN jsonb_build_object('ok', false, 'reason', 'invalid_pickup_location'); END IF;
+    IF v_purchase AND NOT public.online_retail_enabled(v_location) THEN
+      RETURN jsonb_build_object('ok', false, 'reason', 'purchases_disabled'); END IF;
+
+    FOR v_item IN SELECT * FROM jsonb_array_elements(p_items) LOOP
+      v_item_id := (v_item->>'item_id')::uuid;
+      IF NOT EXISTS (
+        SELECT 1 FROM public.equipment_location_inventory li
+        JOIN public.equipment_items i ON i.id = li.equipment_item_id
+        WHERE li.location_id = v_location AND li.equipment_item_id = v_item_id
+          AND li.pickup_enabled AND i.is_active
+          -- Offered means priced at this pharmacy (136).
+          AND CASE WHEN COALESCE(v_item->>'line', CASE WHEN v_purchase THEN 'purchase' ELSE 'rental' END) = 'purchase'
+                   THEN COALESCE(li.sale_price, 0) > 0 ELSE COALESCE(li.pickup_rental_price, 0) > 0 END
+      ) THEN RETURN jsonb_build_object('ok', false, 'reason', 'pickup_unavailable'); END IF;
+    END LOOP;
+  ELSE
+    v_zip := substring(COALESCE(p_fulfillment->>'delivery_zip', '') FROM '^\s*([0-9]{5})');
+    -- Delivery goes only to a store whose delivery area lists the customer's ZIP (100).
+    -- Stores marked "delivers anywhere" are used only where no store lists the ZIP.
+    v_covered := v_zip IS NOT NULL AND EXISTS (
+      SELECT 1 FROM public.pickup_locations l
+       WHERE public.on_storefront(l.id) AND l.fulfillment_mode = 'pickup_and_delivery' AND v_zip = ANY(l.delivery_zips));
+    SELECT c.location_id, c.in_stock INTO v_location, v_in_stock
+    FROM (
+      SELECT li.location_id, l.partner_type, l.created_at,
+             bool_and(CASE WHEN i.is_serialized
+                 THEN (SELECT count(*) FROM public.equipment_units u
+                        WHERE u.item_id = i.id AND u.location_id = li.location_id AND u.status = 'available')
+                 ELSE li.quantity_on_hand END
+               >= (SELECT sum(GREATEST(COALESCE(NULLIF(e->>'quantity', '')::integer, 1), 1))
+                     FROM jsonb_array_elements(p_items) e WHERE (e->>'item_id')::uuid = i.id)) AS in_stock
+      FROM public.equipment_location_inventory li
+      JOIN public.pickup_locations l ON l.id = li.location_id
+      JOIN public.equipment_items i ON i.id = li.equipment_item_id
+      WHERE li.equipment_item_id = ANY(v_item_ids)
+        AND public.on_storefront(l.id) AND l.fulfillment_mode = 'pickup_and_delivery'
+        AND i.is_active AND i.delivery_enabled
+        AND (NOT v_purchase OR l.online_retail_enabled)
+        -- A pharmacy that hasn't priced a line (delivery to rent, or the sale) isn't a candidate (136).
+        AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(p_items) e
+                         WHERE (e->>'item_id')::uuid = i.id
+                           AND NOT CASE WHEN COALESCE(e->>'line', CASE WHEN v_purchase THEN 'purchase' ELSE 'rental' END) = 'purchase'
+                                        THEN COALESCE(li.sale_price, 0) > 0 ELSE COALESCE(li.delivery_rental_price, 0) > 0 END)
+        AND (v_zip IS NULL
+             OR (v_covered AND v_zip = ANY(l.delivery_zips))
+             OR (NOT v_covered AND l.delivers_anywhere))
+      GROUP BY li.location_id, l.partner_type, l.created_at
+      HAVING count(DISTINCT li.equipment_item_id) = cardinality(ARRAY(SELECT DISTINCT unnest(v_item_ids)))
+    ) c
+    ORDER BY c.in_stock DESC, public.storefront_route_rank(c.location_id, v_zip) NULLS LAST,
+             CASE WHEN c.partner_type = 'owned' THEN 0 ELSE 1 END, c.created_at, c.location_id
+    LIMIT 1;
+    IF v_location IS NULL AND v_zip IS NOT NULL AND NOT v_covered AND NOT EXISTS (
+      SELECT 1 FROM public.pickup_locations l
+       WHERE public.on_storefront(l.id) AND l.fulfillment_mode = 'pickup_and_delivery' AND l.delivers_anywhere) THEN
+      RETURN jsonb_build_object('ok', false, 'reason', 'outside_delivery_area', 'zip', v_zip); END IF;
+    -- A store serves this ZIP but doesn't sell online: say so, not "no delivery" (101).
+    IF v_location IS NULL AND v_purchase
+       AND COALESCE((public.validate_storefront_fulfillment(p_items, p_fulfillment - 'order_type')->>'ok')::boolean, false) THEN
+      RETURN jsonb_build_object('ok', false, 'reason', 'purchases_disabled'); END IF;
+    IF v_location IS NULL THEN
+      RETURN jsonb_build_object('ok', false, 'reason', 'delivery_unavailable'); END IF;
+  END IF;
+
+  -- The chosen store must cover every requested quantity right now.
+  v_short := public._storefront_shortages(p_items, v_location);
+  IF jsonb_array_length(v_short) > 0 THEN
+    RETURN jsonb_build_object('ok', false, 'reason', 'out_of_stock', 'method', v_method, 'shortages', v_short);
+  END IF;
+
+  RETURN jsonb_build_object('ok', true, 'method', v_method, 'pickup_location_id', v_location);
 END;
 $function$;
 
