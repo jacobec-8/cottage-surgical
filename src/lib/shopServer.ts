@@ -2,7 +2,7 @@ import 'server-only'
 
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { cache } from 'react'
-import { PRODUCT_FIELDS, type Product } from './shop'
+import { PRODUCT_FIELDS, WEBSITE_PRODUCTS, type Product } from './shop'
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const PUBLIC_CATALOG_REVALIDATE_SECONDS = 60
@@ -49,11 +49,8 @@ export const getPublicCatalog = cache(async (): Promise<Product[]> => {
   if (!supabase) return []
 
   const { data, error } = await supabase
-    .from('equipment_items')
+    .from(WEBSITE_PRODUCTS)
     .select(PRODUCT_FIELDS)
-    .eq('is_active', true)
-    // Retail items show only once a store stocks them with a price (091).
-    .eq('storefront_listed', true)
     .order('category')
     .order('name')
 
@@ -72,12 +69,9 @@ export const getPublicProduct = cache(async (handle: string): Promise<PublicProd
   if (!normalizedHandle) return { status: 'not-found' }
 
   const byHandle = await supabase
-    .from('equipment_items')
+    .from(WEBSITE_PRODUCTS)
     .select(PRODUCT_FIELDS)
     .eq('shopify_handle', normalizedHandle)
-    .eq('is_active', true)
-    // Retail items show only once a store stocks them with a price (091).
-    .eq('storefront_listed', true)
     .maybeSingle()
 
   if (byHandle.error) {
@@ -85,17 +79,14 @@ export const getPublicProduct = cache(async (handle: string): Promise<PublicProd
   }
   if (byHandle.data) return { status: 'found', product: byHandle.data as unknown as Product }
 
-  // equipment_items.id is UUID-backed. Avoid sending an invalid UUID literal
+  // Product ids are UUIDs. Avoid sending an invalid UUID literal
   // to Postgres for an ordinary, missing Shopify handle.
   if (!UUID_PATTERN.test(normalizedHandle)) return { status: 'not-found' }
 
   const byId = await supabase
-    .from('equipment_items')
+    .from(WEBSITE_PRODUCTS)
     .select(PRODUCT_FIELDS)
     .eq('id', normalizedHandle)
-    .eq('is_active', true)
-    // Retail items show only once a store stocks them with a price (091).
-    .eq('storefront_listed', true)
     .maybeSingle()
 
   if (byId.error) {

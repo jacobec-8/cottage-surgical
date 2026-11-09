@@ -186,8 +186,20 @@ RESET ROLE;
 
 -- ── The website reads only its owner's list ───────────────────────────────
 SET ROLE anon;
-SELECT test_assert((SELECT count(*) = 4 AND bool_and(business_id = 'b0000000-0000-0000-0000-00000000000a') FROM product_pairings),
+CREATE TEMP TABLE public_picks AS SELECT * FROM website_pairings;
+RESET ROLE;
+SELECT test_assert((SELECT count(*) = 4 AND bool_and(p.business_id = 'b0000000-0000-0000-0000-00000000000a' AND p.location_id IS NULL)
+                      FROM public_picks w JOIN product_pairings p USING (equipment_item_id, paired_item_id)),
   'the public reads owner A''s picks and nothing of owner B');
+SELECT test_assert((SELECT array_agg(column_name::text ORDER BY ordinal_position) FROM information_schema.columns
+                     WHERE table_schema = 'public' AND table_name = 'website_pairings')
+                   = ARRAY['equipment_item_id', 'paired_item_id', 'position'],
+  'the picks view carries the product, the pick and its place only');
+SET ROLE anon;
+DO $$ BEGIN
+  PERFORM count(*) FROM product_pairings;
+  RAISE EXCEPTION 'FAILED: the public key read the picks table directly';
+EXCEPTION WHEN insufficient_privilege THEN NULL; END $$;
 DO $$ BEGIN
   PERFORM set_product_pairings('b7000000-0000-0000-0000-000000000001', ARRAY[]::uuid[]);
   RAISE EXCEPTION 'FAILED: the public key saved picks';

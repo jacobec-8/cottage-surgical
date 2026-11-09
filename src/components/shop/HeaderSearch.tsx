@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronDown, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { WEBSITE_PRODUCTS } from '../../lib/shop'
 import { distinctCategories, headerSearchHref } from './headerNav'
 
 export type HeaderSearchHandler = (words: string, cat: string) => void
@@ -21,8 +22,7 @@ export default function HeaderSearch({ onSearch, className = '' }: { onSearch?: 
   const { data: categories = [] } = useQuery({
     queryKey: ['shop_categories'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('equipment_items').select('category')
-        .eq('is_active', true).eq('storefront_listed', true)
+      const { data, error } = await supabase.from(WEBSITE_PRODUCTS).select('category')
       if (error) throw error
       return distinctCategories(data ?? [])
     },

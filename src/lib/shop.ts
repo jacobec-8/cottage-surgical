@@ -55,15 +55,16 @@ export type PickupLocation = {
   partner_type: 'owned' | 'partner'
 }
 
-// quantity_on_hand deliberately NOT exposed to the public shop.
-// pickup_enabled / pickup_rental_price come from computed fields (104): a store can offer
-// pickup on its own, so the shop shows pickup wherever any open store offers it.
+/** The website reads products and picks only through these views (133); never the tables. */
+export const WEBSITE_PRODUCTS = 'website_products'
+export const WEBSITE_PAIRINGS = 'website_pairings'
+
+// The view carries only listed products, with the shown prices and the pharmacies on the
+// website already worked out (pickup_rental_price, sale_price, pickup_enabled are the shown ones).
 export const PRODUCT_FIELDS =
-  'id,name,description,category,monthly_rental_price,pickup_rental_price:pickup_price_shown,delivery_rental_price,sale_price:sale_price_shown,image_url,shopify_handle,' +
-  'is_rentable,is_purchasable,pickup_enabled:pickup_offered,delivery_enabled,same_day_pickup,installation_required,' +
-  'pickup_price_range,delivery_price_range,in_stock,can_buy,' +
-  'pickup_locations:equipment_item_pickup_locations(' +
-  'pickup_location:pickup_locations(id,name,address_line1,address_line2,address_city,address_state,address_zip,phone,instructions,fulfillment_mode,partner_type))'
+  'id,name,description,category,monthly_rental_price,pickup_rental_price,delivery_rental_price,sale_price,image_url,shopify_handle,' +
+  'is_rentable,is_purchasable,pickup_enabled,delivery_enabled,same_day_pickup,installation_required,' +
+  'pickup_price_range,delivery_price_range,in_stock,can_buy,pickup_locations'
 
 export function productPickupLocations(product: Product): PickupLocation[] {
   return (product.pickup_locations ?? [])

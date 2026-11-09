@@ -6,7 +6,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { ArrowUpRight, Loader2, MessageCircle, Send, Sparkles, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { publicSupabase } from '../../lib/publicSupabase'
-import { PRODUCT_FIELDS, type Product } from '../../lib/shop'
+import { PRODUCT_FIELDS, WEBSITE_PRODUCTS, type Product } from '../../lib/shop'
 import { answerCatalogQuestion, customerAssistantAllowed, type CatalogContext, type CatalogReply } from '../../lib/catalogAssistant'
 import { useCart } from './CartContext'
 
@@ -71,8 +71,8 @@ function CatalogChat() {
       // Anonymous catalog reads never inherit staff access or request private stock counts.
       const products: Product[] = []
       for (let page = 0; ; page++) {
-        const { data, error } = await publicSupabase.from('equipment_items').select(PRODUCT_FIELDS)
-          .eq('is_active', true).eq('storefront_listed', true).order('name').order('id')
+        const { data, error } = await publicSupabase.from(WEBSITE_PRODUCTS).select(PRODUCT_FIELDS)
+          .order('name').order('id')
           .range(page * 500, (page + 1) * 500 - 1).abortSignal(controller.signal)
         if (error) throw error
         products.push(...((data ?? []) as unknown as Product[]))

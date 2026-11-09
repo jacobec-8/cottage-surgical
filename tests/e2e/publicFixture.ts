@@ -50,7 +50,7 @@ export const catalog = [
 ]
 
 export async function mockCatalogReads(page: Page, products = catalog) {
-  await page.route('**/rest/v1/equipment_items**', async (route) => {
+  await page.route('**/rest/v1/website_products**', async (route) => {
     const request = route.request()
 
     if (request.method() === 'OPTIONS') {
@@ -105,7 +105,7 @@ export type FixturePairing = { equipment_item_id: string; paired_item_id: string
 
 /** The "Goes well with" picks (127) the browser reads with the public key. */
 export async function mockPairings(page: Page, pairings: FixturePairing[]) {
-  await page.route('**/rest/v1/product_pairings**', async (route) => {
+  await page.route('**/rest/v1/website_pairings**', async (route) => {
     if (route.request().method() === 'OPTIONS') {
       await route.fulfill({
         status: 204,

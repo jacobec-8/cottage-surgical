@@ -48,7 +48,7 @@ test('stock is refreshed on every question and an outage never becomes an invent
   await chat.getByLabel('Ask about equipment').fill('Is it still in stock?')
   await chat.getByLabel('Ask about equipment').press('Enter')
   await expect(chat.getByText('Out of stock', { exact: true })).toHaveCount(2)
-  await page.route('**/rest/v1/equipment_items**', route => route.abort('failed'))
+  await page.route('**/rest/v1/website_products**', route => route.abort('failed'))
   await chat.getByLabel('Ask about equipment').fill('Is it available?')
   await chat.getByRole('button', { name: 'Send equipment question' }).click()
   await expect(chat.getByRole('alert')).toContainText('couldn’t check the catalog')

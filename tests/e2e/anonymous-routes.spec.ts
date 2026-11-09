@@ -75,7 +75,7 @@ const catalog = [
 ]
 
 async function mockCatalogReads(page: Page, products = catalog) {
-  await page.route('**/rest/v1/equipment_items**', async (route) => {
+  await page.route('**/rest/v1/website_products**', async (route) => {
     const request = route.request()
 
     if (request.method() === 'OPTIONS') {
@@ -140,7 +140,7 @@ async function openPublicRoute(page: Page, path: string) {
 
 test.describe('anonymous public route smoke tests', () => {
   test('renders the storefront when the catalog is unavailable', async ({ page }) => {
-    await page.route('**/rest/v1/equipment_items**', (route) => route.abort('failed'))
+    await page.route('**/rest/v1/website_products**', (route) => route.abort('failed'))
     await openPublicRoute(page, '/')
     await expect(
       page.getByRole('heading', {

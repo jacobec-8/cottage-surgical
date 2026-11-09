@@ -452,10 +452,17 @@ SELECT test_assert((SELECT NOT storefront_listed(i) FROM equipment_items i WHERE
   'the website never lists another owner''s product, however active');
 
 SELECT test_as(''); SET ROLE anon;
-SELECT test_assert((SELECT count(*) > 0 AND bool_and(business_id = 'a0000000-0000-0000-0000-00000000000a') FROM equipment_items),
+CREATE TEMP TABLE public_view AS SELECT * FROM website_products;
+RESET ROLE;
+SELECT test_assert((SELECT count(*) > 0 AND bool_and(i.business_id = 'a0000000-0000-0000-0000-00000000000a')
+                      FROM public_view w JOIN equipment_items i ON i.id = w.id),
   'the public reads only the website owner''s products');
-SELECT test_assert((SELECT count(*) = 2 AND bool_and(business_id = 'a0000000-0000-0000-0000-00000000000a') FROM pickup_locations),
+SELECT test_assert((SELECT bool_and(l.business_id = 'a0000000-0000-0000-0000-00000000000a')
+                      FROM public_view w, jsonb_array_elements(w.pickup_locations) e
+                      JOIN pickup_locations l ON l.id = (e->'pickup_location'->>'id')::uuid),
   'the public reads only the website owner''s pharmacies');
+DROP TABLE public_view;
+SET ROLE anon;
 SELECT test_assert((validate_storefront_fulfillment('[{"item_id":"a7000000-0000-0000-0000-00000000000a","quantity":1}]',
                                                     '{"method":"delivery","delivery_zip":"11743"}'))->>'pickup_location_id'
                    = 'a1000000-0000-0000-0000-0000000000a1',
@@ -603,8 +610,10 @@ SELECT test_as('a2000000-0000-0000-0000-000000000002'); SET ROLE authenticated;
 SELECT set_pharmacy_on_website('a1000000-0000-0000-0000-0000000000a2', false);
 RESET ROLE;
 SELECT test_as(''); SET ROLE anon;
-SELECT test_assert((SELECT count(*) = 1 FROM pickup_locations), 'off the website, a pharmacy disappears from the public');
-SELECT test_assert((SELECT NOT storefront_listed(i) FROM equipment_items i WHERE i.id = 'a7000000-0000-0000-0000-0000000000c2'),
+SELECT test_assert((SELECT NOT EXISTS (SELECT 1 FROM website_products w, jsonb_array_elements(w.pickup_locations) e
+                                       WHERE e->'pickup_location'->>'id' = 'a1000000-0000-0000-0000-0000000000a2')),
+  'off the website, a pharmacy disappears from the public');
+SELECT test_assert((SELECT NOT EXISTS (SELECT 1 FROM website_products WHERE id = 'a7000000-0000-0000-0000-0000000000c2')),
   'a product stocked only at a pharmacy off the website is not listed');
 SELECT test_assert((validate_storefront_fulfillment('[{"item_id":"a7000000-0000-0000-0000-00000000000a","quantity":1}]',
                     '{"method":"pickup","pickup_location_id":"a1000000-0000-0000-0000-0000000000a2"}'))->>'reason' = 'invalid_pickup_location',
@@ -622,8 +631,11 @@ SELECT set_pharmacy_on_website('a1000000-0000-0000-0000-0000000000a2', true);
 SELECT test_assert((SELECT count(*) = 2 FROM storefront_pharmacies), 'the owner sees which pharmacies are on the website');
 RESET ROLE;
 SELECT test_as(''); SET ROLE anon;
-SELECT test_assert((SELECT storefront_listed(i) FROM equipment_items i WHERE i.id = 'a7000000-0000-0000-0000-0000000000c2'),
+SELECT test_assert((SELECT EXISTS (SELECT 1 FROM website_products WHERE id = 'a7000000-0000-0000-0000-0000000000c2')),
   'back on the website, its stock lists the product: the pool''s combined stock');
+SELECT test_assert((SELECT EXISTS (SELECT 1 FROM website_products w, jsonb_array_elements(w.pickup_locations) e
+                                   WHERE e->'pickup_location'->>'id' = 'a1000000-0000-0000-0000-0000000000a2')),
+  'back on the website, the pharmacy is a pickup choice again');
 SELECT test_assert((validate_storefront_fulfillment('[{"item_id":"a7000000-0000-0000-0000-00000000000a","quantity":1}]',
                     '{"method":"delivery","delivery_zip":"11746"}'))->>'pickup_location_id' = 'a1000000-0000-0000-0000-0000000000a2',
   'a Huntington Station delivery goes to the nearer Melville pharmacy');
@@ -633,7 +645,7 @@ SELECT test_assert((validate_storefront_fulfillment('[{"item_id":"a7000000-0000-
 SELECT test_assert((validate_storefront_fulfillment('[{"item_id":"a7000000-0000-0000-0000-00000000000a","quantity":4}]',
                     '{"method":"delivery","delivery_zip":"11746"}'))->>'pickup_location_id' = 'a1000000-0000-0000-0000-0000000000a1',
   'the nearer pharmacy without enough stock loses to one that has it');
-SELECT test_assert((SELECT pickup_price_range(i) = '{"min": 41, "max": 46}'::jsonb FROM equipment_items i WHERE i.id = 'a7000000-0000-0000-0000-00000000000a'),
+SELECT test_assert((SELECT pickup_price_range = '{"min": 41, "max": 46}'::jsonb FROM website_products WHERE id = 'a7000000-0000-0000-0000-00000000000a'),
   'prices stay per pharmacy: the website shows the range');
 SELECT test_assert((quote_storefront_rentals('[{"item_id":"a7000000-0000-0000-0000-00000000000a","quantity":1}]',
                     '{"method":"pickup","pickup_location_id":"a1000000-0000-0000-0000-0000000000a2"}'))->'prices'->>'a7000000-0000-0000-0000-00000000000a' = '41.00',
@@ -680,6 +692,67 @@ DO $$ BEGIN
   PERFORM set_pharmacy_on_website('a1000000-0000-0000-0000-0000000000b1', true);
   RAISE EXCEPTION 'FAILED: a pharmacy went on a website its owner doesn''t have';
 EXCEPTION WHEN no_data_found THEN NULL; END $$;
+RESET ROLE;
+
+-- ── The website's views (133, 134): the public key reads them, never the tables ─
+SELECT test_as('');
+SELECT test_assert((SELECT array_agg(column_name::text ORDER BY ordinal_position) FROM information_schema.columns
+                     WHERE table_schema = 'public' AND table_name = 'website_products')
+                   = ARRAY['id','name','description','category','monthly_rental_price','pickup_rental_price',
+                           'delivery_rental_price','sale_price','image_url','shopify_handle','is_rentable','is_purchasable',
+                           'pickup_enabled','delivery_enabled','same_day_pickup','installation_required',
+                           'pickup_price_range','delivery_price_range','in_stock','can_buy','pickup_locations'],
+  'the website view carries exactly what the shop shows');
+SELECT test_assert((SELECT bool_and(jsonb_object_keys_ok) FROM (
+                      SELECT (SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(e->'pickup_location') k)
+                             = ARRAY['address_city','address_line1','address_line2','address_state','address_zip',
+                                     'fulfillment_mode','id','instructions','name','partner_type','phone'] AS jsonb_object_keys_ok
+                        FROM website_products w, jsonb_array_elements(w.pickup_locations) e) t),
+  'a pickup pharmacy carries its name, address, phone and instructions only');
+SELECT test_assert((SELECT count(*) FROM website_products) = (SELECT count(*) FROM equipment_items i WHERE i.is_active AND storefront_listed(i)),
+  'the website view holds the listed products and nothing else');
+SELECT test_assert((SELECT NOT EXISTS (SELECT 1 FROM website_products w JOIN equipment_items i ON i.id = w.id
+                                        WHERE i.business_id <> 'a0000000-0000-0000-0000-00000000000a')),
+  'the website view never carries another owner''s product');
+
+SET ROLE anon;
+DO $$ DECLARE t text; BEGIN
+  FOREACH t IN ARRAY ARRAY['equipment_items', 'pickup_locations', 'equipment_item_pickup_locations', 'product_pairings'] LOOP
+    BEGIN
+      EXECUTE format('SELECT count(*) FROM public.%I', t);
+      RAISE EXCEPTION 'FAILED: the public key read % directly', t;
+    EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+  END LOOP;
+END $$;
+DO $$ DECLARE f text; BEGIN
+  FOREACH f IN ARRAY ARRAY['can_buy', 'delivery_price_range', 'in_stock', 'pickup_offered', 'pickup_price_range',
+                           'pickup_price_shown', 'sale_price_shown', 'storefront_listed'] LOOP
+    BEGIN
+      EXECUTE format('SELECT public.%I(NULL::public.equipment_items)', f);
+      RAISE EXCEPTION 'FAILED: the public key called % with a product of its own making', f;
+    EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+  END LOOP;
+  BEGIN
+    PERFORM public.on_website(NULL::public.pickup_locations);
+    RAISE EXCEPTION 'FAILED: the public key called on_website with a pharmacy of its own making';
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+END $$;
+DO $$ BEGIN
+  UPDATE website_products SET name = 'Defaced' WHERE id = 'a7000000-0000-0000-0000-00000000000a';
+  RAISE EXCEPTION 'FAILED: the public key wrote through the website view';
+EXCEPTION WHEN insufficient_privilege OR object_not_in_prerequisite_state OR feature_not_supported THEN NULL; END $$;
+SELECT test_assert((SELECT count(*) > 0 FROM website_products), 'the public key reads the website view');
+RESET ROLE;
+SELECT test_assert(NOT has_table_privilege('anon', 'public.website_products', 'INSERT')
+                   AND NOT has_table_privilege('anon', 'public.website_products', 'UPDATE')
+                   AND NOT has_table_privilege('anon', 'public.website_products', 'DELETE')
+                   AND NOT has_table_privilege('anon', 'public.website_pairings', 'UPDATE'),
+  'the public key may only read the website views');
+
+SELECT test_as('a2000000-0000-0000-0000-000000000003'); SET ROLE authenticated;
+SELECT test_assert((SELECT count(*) FROM website_products) > 0
+                   AND (SELECT count(*) = 1 FROM equipment_items WHERE id = 'a7000000-0000-0000-0000-00000000000a'),
+  'signed-in staff browsing the website see the website, and still read their own products');
 RESET ROLE;
 
 SELECT test_as('');
