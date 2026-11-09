@@ -47,6 +47,8 @@ test('duplicates name the field that clashes', () => {
 
 test('permission, sign-in, missing-record and type errors read plainly', () => {
   assert.equal(saveErrorMessage({ code: '42501', message: 'new row violates row-level security policy for table "drivers"' }), 'Your login can’t change this.')
+  assert.equal(saveErrorMessage({ code: '42501', message: 'Customers is turned off for staff at this pharmacy.' }), 'Customers is turned off for staff at this pharmacy.')
+  assert.equal(saveErrorMessage({ code: '42501', message: 'Prices are locked at this store.' }), 'Prices are locked at this store.')
   assert.equal(saveErrorMessage({ code: 'PGRST301', message: 'JWT expired' }), 'Your sign-in has expired. Sign in again, then retry.')
   assert.equal(saveErrorMessage({ code: '23503', message: 'insert or update violates foreign key constraint' }), 'Something this refers to was removed. Reload the page and try again.')
   assert.equal(saveErrorMessage({ code: '23502', message: 'null value in column "name" violates not-null constraint' }), 'A required field is empty.')

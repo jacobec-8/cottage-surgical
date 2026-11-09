@@ -33,12 +33,12 @@ test('today’s single-type checkout functions are not touched', () => {
 
 test('128 rebuilds exactly the functions it says it does', () => {
   // queue_order_status_email was rebuilt again by 129 (nobody pays the delivery person),
-  // the cart create and quote by 136 (prices once).
+  // the cart create and quote by 136 (prices once), cancel and the Stripe syncs by 139 (section switches).
   const rebuilt = [...latestFunctions()].filter(([, d]) => d.file === MIGRATION).map(([n]) => n).sort()
   assert.deepEqual(rebuilt, [
-    '_settle_stripe_session', '_stripe_request', 'cancel_order', 'cancel_stripe_checkout',
-    'create_stripe_cart_checkout_once', 'reconcile_pending_stripe_orders', 'verify_stripe_payment',
+    '_settle_stripe_session', '_stripe_request', 'cancel_stripe_checkout', 'create_stripe_cart_checkout_once',
   ])
+  for (const name of ['cancel_order', 'reconcile_pending_stripe_orders', 'verify_stripe_payment']) assert.equal(latestFunctions().get(name)?.file, '139_section_switches.sql', name)
   assert.equal(latestFunctions().get('queue_order_status_email')?.file, '129_store_collects_payment.sql')
   for (const name of ['create_stripe_cart_checkout', 'quote_storefront_cart']) assert.equal(latestFunctions().get(name)?.file, '136_prices_once.sql', name)
 })

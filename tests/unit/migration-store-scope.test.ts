@@ -27,9 +27,6 @@ test('the parser sees the functions this guard exists for', () => {
   for (const name of ['update_rental_details', 'cancel_order', 'close_out_order', 'settle_deposit']) {
     assert.ok(latest.has(name), `${name} not found in migrations`)
   }
-  // The latest definition wins: update_rental_details still comes from the
-  // baseline, while these two were rebuilt by later migrations.
-  assert.equal(latest.get('update_rental_details')?.file, '000_baseline.sql')
-  assert.equal(latest.get('settle_deposit')?.file, '121_trust.sql')
-  assert.equal(latest.get('cancel_order')?.file, '128_one_payment_checkout.sql')
+  // The latest definition wins: 139 (section switches) rebuilt all three to declare their section.
+  for (const name of ['update_rental_details', 'settle_deposit', 'cancel_order']) assert.equal(latest.get(name)?.file, '139_section_switches.sql', name)
 })
