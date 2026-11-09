@@ -955,6 +955,7 @@ EXCEPTION WHEN insufficient_privilege THEN NULL; END $$;
 RESET ROLE;
 SELECT test_as('');
 UPDATE deliveries SET address_line1 = '1 Main St', address_city = 'Woodbury' WHERE id = 'a6000000-0000-0000-0000-0000000000a1';
+UPDATE rental_orders SET payment_status = 'paid' WHERE id = 'a5000000-0000-0000-0000-0000000000a1';  -- equipment leaves only on a paid order (140)
 SELECT test_as('a2000000-0000-0000-0000-000000000004'); SET ROLE authenticated;
 CREATE TEMP TABLE sec_drive AS SELECT start_delivery('a6000000-0000-0000-0000-0000000000a1') AS r;
 RESET ROLE;
@@ -1008,6 +1009,66 @@ UPDATE customers SET notes = 'all open' WHERE id = 'a4000000-0000-0000-0000-0000
 RESET ROLE;
 SELECT test_as('');
 SELECT test_assert((SELECT notes = 'all open' FROM customers WHERE id = 'a4000000-0000-0000-0000-0000000000a1'), 'with the section on, staff work as before');
+
+-- ── Equipment leaves only on a paid order (140) ─────────────────────────────
+SELECT test_as('');
+INSERT INTO rental_orders (id, customer_id, location_id, status, source, payment_status) VALUES ('a5000000-0000-0000-0000-0000000000f1', 'a4000000-0000-0000-0000-0000000000a1', 'a1000000-0000-0000-0000-0000000000a1', 'open', 'staff', 'unpaid');
+INSERT INTO deliveries (id, order_id, leg_type, requires_driver, status, location_id, address_line1, address_city, scheduled_date) VALUES
+ ('a6000000-0000-0000-0000-0000000000f1', 'a5000000-0000-0000-0000-0000000000f1', 'delivery', true, 'pending', 'a1000000-0000-0000-0000-0000000000a1', '1 Main St', 'Woodbury', CURRENT_DATE + 2),
+ ('a6000000-0000-0000-0000-0000000000f2', 'a5000000-0000-0000-0000-0000000000f1', 'pickup', false, 'pending', 'a1000000-0000-0000-0000-0000000000a1', '1 Store St', 'Woodbury', NULL),
+ ('a6000000-0000-0000-0000-0000000000f3', 'a5000000-0000-0000-0000-0000000000f1', 'pickup', true, 'pending', 'a1000000-0000-0000-0000-0000000000a1', '1 Main St', 'Woodbury', CURRENT_DATE + 30);
+SELECT test_as('a2000000-0000-0000-0000-000000000003'); SET ROLE authenticated;
+DO $$ BEGIN
+  SET CONSTRAINTS ALL IMMEDIATE;
+  UPDATE deliveries SET driver_id = 'a3000000-0000-0000-0000-000000000001' WHERE id = 'a6000000-0000-0000-0000-0000000000f1';
+  RAISE EXCEPTION 'FAILED: staff assigned a driver to an unpaid delivery';
+EXCEPTION WHEN raise_exception THEN IF SQLERRM NOT LIKE 'payment_required:%' THEN RAISE; END IF; END $$;
+RESET ROLE;
+SELECT test_as('a2000000-0000-0000-0000-000000000003'); SET ROLE authenticated;
+UPDATE deliveries SET scheduled_date = CURRENT_DATE + 3 WHERE id = 'a6000000-0000-0000-0000-0000000000f1';
+RESET ROLE;
+SELECT test_as('');
+SELECT test_assert((SELECT status = 'pending' AND driver_id IS NULL FROM deliveries WHERE id = 'a6000000-0000-0000-0000-0000000000f1'),
+  'picking a date for an unpaid delivery is allowed; it stays pending with no driver');
+SELECT test_as('a2000000-0000-0000-0000-000000000002'); SET ROLE authenticated;
+DO $$ BEGIN
+  SET CONSTRAINTS ALL IMMEDIATE;
+  UPDATE deliveries SET driver_id = 'a3000000-0000-0000-0000-000000000001' WHERE id = 'a6000000-0000-0000-0000-0000000000f1';
+  RAISE EXCEPTION 'FAILED: an owner assigned a driver to an unpaid delivery';
+EXCEPTION WHEN raise_exception THEN IF SQLERRM NOT LIKE 'payment_required:%' THEN RAISE; END IF; END $$;
+RESET ROLE;
+SELECT test_as('a2000000-0000-0000-0000-000000000003'); SET ROLE authenticated;
+DO $$ BEGIN
+  SET CONSTRAINTS ALL IMMEDIATE;
+  UPDATE deliveries SET status = 'completed' WHERE id = 'a6000000-0000-0000-0000-0000000000f2';
+  RAISE EXCEPTION 'FAILED: staff marked an unpaid counter pickup done by hand';
+EXCEPTION WHEN raise_exception THEN IF SQLERRM NOT LIKE 'payment_required:%' THEN RAISE; END IF; END $$;
+RESET ROLE;
+SELECT test_as('a2000000-0000-0000-0000-000000000003'); SET ROLE authenticated;
+SELECT test_assert((complete_store_pickup('a6000000-0000-0000-0000-0000000000f2'))->>'reason' = 'payment_required', '"Pickup done" says the order isn''t paid');
+UPDATE deliveries SET address_line1 = '2 Main St' WHERE id = 'a6000000-0000-0000-0000-0000000000f1';
+UPDATE deliveries SET driver_id = 'a3000000-0000-0000-0000-000000000001', status = 'scheduled' WHERE id = 'a6000000-0000-0000-0000-0000000000f3';
+RESET ROLE;
+SELECT test_as('');
+SELECT test_assert((SELECT address_line1 = '2 Main St' FROM deliveries WHERE id = 'a6000000-0000-0000-0000-0000000000f1'), 'fixing an unpaid stop''s address is not a hand-over');
+SELECT test_assert((SELECT driver_id = 'a3000000-0000-0000-0000-000000000001' FROM deliveries WHERE id = 'a6000000-0000-0000-0000-0000000000f3'), 'a driver collecting equipment back needs no payment');
+UPDATE deliveries SET driver_id = 'a3000000-0000-0000-0000-000000000001', status = 'scheduled' WHERE id = 'a6000000-0000-0000-0000-0000000000f1';
+SELECT test_as('a2000000-0000-0000-0000-000000000004'); SET ROLE authenticated;
+SELECT test_assert((start_delivery('a6000000-0000-0000-0000-0000000000f1'))->>'reason' = 'payment_required', 'a driver can''t set out with an unpaid delivery');
+RESET ROLE;
+SELECT test_as('a2000000-0000-0000-0000-000000000003'); SET ROLE authenticated;
+UPDATE deliveries SET driver_id = NULL, status = 'pending' WHERE id = 'a6000000-0000-0000-0000-0000000000f1';
+RESET ROLE;
+SELECT test_as('');
+SELECT test_assert((SELECT driver_id IS NULL AND status = 'pending' FROM deliveries WHERE id = 'a6000000-0000-0000-0000-0000000000f1'), 'unassigning an unpaid delivery stays open');
+UPDATE rental_orders SET payment_status = 'paid' WHERE id = 'a5000000-0000-0000-0000-0000000000f1';
+SELECT test_as('a2000000-0000-0000-0000-000000000003'); SET ROLE authenticated;
+UPDATE deliveries SET driver_id = 'a3000000-0000-0000-0000-000000000001', status = 'scheduled' WHERE id = 'a6000000-0000-0000-0000-0000000000f1';
+CREATE TEMP TABLE paid_pickup AS SELECT complete_store_pickup('a6000000-0000-0000-0000-0000000000f2') AS r;
+RESET ROLE;
+SELECT test_as('');
+SELECT test_assert((SELECT driver_id = 'a3000000-0000-0000-0000-000000000001' FROM deliveries WHERE id = 'a6000000-0000-0000-0000-0000000000f1'), 'once paid, a driver is assigned');
+SELECT test_assert((SELECT (r->>'ok')::boolean FROM paid_pickup), 'once paid, the counter pickup is done: ' || (SELECT r::text FROM paid_pickup));
 
 SELECT test_as('');
 SELECT 'roles assertions passed' AS result;
