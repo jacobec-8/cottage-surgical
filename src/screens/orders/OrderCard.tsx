@@ -92,7 +92,7 @@ export default function OrderCard({ o, selected, onOpen, onSchedulePickup, picku
                 ) : (
                   <>
                     {st === 'unallocated' && <span className="text-[11px]">· no unit</span>}
-                    {st === 'returned' && <span className="text-[11px] text-slate-400">· returned</span>}
+                    {st === 'returned' && <span className="text-[11px] text-slate-400">· {o.order_type === 'purchase' ? 'sold' : 'returned'}</span>}
                   </>
                 )}
               </span>

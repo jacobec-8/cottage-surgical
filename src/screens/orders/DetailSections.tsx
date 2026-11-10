@@ -72,6 +72,7 @@ const LINE_STATUS_CLS: Record<string, string> = {
   allocated: 'bg-emerald-100 text-emerald-700',
   unallocated: 'bg-amber-100 text-amber-800',
   returned: 'bg-slate-100 text-slate-500',
+  sold: 'bg-slate-100 text-slate-500',
   'pending confirm': 'bg-sky-100 text-sky-700',
   released: 'bg-slate-100 text-slate-500',
 }
@@ -106,7 +107,8 @@ export function LinesSection({ o, pendingConfirm = false, released = false, canA
             )}
             {lines.map((li, i) => {
               const base = lineStatus(li)
-              const st = pendingConfirm && !li.equipment_unit_id ? 'pending confirm' : released && base !== 'allocated' ? 'released' : base
+              // A finished sale's line went to the customer: sold, not returned.
+              const st = pendingConfirm && !li.equipment_unit_id ? 'pending confirm' : released && base !== 'allocated' ? 'released' : base === 'returned' && o.order_type === 'purchase' ? 'sold' : base
               const tag = unitLabel(li)
               const price = isRental ? li.monthly_rate : li.sale_price
               return (
