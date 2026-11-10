@@ -8,7 +8,7 @@ import { supabase } from '../../lib/supabase'
 import { useLocationScope } from '../../contexts/LocationContext'
 import { SETUP_STEPS, setupStepFor, type SetupStep } from '../../lib/ownerSetup'
 import NewPharmacyForm from '../locations/NewPharmacyForm'
-import AddLoginForm from '../staff/AddLoginForm'
+import SetupLoginForm from './SetupLoginForm'
 import BusinessDetailsForm from './BusinessDetailsForm'
 import LocationCards from '../products/LocationCards'
 import ProductsByLocation from '../products/ProductsByLocation'
@@ -212,7 +212,7 @@ function StaffStep({ locations, onBack, onFinish }: { locations: Locs; onBack: (
       </section>
       <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
         <h2 className="text-lg font-semibold">2. Add staff at {current.name}</h2>
-        <AddLoginForm key={`${current.id}-${added}`} locations={locations} defaultLocationId={current.id} onCreated={() => { setAdded((n) => n + 1); void staff.refetch() }} />
+        <SetupLoginForm key={`${current.id}-${added}`} locations={locations} defaultLocationId={current.id} onCreated={() => { setAdded((n) => n + 1); void staff.refetch() }} />
         <AddedList icon={<UserRound size={16} />} empty={`No staff at ${current.name} yet. You can add them later on Staff.`}
           items={at(current.id).map((p) => ({ id: p.id, label: p.name, detail: `${p.role === 'driver' ? 'Driver' : 'Staff'}${others(p) ? ` · also at ${others(p)}` : ''}` }))} />
       </section>

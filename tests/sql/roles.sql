@@ -1422,34 +1422,18 @@ SELECT test_assert((submit_owner_signup('{"business_name":"Under Score","full_na
   'owner sign-up takes underscores too');
 RESET ROLE;
 
--- ── Staff add from the starter list to their own location (154) ─────────────
+-- ── Staff do not bulk-add products (156 undoes 154) ─────────────────────────
 SELECT test_as('');
 INSERT INTO starter_products (id, name, category, is_purchasable) VALUES ('a9000000-0000-0000-0000-000000000003', 'Starter Staff Pick', 'personal care', true);
-UPDATE staff_module_access SET enabled = false WHERE location_id = 'a1000000-0000-0000-0000-0000000000a1' AND module_key = 'edit_products';
-SELECT test_as('a2000000-0000-0000-0000-000000000003'); SET ROLE authenticated;
-CREATE TEMP TABLE staff_locked AS SELECT add_products('a0000000-0000-0000-0000-00000000000a', 'a1000000-0000-0000-0000-0000000000a1',
-  '[{"starter_id":"a9000000-0000-0000-0000-000000000003","sell":true,"sale_price":"9","stock":"4"}]'::jsonb) AS r;
-RESET ROLE;
-SELECT test_as('');
 UPDATE staff_module_access SET enabled = true WHERE location_id = 'a1000000-0000-0000-0000-0000000000a1' AND module_key = 'edit_products';
 SELECT test_as('a2000000-0000-0000-0000-000000000003'); SET ROLE authenticated;
-CREATE TEMP TABLE staff_other AS SELECT add_products('a0000000-0000-0000-0000-00000000000a', 'a1000000-0000-0000-0000-0000000000a2',
-  '[{"starter_id":"a9000000-0000-0000-0000-000000000003","sell":true,"sale_price":"9","stock":"4"}]'::jsonb) AS r;
-CREATE TEMP TABLE staff_reach AS SELECT add_products('a0000000-0000-0000-0000-00000000000a', 'a1000000-0000-0000-0000-0000000000a1',
-  '[{"starter_id":"a9000000-0000-0000-0000-000000000003","sell":true,"sale_price":"9",
-     "stocks":[{"location_id":"a1000000-0000-0000-0000-0000000000a1","stock":"1"},{"location_id":"a1000000-0000-0000-0000-0000000000a2","stock":"1"}]}]'::jsonb) AS r;
-CREATE TEMP TABLE staff_good AS SELECT add_products('a0000000-0000-0000-0000-00000000000a', 'a1000000-0000-0000-0000-0000000000a1',
+CREATE TEMP TABLE staff_bulk AS SELECT add_products('a0000000-0000-0000-0000-00000000000a', 'a1000000-0000-0000-0000-0000000000a1',
   '[{"starter_id":"a9000000-0000-0000-0000-000000000003","sell":true,"sale_price":"9","stock":"4"}]'::jsonb) AS r;
 RESET ROLE;
 SELECT test_as('');
-SELECT test_assert((SELECT r->>'reason' = 'forbidden' FROM staff_locked), 'staff with products switched off cannot add');
-SELECT test_assert((SELECT r->>'reason' = 'forbidden' FROM staff_other), 'staff cannot add at a location they don''t work at');
-SELECT test_assert((SELECT r->'errors'->0->>'field' = 'stocks' FROM staff_reach), 'staff cannot stock other locations: ' || (SELECT r::text FROM staff_reach));
-SELECT test_assert((SELECT (r->>'ok')::boolean FROM staff_good), 'staff add a starter product: ' || (SELECT r::text FROM staff_good));
-SELECT test_assert((SELECT e.location_id = 'a1000000-0000-0000-0000-0000000000a1' AND li.quantity_on_hand = 4
-                      FROM equipment_items e JOIN equipment_location_inventory li ON li.equipment_item_id = e.id
-                     WHERE e.name = 'Starter Staff Pick'),
-  'what staff add is a product of their location only, with its stock');
+SELECT test_assert((SELECT r->>'reason' = 'forbidden' FROM staff_bulk), 'staff cannot bulk-add products, even with Change products on');
+SELECT test_assert(NOT EXISTS (SELECT 1 FROM equipment_items WHERE name = 'Starter Staff Pick'), 'nothing was added');
+UPDATE staff_module_access SET enabled = false WHERE location_id = 'a1000000-0000-0000-0000-0000000000a1' AND module_key = 'edit_products';
 
 -- ── One list: an owner's product is stocked, not added twice (155) ─────────
 -- Starter Walker is owner A's (149), carried at A1 only.

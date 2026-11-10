@@ -117,9 +117,6 @@ export function AuthProvider({ children, initialUserId, initialProfile }: AuthPr
         .single()
       if (!active) return
       if (error) console.error('profile load failed:', error.message)
-      // A background refresh that fails keeps the profile already shown; blanking
-      // it rebuilt every screen (and reset the location being stocked).
-      if (error && !showLoading) return
       const { data: memberships } = data
         ? await supabase.from('memberships').select('scope_type,scope_id').eq('user_id', userId).eq('scope_type', 'location')
         : { data: null }

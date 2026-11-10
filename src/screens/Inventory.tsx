@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Search, Pencil, Trash2, X, ImagePlus, Building2, Lock, ListPlus } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, X, ImagePlus, Building2, Lock } from 'lucide-react'
 
 const LOCKED_PRODUCTS = 'Locked by the owner (Staff Access → Change products)'
 
@@ -23,10 +23,8 @@ import { refreshWebsite } from '../lib/websiteRefresh'
 import { canManageStore, removeProductMessage } from '../lib/storeProducts'
 import { useAuth } from '../contexts/AuthContext'
 import { CATEGORIES } from '../lib/categories'
+import CatalogPicker from './inventory/CatalogPicker'
 import { addStartingStock } from './inventory/startingStock'
-import ProductsByLocation from './products/ProductsByLocation'
-import StarterPicker from './products/StarterPicker'
-import { importLocations } from './products/useAddProducts'
 import InventoryTable from './inventory/InventoryTable'
 
 export type InventoryItem = {
@@ -59,8 +57,7 @@ const SELECT = 'id,name,description,category,sku,pickup_rental_price,delivery_re
 export default function Inventory() {
   const qc = useQueryClient()
   const { profile } = useAuth()
-  const { locations, selectedLocationId, selectedLocation, setSelectedLocationId, viewingBusinessId, scopeBusinessId } = useLocationScope()
-  const [bulkOpen, setBulkOpen] = useState(false)
+  const { locations, selectedLocationId, selectedLocation, setSelectedLocationId, viewingBusinessId } = useLocationScope()
   const [q, setQ] = useState('')
   const [editing, setEditing] = useState<Partial<InventoryItem> | null>(null) // null=closed, {} = new
   const catalogManager = useCatalogManager()
@@ -70,6 +67,8 @@ export default function Inventory() {
   const [editTarget, setEditTarget] = useState<{ id: string; n: number } | null>(null)
   const [view, setView] = useState<'store' | 'catalog'>('store')
   const [category, setCategory] = useState('all')
+  // Products added this visit stay in the catalog list with "Added · set stock".
+  const [justAdded, setJustAdded] = useState<readonly string[]>([])
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['equipment_items', selectedLocationId, viewingBusinessId],
@@ -131,10 +130,9 @@ export default function Inventory() {
     && ([it.name, it.description, it.sku, it.category, ...(it.location_inventory ?? []).filter((row) => !selectedLocationId || row.location_id === selectedLocationId).map((row) => row.scan_code)].filter(Boolean).join(' ').toLowerCase().includes(q.toLowerCase())
       || Boolean(scanned.data?.has(it.id)))
   const filtered = (data ?? []).filter((it) => matches(it) && (!selectedLocationId || inStore(it)))
-  // A store adds products itself (the Add products tab): its owner’s list, then the starter list.
+  // A store adds products from the shared catalog itself ("Add from catalog").
+  const addable = selectedLocationId ? (data ?? []).filter((it) => it.is_active && (!inStore(it) || justAdded.includes(`${selectedLocationId}:${it.id}`)) && matches(it)) : []
   const showCatalog = Boolean(selectedLocation) && view === 'catalog'
-  // Starter products this location already carries show as "Already here".
-  const hereNames = new Set((data ?? []).filter((it) => inStore(it)).map((it) => it.name.trim().toLowerCase()))
   const usedCategories = CATEGORIES.filter((c) => (data ?? []).some((it) => it.category === c))
   const rowActions = (it: InventoryItem) => (
     <>
@@ -171,13 +169,6 @@ export default function Inventory() {
     <div>
       <div className="mb-1 flex flex-col items-start gap-3 sm:flex-row sm:justify-between">
         <h1 className="text-2xl font-semibold">Inventory Management</h1>
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-        {catalogManager && scopeBusinessId && locations.length > 0 && (
-          <button type="button" onClick={() => setBulkOpen((open) => !open)} aria-expanded={bulkOpen}
-            className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 sm:w-auto">
-            <ListPlus size={16} /> Add products
-          </button>
-        )}
         {(catalogManager || profile?.role === 'staff') && (
           <button
             onClick={() => setEditing({})}
@@ -188,15 +179,7 @@ export default function Inventory() {
             <Plus size={16} /> Add Item
           </button>
         )}
-        </div>
       </div>
-      {bulkOpen && scopeBusinessId && locations.length > 0 && (
-        <section aria-label="Add products" className="my-4 rounded-2xl border border-blue-200 bg-blue-50/40 p-5">
-          <h2 className="mb-1 text-lg font-semibold">Add products</h2>
-          <p className="mb-4 text-sm text-slate-600">One location at a time: choose it, then add from your products, the starter list, a CSV, or by hand.</p>
-          <ProductsByLocation businessId={scopeBusinessId} locations={locations} initialId={selectedLocationId} />
-        </section>
-      )}
       <h2 className="text-lg font-semibold mt-2">Equipment &amp; Supplies</h2>
       <p className="text-slate-500 text-sm mb-5">
         Manage rental inventory, pricing, and stock. Returned units become available when the rental closes.
@@ -204,18 +187,17 @@ export default function Inventory() {
       </p>
 
       <div className={`mb-4 grid gap-3 ${canSwitchStores(profile) ? 'sm:grid-cols-[minmax(0,1fr)_auto_minmax(15rem,20rem)]' : 'sm:grid-cols-[minmax(0,1fr)_auto]'}`}>
-        {/* The starter list has its own search and categories. */}
-        <div className={`relative ${showCatalog ? 'hidden' : ''}`}>
+        <div className="relative">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search inventory or scan an SN..."
+            placeholder={showCatalog ? 'Search the catalog…' : 'Search inventory or scan an SN...'}
             className="w-full border border-slate-300 rounded-lg pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
         <select aria-label="Filter by category" value={category} onChange={(event) => setCategory(event.target.value)}
-          className={`${showCatalog ? 'hidden' : ''} rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm capitalize text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500`}>
+          className="rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm capitalize text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
           <option value="all">All categories</option>
           {usedCategories.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
@@ -238,10 +220,10 @@ export default function Inventory() {
 
       {selectedLocation && (
         <div role="tablist" aria-label="Inventory view" className="mb-4 inline-flex rounded-xl border border-slate-200 bg-white p-1">
-          {([['store', `In ${selectedLocation.name}`, filtered.length], ['catalog', 'Add products', null]] as const).map(([key, label, count]) => (
+          {([['store', `In ${selectedLocation.name}`, filtered.length], ['catalog', 'Add from catalog', addable.length]] as const).map(([key, label, count]) => (
             <button key={key} role="tab" aria-selected={view === key} onClick={() => setView(key)}
               className={`min-h-10 rounded-lg px-4 text-sm font-medium ${view === key ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
-              {label}{count == null ? '' : ` · ${count}`}
+              {label} · {count}
             </button>
           ))}
         </div>
@@ -250,17 +232,7 @@ export default function Inventory() {
       {isLoading && <div className="text-slate-500">Loading…</div>}
       {error && <div className="text-red-600 text-sm">{(error as Error).message}</div>}
 
-      {/* One list to add from: the shared starter list (149). Staff need Change products on (154); otherwise it shows greyed out. */}
-      {showCatalog && selectedLocation?.business && (
-        <section aria-label="Add products" className="space-y-2">
-          <p className="text-sm text-slate-600">{productsLocked
-            ? 'Adding products is switched off for staff at this location; the owner can switch it on in Staff Access.'
-            : profile?.role === 'staff'
-              ? `Pick products, then set your prices and stock. They’re kept at ${selectedLocation.name}.`
-              : `Pick products, then set your prices and stock at ${selectedLocation.name}.`}</p>
-          <StarterPicker target={{ businessId: selectedLocation.business.id, locations: importLocations([selectedLocation]) }} hereNames={hereNames} disabled={productsLocked} />
-        </section>
-      )}
+      {showCatalog && selectedLocation && <CatalogPicker items={addable} locationId={selectedLocation.id} locationName={selectedLocation.name} locked={productsLocked} added={justAdded.filter((key) => key.startsWith(`${selectedLocation.id}:`)).map((key) => key.split(':')[1])} onAdded={(id) => setJustAdded((prev) => [...prev, `${selectedLocation.id}:${id}`])} />}
 
       {filtered.length > 0 && (
         <div className={showCatalog ? 'hidden' : ''}>
@@ -272,7 +244,7 @@ export default function Inventory() {
       {!showCatalog && !isLoading && !error && filtered.length === 0 && (
         <div className="rounded-xl border border-slate-200 bg-white py-10 text-center text-sm text-slate-500">
           {selectedLocation && !q && category === 'all'
-            ? <>Nothing is stocked at {selectedLocation.name} yet. {productsLocked ? <span className="text-slate-400" title={LOCKED_PRODUCTS}>Add products from the catalog (locked by the owner)</span> : <button type="button" onClick={() => setView('catalog')} className="font-medium text-blue-600 hover:underline">Add products</button>}.</>
+            ? <>Nothing is stocked at {selectedLocation.name} yet. {productsLocked ? <span className="text-slate-400" title={LOCKED_PRODUCTS}>Add products from the catalog (locked by the owner)</span> : <button type="button" onClick={() => setView('catalog')} className="font-medium text-blue-600 hover:underline">Add products from the catalog</button>}.</>
             : 'No inventory matches this store and search.'}
         </div>
       )}
