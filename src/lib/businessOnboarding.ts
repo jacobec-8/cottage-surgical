@@ -4,6 +4,7 @@
 // stock and staff logins. Drivers are added afterwards on the Drivers page.
 // Sent to onboard_business (migrations 076, 100).
 import { newOnboardingId, type StockDraft } from './locationOnboarding.ts'
+import { validUsername } from './storeLogins.ts'
 
 export const MAX_LOCATIONS = 10
 export const MAX_STAFF_PER_LOCATION = 20
@@ -46,7 +47,7 @@ export function emptyDraft(ownerId = ''): OnboardingDraft {
 }
 
 const priceValid = (value: string) => value === '' || (/^\d+(\.\d{1,2})?$/.test(value) && Number(value) <= 99999999.99)
-const usernameValid = (value: string) => /^[a-z0-9][a-z0-9-]{2,62}$/.test(value) && !['admin', 'administrator', 'root'].includes(value)
+const usernameValid = (value: string) => validUsername(value)
 const passwordValid = (value: string) => value.length >= 8 && new TextEncoder().encode(value).length <= 72
 const norm = (value: string) => value.trim().toLowerCase()
 /** "11954, 11930 11937" → ['11954', '11930', '11937']; null when any entry is not a 5-digit ZIP. */
@@ -72,7 +73,7 @@ function duplicated(draft: OnboardingDraft, username: string): boolean {
 }
 function loginProblem(draft: OnboardingDraft, username: string, password: string): string | null {
   const name = norm(username)
-  if (!usernameValid(name)) return 'use 3–63 letters, numbers, or hyphens for the username (start with a letter or number).'
+  if (!usernameValid(name)) return 'use 3–63 letters, numbers, dots, dashes or underscores for the username, starting with a letter or number.'
   if (duplicated(draft, name)) return `choose a different username; “${name}” is used twice in this setup.`
   if (!passwordValid(password)) return 'use a password of at least 8 characters and no more than 72 bytes.'
   return null

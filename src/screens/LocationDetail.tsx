@@ -160,7 +160,7 @@ export default function LocationDetail({ locationId }: { locationId: string }) {
       if (!data?.ok) {
         const reasons: Record<string, string> = {
           username_taken: `Username “${data?.username ?? ''}” is already in use.`,
-          invalid_username: 'Use 3–63 lowercase letters, numbers, or hyphens for every username.',
+          invalid_username: 'Use 3–63 letters, numbers, dots, dashes or underscores for every username.',
           incomplete_credentials: 'Enter a password for every added user.',
           invalid_role: 'Choose a valid user type.',
           too_many_users: 'Create no more than 20 users at one time.',
