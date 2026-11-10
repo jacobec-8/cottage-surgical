@@ -1331,7 +1331,7 @@ SELECT test_assert((SELECT li.quantity_on_hand = 2 AND li.pickup_rental_price = 
 SELECT test_assert((SELECT li.quantity_on_hand = 12 AND li.sale_price = 24.50 FROM equipment_items e JOIN equipment_location_inventory li ON li.equipment_item_id = e.id
                      WHERE e.business_id = 'a0000000-0000-0000-0000-00000000000a' AND e.name = 'CSV Cane' AND e.description = 'Offset cane'),
   'a CSV row is added the same way');
-SELECT test_assert((SELECT r->'errors'->0->>'message' = 'You already have a product with this name.' FROM import_again), 'importing a product twice is refused');
+SELECT test_assert((SELECT r->'errors'->0->>'message' IN ('You already have a product with this name.', 'Already here.') FROM import_again), 'importing a product twice is refused');
 SELECT test_assert((SELECT r->>'reason' = 'location_not_found' FROM import_other), 'an owner can only stock their own locations');
 SELECT test_assert((SELECT r->>'reason' = 'forbidden' FROM import_foreign), 'an owner cannot add to another owner');
 SELECT test_assert((SELECT r->>'reason' = 'forbidden' FROM import_staff), 'staff cannot add products in bulk');
@@ -1450,6 +1450,22 @@ SELECT test_assert((SELECT e.location_id = 'a1000000-0000-0000-0000-0000000000a1
                       FROM equipment_items e JOIN equipment_location_inventory li ON li.equipment_item_id = e.id
                      WHERE e.name = 'Starter Staff Pick'),
   'what staff add is a product of their location only, with its stock');
+
+-- ── One list: an owner's product is stocked, not added twice (155) ─────────
+-- Starter Walker is owner A's (149), carried at A1 only.
+SELECT test_as('a2000000-0000-0000-0000-000000000002'); SET ROLE authenticated;
+CREATE TEMP TABLE attach_a2 AS SELECT add_products('a0000000-0000-0000-0000-00000000000a', 'a1000000-0000-0000-0000-0000000000a2',
+  '[{"starter_id":"a9000000-0000-0000-0000-000000000001","sell":true,"sale_price":"79","stock":"2"}]'::jsonb) AS r;
+CREATE TEMP TABLE attach_again AS SELECT add_products('a0000000-0000-0000-0000-00000000000a', 'a1000000-0000-0000-0000-0000000000a2',
+  '[{"starter_id":"a9000000-0000-0000-0000-000000000001","sell":true,"sale_price":"79","stock":"2"}]'::jsonb) AS r;
+RESET ROLE;
+SELECT test_as('');
+SELECT test_assert((SELECT (r->>'ok')::boolean FROM attach_a2), 'a starter pick the owner already has is stocked at the new location: ' || (SELECT r::text FROM attach_a2));
+SELECT test_assert((SELECT count(*) = 1 FROM equipment_items WHERE business_id = 'a0000000-0000-0000-0000-00000000000a' AND name = 'Starter Walker'), 'no second product is made');
+SELECT test_assert((SELECT li.sale_price = 79 AND li.quantity_on_hand = 2 FROM equipment_items e JOIN equipment_location_inventory li ON li.equipment_item_id = e.id
+                     WHERE e.business_id = 'a0000000-0000-0000-0000-00000000000a' AND e.name = 'Starter Walker' AND li.location_id = 'a1000000-0000-0000-0000-0000000000a2'),
+  'the new location gets the row''s price and stock');
+SELECT test_assert((SELECT r->'errors'->0->>'message' = 'Already here.' FROM attach_again), 'picking it again at the same location is refused as already here');
 
 SELECT test_as('');
 SELECT 'roles assertions passed' AS result;
