@@ -25,6 +25,8 @@ const REASONS: Record<string, string> = {
   username_taken: 'That username is already taken. Try another.',
   weak_password: `Passwords need at least ${MIN_PASSWORD_LENGTH} characters.`,
   incomplete_credentials: 'Enter a password.',
+  driver_one_home: 'A driver works from one home location.',
+  other_business: 'Choose only your own locations.',
 }
 
 /** Staff-readable text for an ok:false reason from the login functions. */

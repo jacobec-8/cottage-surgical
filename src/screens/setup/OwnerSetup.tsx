@@ -100,7 +100,7 @@ export default function OwnerSetup() {
         )}
 
         {step === 'staff' && (
-          <Step intro="Give each person their own login. Staff work at one location; drivers see only their stops. Choose what staff can do on Staff → Staff Access later.">
+          <Step intro="Give each person their own login. Staff can work at one or more of your locations; drivers have one home location and see only their stops. Choose what staff can do on Staff → Staff Access later.">
             <StaffStep locations={locations} />
             <Nav onBack={() => go('products')} onNext={() => go('done')} nextLabel="Continue" />
           </Step>
@@ -161,24 +161,31 @@ function PharmacyStep({ locations, onBack, onNext }: { locations: Locs; onBack: 
 function StaffStep({ locations }: { locations: Locs }) {
   const [adding, setAdding] = useState(true)
   const ids = locations.map((l) => l.id)
+  // Each person with every location they work at (151: staff can work at several).
   const staff = useQuery({
     queryKey: [OWNER_BUSINESS_KEY, 'staff', ids.join(',')],
     enabled: ids.length > 0,
     queryFn: async () => {
-      const { data, error } = await supabase.from('profiles').select('id,full_name,email,role,location_id')
-        .in('role', ['staff', 'driver']).in('location_id', ids).order('created_at')
-      if (error) throw error
-      return data as { id: string; full_name: string | null; email: string; role: string; location_id: string }[]
+      const m = await supabase.from('memberships').select('user_id,scope_id,role').eq('scope_type', 'location').in('scope_id', ids).in('role', ['staff', 'driver'])
+      if (m.error) throw m.error
+      const userIds = [...new Set((m.data ?? []).map((row) => row.user_id as string))]
+      if (!userIds.length) return []
+      const p = await supabase.from('profiles').select('id,full_name,email').in('id', userIds).order('created_at')
+      if (p.error) throw p.error
+      return (p.data ?? []).map((person) => {
+        const rows = (m.data ?? []).filter((row) => row.user_id === person.id)
+        return { id: person.id as string, name: (person.full_name || person.email) as string, role: rows[0]?.role as string, at: rows.map((row) => row.scope_id as string) }
+      })
     },
   })
-  const where = (id: string) => locations.find((l) => l.id === id)?.name ?? ''
+  const where = (at: string[]) => at.map((id) => locations.find((l) => l.id === id)?.name).filter(Boolean).join(', ')
   return (
     <div className="space-y-4">
       {adding
         ? <AddLoginForm locations={locations} defaultLocationId={locations[0]?.id ?? null} onClose={() => setAdding(false)} onCreated={() => { void staff.refetch() }} />
         : <button type="button" onClick={() => setAdding(true)} className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-700 hover:underline"><Plus size={15} /> Add a login</button>}
       <AddedList icon={<UserRound size={16} />} empty="No staff logins yet. You can add them later on Staff."
-        items={(staff.data ?? []).map((s) => ({ id: s.id, label: s.full_name || s.email, detail: `${s.role === 'driver' ? 'Driver' : 'Staff'} · ${where(s.location_id)}` }))} />
+        items={(staff.data ?? []).map((s) => ({ id: s.id, label: s.name, detail: `${s.role === 'driver' ? 'Driver' : 'Staff'} · ${where(s.at)}` }))} />
     </div>
   )
 }
