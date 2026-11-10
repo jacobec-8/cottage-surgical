@@ -202,7 +202,7 @@ export default function Orders() {
         <NewRequests requests={{ ...requests, rows: requestRows }} selected={selected} onOpen={setSelected} showEmpty={view === 'requests'} />
       )}
 
-      {showRequests && view === 'all' && <h3 className="mb-3 text-base font-semibold text-slate-900">In Progress</h3>}
+      {showRequests && view === 'all' && <h3 className="mb-3 text-base font-semibold text-slate-900">All orders</h3>}
 
       {isLoading && <div className="text-slate-500">Loading…</div>}
       {error && <div className="text-red-600 text-sm">Couldn’t load orders. Please try again.</div>}
