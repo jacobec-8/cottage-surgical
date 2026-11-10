@@ -22,6 +22,7 @@ import { BACKOFFICE_ROLES, STAFF_APP_ROLES, canSwitchStores, roleLabel } from '.
 import { NeedsTodayBadge, NeedsTodayPanel } from './NeedsTodayPanel'
 import { NEEDS_TODAY_MODULES, canSeeNeedsToday, needsTodayTotal, type NeedsTodayModule, type NeedsTodayStatus } from './needsToday'
 import { useNeedsToday } from './useNeedsToday'
+import { AdminNavLinks, NoPharmaciesYet, WorkspaceBanner, usePendingSignups, useViewedOwnerName } from './AdminChrome'
 
 const STAFF = BACKOFFICE_ROLES
 const ALL = STAFF_APP_ROLES
@@ -46,6 +47,13 @@ export default function Layout({ children }: { children: ReactNode }) {
   const locationScope = useLocationScope()
   const { selectedLocationId, selectedLocation } = locationScope
   const isDriver = profile?.role === 'driver'
+  // Admin (us) has its own Home and Owners pages; an owner's screens only inside their workspace (146).
+  const viewingBusinessId = locationScope.viewingBusinessId
+  const adminHome = profile?.role === 'admin' && !viewingBusinessId
+  const pendingSignups = usePendingSignups(profile?.role === 'admin')
+  const viewedOwner = useViewedOwnerName(viewingBusinessId)
+  const viewedOwnerName = viewedOwner.data ?? 'This owner'
+  const noPharmacies = Boolean(viewingBusinessId) && !locationScope.loading && locationScope.locations.length === 0
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const access = useStaffModuleAccess()
   const pathname = usePathname()
@@ -96,7 +104,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   // Rows behind a locked staff module stay out, and the panel waits for the
   // module switches rather than flashing a false "All caught up".
   const canOpenNeeds = (module: NeedsTodayModule) => access.canAccess(module)
-  const showNeeds = canSeeNeedsToday(profile?.role) && !access.loadingAccess && NEEDS_TODAY_MODULES.some(canOpenNeeds)
+  const showNeeds = !adminHome && canSeeNeedsToday(profile?.role) && !access.loadingAccess && NEEDS_TODAY_MODULES.some(canOpenNeeds)
   const needs = useNeedsToday(selectedLocationId, showNeeds, canOpenNeeds)
   const needsRows = needs.data ?? []
   const needsStatus: NeedsTodayStatus = needs.status === 'error' ? 'error' : needs.status === 'pending' ? 'loading' : 'ready'
@@ -118,7 +126,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   const name = profile?.full_name || profile?.email || 'User'
   // An owner viewing all their locations still sees their own name.
   const business = selectedLocation?.business ?? (profile?.role === 'owner' ? locationScope.locations[0]?.business : null)
-  const businessName = business?.name ?? 'All stores'
+  const businessName = adminHome ? 'Cottage admin' : business?.name ?? (viewingBusinessId ? viewedOwnerName : 'All stores')
   // Cottage's own contact is only the fallback for the all-stores admin view;
   // another business never shows Cottage's details.
   // A single store shows its own phone and reply-to (its staff answer them), else the business's.
@@ -129,12 +137,17 @@ export default function Layout({ children }: { children: ReactNode }) {
   const activeWorkspace = workspaces.find((workspace) => workspace.tabs.some((tab) => matchesWorkspaceTab(pathname, tab.to)))
   const visibleNav = NAV.filter((n) => {
     if (!n.roles.includes(profile?.role || '')) return false
+    if (noPharmacies && n.to !== '/locations') return false
     if ('adminOnly' in n && n.adminOnly && profile?.role !== 'admin') return false
     if (n.workspace) return workspaces.some((workspace) => workspace.id === n.workspace)
     const moduleKey = 'module' in n ? n.module as StaffModule : null
     return !moduleKey || access.canAccess(moduleKey)
   })
-  const navLinks = visibleNav.map((n) => {
+  const leaveWorkspace = () => {
+    locationScope.setViewingBusinessId(null)
+    router.push('/admin')
+  }
+  const navLinks = adminHome ? <AdminNavLinks pathname={pathname} pending={pendingSignups.data ?? 0} /> : visibleNav.map((n) => {
     const Icon = n.icon
     const workspace = workspaces.find((workspace) => workspace.id === n.workspace)
     const href = workspace?.tabs[0].to ?? n.to
@@ -247,13 +260,13 @@ export default function Layout({ children }: { children: ReactNode }) {
               </div>
             </div>
           </div>
-          <div className="hidden min-w-0 items-center gap-3 text-xs text-slate-500 xl:flex 2xl:gap-5">
+          <div className={`hidden min-w-0 items-center gap-3 text-xs text-slate-500 2xl:gap-5 ${adminHome ? '' : 'xl:flex'}`}>
             <span className="flex min-w-0 items-center gap-1.5"><MapPin size={13} className="shrink-0" /> {selectedLocation ? `${selectedLocation.address_line1}, ${selectedLocation.address_city} ${selectedLocation.address_state} ${selectedLocation.address_zip}` : 'All store locations'}</span>
             {contactPhone && <span className="flex items-center gap-1.5 whitespace-nowrap"><Phone size={13} className="shrink-0" /> {contactPhone}</span>}
             {contactEmail && <span className="flex items-center gap-1.5 whitespace-nowrap"><Mail size={13} className="shrink-0" /> {contactEmail}</span>}
           </div>
           <div className="min-w-0 flex-1 sm:max-w-xs lg:flex-none">
-            {canSwitchStores(profile) ? (
+            {adminHome ? null : canSwitchStores(profile) ? (
               <label className="block">
                 <span className="sr-only">Store selector</span>
                 <select
@@ -262,7 +275,7 @@ export default function Layout({ children }: { children: ReactNode }) {
                   onChange={(event) => locationScope.setSelectedLocationId(event.target.value === 'all' ? null : event.target.value)}
                   className="min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  {profile?.role !== 'staff' && <option value="all">{profile?.role === 'owner' ? 'All my stores' : 'All stores'}</option>}
+                  {profile?.role !== 'staff' && !viewingBusinessId && <option value="all">{profile?.role === 'owner' ? 'All my stores' : 'All stores'}</option>}
                   {locationScope.locations.map((location) => <option key={location.id} value={location.id}>{location.name} · {location.address_city}{location.is_active ? '' : ' (not open)'}</option>)}
                 </select>
               </label>
@@ -294,7 +307,8 @@ export default function Layout({ children }: { children: ReactNode }) {
           </div>
         </header>
         <main className="flex-1 overflow-x-hidden p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:p-6 lg:p-8">
-          {activeWorkspace && !isDriver && (
+          {viewingBusinessId && <WorkspaceBanner ownerName={viewedOwnerName} onLeave={leaveWorkspace} />}
+          {activeWorkspace && !isDriver && !noPharmacies && (
             <div className="mb-6 print:hidden">
               {activeWorkspace.tabs.some((tab) => pathname === tab.to) && (
                 <h1 className="mb-4 text-2xl font-semibold">{activeWorkspace.label}</h1>
@@ -322,7 +336,7 @@ export default function Layout({ children }: { children: ReactNode }) {
               </nav>
             </div>
           )}
-          {children}
+          {noPharmacies && !pathname.startsWith('/locations') ? <NoPharmaciesYet ownerName={viewedOwnerName} /> : children}
         </main>
       </div>
     </div>

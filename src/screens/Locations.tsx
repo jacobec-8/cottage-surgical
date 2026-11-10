@@ -6,8 +6,8 @@ import { useQuery } from '@tanstack/react-query'
 import { Building2, ChevronRight, Globe, MapPin, Plus, Store, Users } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { useLocationScope } from '../contexts/LocationContext'
 import NewPharmacyForm from './locations/NewPharmacyForm'
-import SignupRequests from './locations/SignupRequests'
 
 type LocationUser = {
   id: string
@@ -35,15 +35,16 @@ type Location = {
 
 export default function Locations() {
   const { profile } = useAuth()
+  const { viewingBusinessId } = useLocationScope()
   const [adding, setAdding] = useState(false)
   const locations = useQuery({
-    queryKey: ['locations_manager'],
+    queryKey: ['locations_manager', viewingBusinessId],
     queryFn: async () => {
       const { data, error } = await supabase.from('pickup_locations').select(
         'id,name,address_line1,address_line2,address_city,address_state,address_zip,phone,instructions,' +
         'fulfillment_mode,partner_type,is_active,on_website,' +
         'users:profiles!profiles_location_id_fkey(id,email,role,is_active),business:businesses!inner(is_active)',
-      ).eq('business.is_active', true).order('name')
+      ).eq('business.is_active', true).match(viewingBusinessId ? { business_id: viewingBusinessId } : {}).order('name')
       if (error) throw error
       return data as unknown as Location[]
     },
@@ -55,10 +56,9 @@ export default function Locations() {
         <div><h1 className="flex items-center gap-2 text-2xl font-semibold"><Building2 className="text-blue-600" /> Locations</h1><p className="mt-1 text-sm text-slate-500">Manage owned pharmacies, partner pickup stores, and their location-scoped users.</p></div>
         <div className="flex gap-2">
           <button type="button" onClick={() => setAdding((open) => !open)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700"><Plus size={16} /> New pharmacy</button>
-          {profile?.role === 'admin' && <Link href="/locations/onboard" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-blue-200 px-4 text-sm font-medium text-blue-700 hover:bg-blue-50">Onboard a business</Link>}
+          {profile?.role === 'admin' && !viewingBusinessId && <Link href="/locations/onboard" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-blue-200 px-4 text-sm font-medium text-blue-700 hover:bg-blue-50">Onboard a business</Link>}
         </div>
       </div>
-      {profile?.role === 'admin' && <SignupRequests />}
       {adding && <NewPharmacyForm onDone={() => { setAdding(false); void locations.refetch() }} />}
       {locations.isLoading && <div className="text-sm text-slate-500">Loading locations…</div>}
       {locations.error && <div className="text-sm text-red-600">Couldn’t load locations.</div>}

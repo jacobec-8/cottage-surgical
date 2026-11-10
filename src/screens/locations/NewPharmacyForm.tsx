@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Building2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import { useLocationScope } from '../../contexts/LocationContext'
 import { Checked, SaveForm, SubmitButton } from '../../components/SaveForm'
 import { locationProblems } from '../../lib/formChecks/peopleChecks'
 
@@ -22,7 +23,9 @@ interface NewPharmacyFormProps {
 export default function NewPharmacyForm({ onDone }: NewPharmacyFormProps) {
   const { profile } = useAuth()
   const qc = useQueryClient()
-  const isAdmin = profile?.role === 'admin'
+  const { viewingBusinessId } = useLocationScope()
+  // Inside an owner's workspace, admin adds to that owner, like the owner would.
+  const isAdmin = profile?.role === 'admin' && !viewingBusinessId
   const [form, setForm] = useState<{ name: string; line1: string; line2: string; city: string; state: string; zip: string; phone: string; notes: string; fulfillmentMode: 'pickup_and_delivery' | 'pickup_only'; deliveryZips: string; deliversAnywhere: boolean; businessId: string }>({ name: '', line1: '', line2: '', city: '', state: 'NY', zip: '', phone: '', notes: '', fulfillmentMode: 'pickup_and_delivery', deliveryZips: '', deliversAnywhere: false, businessId: '' })
   const businesses = useQuery({
     queryKey: ['businesses_active'],
@@ -36,7 +39,7 @@ export default function NewPharmacyForm({ onDone }: NewPharmacyFormProps) {
   const set = (key: keyof typeof form, value: string | boolean) => setForm((current) => ({ ...current, [key]: value }))
   const save = useMutation({
     mutationFn: async () => {
-      const businessId = isAdmin ? form.businessId : profile?.business_id
+      const businessId = isAdmin ? form.businessId : viewingBusinessId ?? profile?.business_id
       if (!businessId) throw new Error(isAdmin ? 'Choose the business this pharmacy belongs to.' : 'Your login has no business.')
       const zips = form.deliveryZips.split(/[,\s]+/).map((zip) => zip.trim()).filter(Boolean)
       const { data, error } = await supabase.from('pickup_locations').insert({

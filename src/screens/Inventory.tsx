@@ -56,7 +56,7 @@ const SELECT = 'id,name,description,category,sku,pickup_rental_price,delivery_re
 export default function Inventory() {
   const qc = useQueryClient()
   const { profile } = useAuth()
-  const { locations, selectedLocationId, selectedLocation, setSelectedLocationId } = useLocationScope()
+  const { locations, selectedLocationId, selectedLocation, setSelectedLocationId, viewingBusinessId } = useLocationScope()
   const [q, setQ] = useState('')
   const [editing, setEditing] = useState<Partial<InventoryItem> | null>(null) // null=closed, {} = new
   const catalogManager = useCatalogManager()
@@ -70,9 +70,11 @@ export default function Inventory() {
   const [justAdded, setJustAdded] = useState<readonly string[]>([])
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['equipment_items', selectedLocationId],
+    queryKey: ['equipment_items', selectedLocationId, viewingBusinessId],
     queryFn: async () => {
-      const { data, error } = await supabase.from('equipment_items').select(SELECT).order('category').order('name')
+      // Admin can read every owner's products; inside an owner's workspace only theirs.
+      const { data, error } = await supabase.from('equipment_items').select(SELECT)
+        .match(viewingBusinessId ? { business_id: viewingBusinessId } : {}).order('category').order('name')
       if (error) throw error
       return data as InventoryItem[]
     },
