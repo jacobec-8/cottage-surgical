@@ -3,15 +3,16 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, MapPin, Package, Plus, UserRound } from 'lucide-react'
+import { Check, MapPin, Plus, UserRound } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useLocationScope } from '../../contexts/LocationContext'
 import { SETUP_STEPS, setupStepFor, type SetupStep } from '../../lib/ownerSetup'
 import NewPharmacyForm from '../locations/NewPharmacyForm'
 import AddLoginForm from '../staff/AddLoginForm'
 import BusinessDetailsForm from './BusinessDetailsForm'
-import AddProductsPanel from '../products/AddProductsPanel'
-import { importLocations } from '../products/useAddProducts'
+import LocationCards from '../products/LocationCards'
+import ProductsByLocation from '../products/ProductsByLocation'
+import { nextLocation } from '../../lib/locationSteps'
 import SetupDone from './SetupDone'
 import { OWNER_BUSINESS_KEY, useOwnerBusiness } from './useOwnerBusiness'
 
@@ -88,21 +89,21 @@ export default function OwnerSetup() {
         )}
 
         {step === 'products' && (
-          <Step intro="Add what you rent or sell: pick from our starter list, upload a spreadsheet (CSV), or add one by hand. You set your own prices, and how many you have at each location. Photos, descriptions and more options are on Inventory after setup.">
+          <Step intro="Add what you rent or sell, one location at a time: pick from our starter list, upload a spreadsheet (CSV), or add one by hand, with your prices and stock there. Photos, descriptions and more options are on Inventory after setup.">
             {locations.length > 0 && businessId ? (
-              <div className="space-y-4">
-                <AddProductsPanel target={{ businessId, locations: importLocations(locations) }} />
-                <AddedList icon={<Package size={16} />} empty="No products yet." items={(products.data ?? []).map((p) => ({ id: p.id, label: p.name, detail: [p.is_rentable && 'rent', p.is_purchasable && 'sell'].filter(Boolean).join(' & ') }))} />
-              </div>
-            ) : <p className="text-sm text-slate-600">Add a location first.</p>}
-            <Nav onBack={() => go('pharmacy')} onNext={() => go('staff')} nextLabel={(products.data?.length ?? 0) ? 'Continue' : 'Add products later'} />
+              <ProductsByLocation businessId={businessId} locations={locations} renderNav={(_current, next, select) => (
+                <LocationNav onBack={() => go('pharmacy')} next={next} nextLabel={(n) => `Next: stock ${n.name} →`}
+                  onNextLocation={(id) => { select(id); window.scrollTo({ top: 0 }) }} skipLabel="Skip to Staff" finishLabel="Continue to Staff" onFinish={() => go('staff')} />
+              )} />
+            ) : (
+              <><p className="text-sm text-slate-600">Add a location first.</p><Nav onBack={() => go('pharmacy')} onNext={() => go('staff')} nextLabel="Add products later" /></>
+            )}
           </Step>
         )}
 
         {step === 'staff' && (
-          <Step intro="Give each person their own login. Staff can work at one or more of your locations; drivers have one home location and see only their stops. Choose what staff can do on Staff → Staff Access later.">
-            <StaffStep locations={locations} />
-            <Nav onBack={() => go('products')} onNext={() => go('done')} nextLabel="Continue" />
+          <Step intro="Give each person their own login, one location at a time. Staff can also work at your other locations; drivers have one home location and see only their stops. Choose what staff can do on Staff → Staff Access later.">
+            <StaffStep locations={locations} onBack={() => go('products')} onFinish={() => go('done')} />
           </Step>
         )}
 
@@ -121,6 +122,23 @@ function Nav({ onBack, onNext, nextLabel, disabled = false }: { onBack: () => vo
     <div className="mt-6 flex items-center justify-between">
       <button type="button" onClick={onBack} className={`${BUTTON} border border-slate-300 bg-white text-slate-700 hover:bg-slate-50`}>Back</button>
       <button type="button" onClick={onNext} disabled={disabled} className={`${BUTTON} bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50`}>{nextLabel}</button>
+    </div>
+  )
+}
+
+function LocationNav({ onBack, next, nextLabel, onNextLocation, skipLabel, finishLabel, onFinish }: {
+  onBack: () => void; next: { id: string; name: string } | null; nextLabel: (next: { name: string }) => string
+  onNextLocation: (id: string) => void; skipLabel: string; finishLabel: string; onFinish: () => void
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <button type="button" onClick={onBack} className={`${BUTTON} border border-slate-300 bg-white text-slate-700 hover:bg-slate-50`}>Back</button>
+      <div className="flex flex-wrap gap-2">
+        {next && <button type="button" onClick={onFinish} className={`${BUTTON} border border-slate-300 bg-white text-slate-700 hover:bg-slate-50`}>{skipLabel}</button>}
+        {next
+          ? <button type="button" onClick={() => onNextLocation(next.id)} className={`${BUTTON} bg-blue-600 text-white hover:bg-blue-700`}>{nextLabel(next)}</button>
+          : <button type="button" onClick={onFinish} className={`${BUTTON} bg-blue-600 text-white hover:bg-blue-700`}>{finishLabel}</button>}
+      </div>
     </div>
   )
 }
@@ -158,8 +176,9 @@ function PharmacyStep({ locations, onBack, onNext }: { locations: Locs; onBack: 
   )
 }
 
-function StaffStep({ locations }: { locations: Locs }) {
-  const [adding, setAdding] = useState(true)
+function StaffStep({ locations, onBack, onFinish }: { locations: Locs; onBack: () => void; onFinish: () => void }) {
+  const [currentId, setCurrentId] = useState(locations[0]?.id ?? '')
+  const [added, setAdded] = useState(0)
   const ids = locations.map((l) => l.id)
   // Each person with every location they work at (151: staff can work at several).
   const staff = useQuery({
@@ -178,14 +197,27 @@ function StaffStep({ locations }: { locations: Locs }) {
       })
     },
   })
-  const where = (at: string[]) => at.map((id) => locations.find((l) => l.id === id)?.name).filter(Boolean).join(', ')
+  const current = locations.find((l) => l.id === currentId) ?? locations[0]
+  if (!current) return <><p className="text-sm text-slate-600">Add a location first.</p><Nav onBack={onBack} onNext={onFinish} nextLabel="Continue" /></>
+  const people = staff.data ?? []
+  const at = (id: string) => people.filter((p) => p.at.includes(id))
+  const others = (p: { at: string[] }) => p.at.filter((id) => id !== current.id).map((id) => locations.find((l) => l.id === id)?.name).filter(Boolean).join(', ')
+  const next = nextLocation(locations, current.id, (id) => at(id).length > 0)
   return (
-    <div className="space-y-4">
-      {adding
-        ? <AddLoginForm locations={locations} defaultLocationId={locations[0]?.id ?? null} onClose={() => setAdding(false)} onCreated={() => { void staff.refetch() }} />
-        : <button type="button" onClick={() => setAdding(true)} className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-700 hover:underline"><Plus size={15} /> Add a login</button>}
-      <AddedList icon={<UserRound size={16} />} empty="No staff logins yet. You can add them later on Staff."
-        items={(staff.data ?? []).map((s) => ({ id: s.id, label: s.name, detail: `${s.role === 'driver' ? 'Driver' : 'Staff'} · ${where(s.at)}` }))} />
+    <div className="space-y-6">
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold">1. Which location are you adding staff to?</h2>
+        <LocationCards label="Location to add staff to" locations={locations} selectedId={current.id} onSelect={setCurrentId}
+          status={(l) => ({ text: at(l.id).length ? `${at(l.id).length} ${at(l.id).length === 1 ? 'person' : 'people'}` : 'No staff yet', done: at(l.id).length > 0 })} />
+      </section>
+      <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+        <h2 className="text-lg font-semibold">2. Add staff at {current.name}</h2>
+        <AddLoginForm key={`${current.id}-${added}`} locations={locations} defaultLocationId={current.id} onCreated={() => { setAdded((n) => n + 1); void staff.refetch() }} />
+        <AddedList icon={<UserRound size={16} />} empty={`No staff at ${current.name} yet. You can add them later on Staff.`}
+          items={at(current.id).map((p) => ({ id: p.id, label: p.name, detail: `${p.role === 'driver' ? 'Driver' : 'Staff'}${others(p) ? ` · also at ${others(p)}` : ''}` }))} />
+      </section>
+      <LocationNav onBack={onBack} next={next} nextLabel={(n) => `Next: add staff at ${n.name} →`}
+        onNextLocation={(id) => { setCurrentId(id); window.scrollTo({ top: 0 }) }} skipLabel="Skip to the end" finishLabel="Continue" onFinish={onFinish} />
     </div>
   )
 }

@@ -1378,5 +1378,32 @@ SELECT test_assert((SELECT r->>'reason' = 'other_business' FROM login_foreign), 
 SELECT test_assert(NOT EXISTS (SELECT 1 FROM auth.users WHERE email IN ('qa-two-homes@staff-login.cottagesurgical.invalid', 'qa-reach-over@staff-login.cottagesurgical.invalid')),
   'a refused login is not created at all');
 
+-- ── Carry your products at another location (152) ───────────────────────────
+-- CSV Cane was added at A1 (149); A2 starts carrying it at its own price.
+SELECT test_as('');
+CREATE TEMP TABLE carry_ids AS SELECT id, name FROM equipment_items WHERE business_id = 'a0000000-0000-0000-0000-00000000000a' AND name IN ('CSV Cane', 'Starter Bed');
+GRANT SELECT ON carry_ids TO authenticated;
+SELECT test_as('a2000000-0000-0000-0000-000000000002'); SET ROLE authenticated;
+CREATE TEMP TABLE carry_good AS SELECT carry_products_at('a0000000-0000-0000-0000-00000000000a', 'a1000000-0000-0000-0000-0000000000a2',
+  jsonb_build_array(jsonb_build_object('item_id', (SELECT id FROM carry_ids WHERE name = 'CSV Cane'), 'sale_price', '22', 'stock', '6'))) AS r;
+CREATE TEMP TABLE carry_again AS SELECT carry_products_at('a0000000-0000-0000-0000-00000000000a', 'a1000000-0000-0000-0000-0000000000a2',
+  jsonb_build_array(jsonb_build_object('item_id', (SELECT id FROM carry_ids WHERE name = 'CSV Cane'), 'sale_price', '22', 'stock', '1'))) AS r;
+CREATE TEMP TABLE carry_noprice AS SELECT carry_products_at('a0000000-0000-0000-0000-00000000000a', 'a1000000-0000-0000-0000-0000000000b1',
+  jsonb_build_array(jsonb_build_object('item_id', (SELECT id FROM carry_ids WHERE name = 'Starter Bed'), 'stock', '1'))) AS r;
+CREATE TEMP TABLE carry_foreign_item AS SELECT carry_products_at('a0000000-0000-0000-0000-00000000000a', 'a1000000-0000-0000-0000-0000000000a2',
+  jsonb_build_array(jsonb_build_object('item_id', (SELECT id FROM equipment_items WHERE business_id = 'a0000000-0000-0000-0000-00000000000b' AND location_id IS NULL LIMIT 1), 'sale_price', '5'))) AS r;
+RESET ROLE;
+SELECT test_as('');
+SELECT test_assert((SELECT (r->>'ok')::boolean FROM carry_good), 'the owner carries an existing product at a second location: ' || (SELECT r::text FROM carry_good));
+SELECT test_assert((SELECT li.sale_price = 22 AND li.quantity_on_hand = 6 FROM equipment_location_inventory li JOIN carry_ids c ON c.id = li.equipment_item_id
+                     WHERE c.name = 'CSV Cane' AND li.location_id = 'a1000000-0000-0000-0000-0000000000a2'),
+  'the second location has its own price and stock');
+SELECT test_assert((SELECT li.sale_price = 24.50 FROM equipment_location_inventory li JOIN carry_ids c ON c.id = li.equipment_item_id
+                     WHERE c.name = 'CSV Cane' AND li.location_id = 'a1000000-0000-0000-0000-0000000000a1'),
+  'the first location keeps its price');
+SELECT test_assert((SELECT r->'errors'->0->>'message' = 'This location already carries it.' FROM carry_again), 'carrying twice is refused');
+SELECT test_assert((SELECT r->>'reason' = 'location_not_found' FROM carry_noprice), 'another owner''s location is refused');
+SELECT test_assert((SELECT r->'errors'->0->>'message' = 'That product isn''t one of yours.' FROM carry_foreign_item), 'another owner''s product is refused');
+
 SELECT test_as('');
 SELECT 'roles assertions passed' AS result;
