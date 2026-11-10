@@ -502,6 +502,11 @@ SELECT test_assert((SELECT business_id = 'a0000000-0000-0000-0000-00000000000a' 
 SELECT test_assert((SELECT count(*) = 11 AND bool_and(CASE WHEN module_key IN ('edit_prices', 'edit_products') THEN NOT enabled ELSE enabled END)
                       FROM staff_module_access WHERE location_id = 'a1000000-0000-0000-0000-0000000000a3'),
   'the new pharmacy has its switches, trust locked');
+-- The screen reads the new pharmacy back in the same request (144).
+WITH added AS (
+  INSERT INTO pickup_locations (name, business_id, address_line1, address_city, address_state, address_zip)
+  VALUES ('Pharmacy A4', 'a0000000-0000-0000-0000-00000000000a', '4 A St', 'Woodbury', 'NY', '11797') RETURNING id)
+SELECT test_assert(count(*) = 1, 'the owner adds a pharmacy and sees it straight away') FROM added;
 DO $$ BEGIN
   BEGIN
     INSERT INTO pickup_locations (name, business_id, address_line1, address_city, address_state, address_zip)
