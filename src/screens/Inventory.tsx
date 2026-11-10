@@ -26,6 +26,8 @@ import { CATEGORIES } from '../lib/categories'
 import CatalogPicker from './inventory/CatalogPicker'
 import { addStartingStock } from './inventory/startingStock'
 import ProductsByLocation from './products/ProductsByLocation'
+import StarterPicker from './products/StarterPicker'
+import { importLocations } from './products/useAddProducts'
 import InventoryTable from './inventory/InventoryTable'
 
 export type InventoryItem = {
@@ -132,9 +134,11 @@ export default function Inventory() {
     && ([it.name, it.description, it.sku, it.category, ...(it.location_inventory ?? []).filter((row) => !selectedLocationId || row.location_id === selectedLocationId).map((row) => row.scan_code)].filter(Boolean).join(' ').toLowerCase().includes(q.toLowerCase())
       || Boolean(scanned.data?.has(it.id)))
   const filtered = (data ?? []).filter((it) => matches(it) && (!selectedLocationId || inStore(it)))
-  // A store adds products from the shared catalog itself ("Add from catalog").
+  // A store adds products itself (the Add products tab): its owner’s list, then the starter list.
   const addable = selectedLocationId ? (data ?? []).filter((it) => it.is_active && (!inStore(it) || justAdded.includes(`${selectedLocationId}:${it.id}`)) && matches(it)) : []
   const showCatalog = Boolean(selectedLocation) && view === 'catalog'
+  // Starter products already among the products here are offered from the business's list instead.
+  const knownNames = new Set((data ?? []).map((it) => it.name.trim().toLowerCase()))
   const usedCategories = CATEGORIES.filter((c) => (data ?? []).some((it) => it.category === c))
   const rowActions = (it: InventoryItem) => (
     <>
@@ -237,10 +241,10 @@ export default function Inventory() {
 
       {selectedLocation && (
         <div role="tablist" aria-label="Inventory view" className="mb-4 inline-flex rounded-xl border border-slate-200 bg-white p-1">
-          {([['store', `In ${selectedLocation.name}`, filtered.length], ['catalog', 'Add from catalog', addable.length]] as const).map(([key, label, count]) => (
+          {([['store', `In ${selectedLocation.name}`, filtered.length], ['catalog', 'Add products', null]] as const).map(([key, label, count]) => (
             <button key={key} role="tab" aria-selected={view === key} onClick={() => setView(key)}
               className={`min-h-10 rounded-lg px-4 text-sm font-medium ${view === key ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
-              {label} · {count}
+              {label}{count == null ? '' : ` · ${count}`}
             </button>
           ))}
         </div>
@@ -249,7 +253,26 @@ export default function Inventory() {
       {isLoading && <div className="text-slate-500">Loading…</div>}
       {error && <div className="text-red-600 text-sm">{(error as Error).message}</div>}
 
-      {showCatalog && selectedLocation && <CatalogPicker items={addable} locationId={selectedLocation.id} locationName={selectedLocation.name} locked={productsLocked} added={justAdded.filter((key) => key.startsWith(`${selectedLocation.id}:`)).map((key) => key.split(':')[1])} onAdded={(id) => setJustAdded((prev) => [...prev, `${selectedLocation.id}:${id}`])} />}
+      {showCatalog && selectedLocation && (
+        <section aria-labelledby="catalog-own" className="space-y-3">
+          <h2 id="catalog-own" className="text-lg font-semibold">From {selectedLocation.business?.name ?? 'your business'}’s products</h2>
+          <CatalogPicker items={addable} locationId={selectedLocation.id} locationName={selectedLocation.name} locked={productsLocked} added={justAdded.filter((key) => key.startsWith(`${selectedLocation.id}:`)).map((key) => key.split(':')[1])} onAdded={(id) => setJustAdded((prev) => [...prev, `${selectedLocation.id}:${id}`])} />
+        </section>
+      )}
+      {/* The shared starter list (149); staff with products switched on add to their own store (154). */}
+      {showCatalog && selectedLocation?.business && (
+        <section aria-labelledby="catalog-starter" className="mt-8 space-y-3">
+          <div>
+            <h2 id="catalog-starter" className="text-lg font-semibold">From the starter list</h2>
+            <p className="text-sm text-slate-600">{profile?.role === 'staff'
+              ? `Products you add here are kept at ${selectedLocation.name} only, with your prices and stock.`
+              : `Products you add become yours, carried at ${selectedLocation.name}, with your prices and stock.`}</p>
+          </div>
+          {productsLocked
+            ? <p className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500"><Lock size={14} className="mr-1 inline" />{LOCKED_PRODUCTS}</p>
+            : <StarterPicker target={{ businessId: selectedLocation.business.id, locations: importLocations([selectedLocation]) }} hideNames={knownNames} />}
+        </section>
+      )}
 
       {filtered.length > 0 && (
         <div className={showCatalog ? 'hidden' : ''}>
@@ -261,7 +284,7 @@ export default function Inventory() {
       {!showCatalog && !isLoading && !error && filtered.length === 0 && (
         <div className="rounded-xl border border-slate-200 bg-white py-10 text-center text-sm text-slate-500">
           {selectedLocation && !q && category === 'all'
-            ? <>Nothing is stocked at {selectedLocation.name} yet. {productsLocked ? <span className="text-slate-400" title={LOCKED_PRODUCTS}>Add products from the catalog (locked by the owner)</span> : <button type="button" onClick={() => setView('catalog')} className="font-medium text-blue-600 hover:underline">Add products from the catalog</button>}.</>
+            ? <>Nothing is stocked at {selectedLocation.name} yet. {productsLocked ? <span className="text-slate-400" title={LOCKED_PRODUCTS}>Add products from the catalog (locked by the owner)</span> : <button type="button" onClick={() => setView('catalog')} className="font-medium text-blue-600 hover:underline">Add products</button>}.</>
             : 'No inventory matches this store and search.'}
         </div>
       )}
