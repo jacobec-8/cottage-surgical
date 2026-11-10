@@ -29,7 +29,7 @@ export default function AddProductsPanel({ target, onAdded }: { target: AddTarge
       </div>
       {mode === 'list' && <StarterPicker target={target} onAdded={onAdded} />}
       {mode === 'csv' && <CsvImport target={target} onAdded={onAdded} />}
-      {mode === 'hand' && <QuickProductForm businessId={target.businessId} location={target.location} />}
+      {mode === 'hand' && <QuickProductForm target={target} />}
     </div>
   )
 }

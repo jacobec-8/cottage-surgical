@@ -11,6 +11,7 @@ import NewPharmacyForm from '../locations/NewPharmacyForm'
 import AddLoginForm from '../staff/AddLoginForm'
 import BusinessDetailsForm from './BusinessDetailsForm'
 import AddProductsPanel from '../products/AddProductsPanel'
+import { importLocations } from '../products/useAddProducts'
 import SetupDone from './SetupDone'
 import { OWNER_BUSINESS_KEY, useOwnerBusiness } from './useOwnerBusiness'
 
@@ -48,7 +49,6 @@ export default function OwnerSetup() {
   if (!business.data || !step) return <p className="p-8 text-sm text-slate-500">Loading…</p>
   const index = SETUP_STEPS.findIndex((s) => s.key === step)
   const go = (next: SetupStep) => { setStep(next); window.scrollTo({ top: 0 }) }
-  const first = locations[0] ?? null
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:py-12">
@@ -88,10 +88,10 @@ export default function OwnerSetup() {
         )}
 
         {step === 'products' && (
-          <Step intro="Add what you rent or sell: pick from our starter list, upload a spreadsheet (CSV), or add one by hand. You set your own prices and how many you have. Photos, descriptions and more options are on Inventory after setup.">
-            {first && businessId ? (
+          <Step intro="Add what you rent or sell: pick from our starter list, upload a spreadsheet (CSV), or add one by hand. You set your own prices, and how many you have at each location. Photos, descriptions and more options are on Inventory after setup.">
+            {locations.length > 0 && businessId ? (
               <div className="space-y-4">
-                <AddProductsPanel target={{ businessId, location: { id: first.id, name: first.name, delivers: first.fulfillment_mode === 'pickup_and_delivery' } }} />
+                <AddProductsPanel target={{ businessId, locations: importLocations(locations) }} />
                 <AddedList icon={<Package size={16} />} empty="No products yet." items={(products.data ?? []).map((p) => ({ id: p.id, label: p.name, detail: [p.is_rentable && 'rent', p.is_purchasable && 'sell'].filter(Boolean).join(' & ') }))} />
               </div>
             ) : <p className="text-sm text-slate-600">Add a location first.</p>}

@@ -7,11 +7,11 @@ import { supabase } from '../../lib/supabase'
 import { CATEGORIES } from '../../lib/categories'
 import { SaveForm, SubmitButton } from '../../components/SaveForm'
 import type { FieldProblem } from '../../lib/fieldRules'
-import { itemProblem, type ImportItem } from '../../lib/productImport'
+import { itemProblem, locationLabels, type ImportItem } from '../../lib/productImport'
 import { addedMessage, useAddProducts, type AddTarget } from './useAddProducts'
 
 type Starter = { id: string; name: string; category: string; description: string | null; image_url: string | null; is_rentable: boolean; is_purchasable: boolean }
-type Picked = ImportItem & { starter_id: string; label: string }
+type Picked = ImportItem & { starter_id: string; label: string; image: string | null }
 
 const INPUT = 'w-full rounded-lg border border-slate-300 px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 const SHOWN = 40
@@ -23,6 +23,8 @@ export default function StarterPicker({ target, onAdded }: { target: AddTarget; 
   const [picked, setPicked] = useState<Picked[]>([])
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({})
   const send = useAddProducts(target, 'list')
+  const labels = locationLabels(target.locations)
+  const delivers = target.locations.some((l) => l.delivers)
   const starters = useQuery({
     queryKey: ['starter_products'],
     staleTime: 5 * 60_000,
@@ -39,22 +41,27 @@ export default function StarterPicker({ target, onAdded }: { target: AddTarget; 
   const isPicked = (id: string) => picked.some((p) => p.starter_id === id)
   const toggle = (s: Starter) => setPicked((current) => isPicked(s.id)
     ? current.filter((p) => p.starter_id !== s.id)
-    : [...current, { starter_id: s.id, label: s.name, rent: s.is_rentable, sell: s.is_purchasable && !s.is_rentable, pickup_price: '', delivery_price: '', sale_price: '', stock: '' }])
+    : [...current, {
+      starter_id: s.id, label: s.name, image: s.image_url, rent: s.is_rentable, sell: s.is_purchasable && !s.is_rentable,
+      pickup_price: '', delivery_price: '', sale_price: '', stocks: target.locations.map((l) => ({ location_id: l.id, stock: '' })),
+    }])
   const update = (id: string, patch: Partial<Picked>) => setPicked((current) => current.map((p) => (p.starter_id === id ? { ...p, ...patch } : p)))
+  const setStock = (p: Picked, locationId: string, stock: string) =>
+    update(p.starter_id, { stocks: p.stocks.map((s) => (s.location_id === locationId ? { ...s, stock } : s)) })
 
   const validate = (): FieldProblem[] => {
-    const found = Object.fromEntries(picked.map((p) => [p.starter_id, itemProblem(p, target.location.delivers)?.message]).filter(([, m]) => m))
+    const found = Object.fromEntries(picked.map((p) => [p.starter_id, itemProblem(p, delivers)?.message]).filter(([, m]) => m))
     setRowErrors(found)
     if (picked.length === 0) return [{ field: null, message: 'Choose at least one product from the list.' }]
     return Object.keys(found).length ? [{ field: null, message: 'Fill in the highlighted products.' }] : []
   }
   const save = () => send(picked.map((p) => ({
-    starter_id: p.starter_id, rent: p.rent, sell: p.sell, pickup_price: p.pickup_price, delivery_price: p.delivery_price, sale_price: p.sale_price, stock: p.stock,
+    starter_id: p.starter_id, rent: p.rent, sell: p.sell, pickup_price: p.pickup_price, delivery_price: p.delivery_price, sale_price: p.sale_price, stocks: p.stocks,
   })))
 
   return (
     <SaveForm aria-label="Add products from the starter list" validate={validate} onSave={save} submitOnEnter={false}
-      onSaved={() => { setPicked([]); onAdded?.() }} savedMessage={addedMessage(target)} errorClassName="mt-3">
+      onSaved={() => { setPicked([]); onAdded?.() }} savedMessage={addedMessage} errorClassName="mt-3">
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_14rem]">
         <label className="relative block"><span className="sr-only">Search the starter list</span>
@@ -89,10 +96,14 @@ export default function StarterPicker({ target, onAdded }: { target: AddTarget; 
 
       {picked.length > 0 && (
         <section aria-label="Your prices and stock" className="rounded-xl border border-slate-200 bg-white">
-          <h3 className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-900">Your prices and stock at {target.location.name} ({picked.length})</h3>
+          <h3 className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-900">Your prices and stock ({picked.length})</h3>
           <ul className="divide-y divide-slate-100">
             {picked.map((p) => (
-              <li key={p.starter_id} className={`px-4 py-3 ${rowErrors[p.starter_id] ? 'bg-red-50' : ''}`}>
+              <li key={p.starter_id} className={`flex gap-4 px-4 py-3 ${rowErrors[p.starter_id] ? 'bg-red-50' : ''}`}>
+                {p.image
+                  ? <img src={p.image} alt="" className="h-16 w-16 shrink-0 rounded-lg bg-slate-100 object-cover" />
+                  : <span aria-hidden="true" className="h-16 w-16 shrink-0 rounded-lg bg-slate-100" />}
+                <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-medium text-slate-900">{p.label}</span>
                   <button type="button" onClick={() => setPicked((c) => c.filter((x) => x.starter_id !== p.starter_id))} aria-label={`Remove ${p.label}`} className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100"><X size={15} /></button>
@@ -101,11 +112,16 @@ export default function StarterPicker({ target, onAdded }: { target: AddTarget; 
                   <label className="flex min-h-10 items-center gap-1.5"><input type="checkbox" className="h-4 w-4" checked={p.rent} onChange={(e) => update(p.starter_id, { rent: e.target.checked })} /> Rent</label>
                   <label className="flex min-h-10 items-center gap-1.5"><input type="checkbox" className="h-4 w-4" checked={p.sell} onChange={(e) => update(p.starter_id, { sell: e.target.checked })} /> Sell</label>
                   {p.rent && <Num label="Monthly, picked up $" value={p.pickup_price} onChange={(v) => update(p.starter_id, { pickup_price: v })} />}
-                  {p.rent && target.location.delivers && <Num label="Monthly, delivered $" value={p.delivery_price} onChange={(v) => update(p.starter_id, { delivery_price: v })} />}
+                  {p.rent && delivers && <Num label="Monthly, delivered $" value={p.delivery_price} onChange={(v) => update(p.starter_id, { delivery_price: v })} />}
                   {p.sell && <Num label="Sale $" value={p.sale_price} onChange={(v) => update(p.starter_id, { sale_price: v })} />}
-                  <Num label="In stock" value={p.stock} onChange={(v) => update(p.starter_id, { stock: v })} numeric />
+                </div>
+                <div className="mt-2 flex flex-wrap items-end gap-3">
+                  {p.stocks.map((st, i) => (
+                    <Num key={st.location_id} label={`In stock at ${labels[i]}`} value={st.stock} onChange={(v) => setStock(p, st.location_id, v)} numeric wide={target.locations.length > 1} />
+                  ))}
                 </div>
                 {rowErrors[p.starter_id] && <p className="mt-1 text-xs text-red-700">{rowErrors[p.starter_id]}</p>}
+                </div>
               </li>
             ))}
           </ul>
@@ -122,9 +138,9 @@ export default function StarterPicker({ target, onAdded }: { target: AddTarget; 
   )
 }
 
-function Num({ label, value, onChange, numeric = false }: { label: string; value: string; onChange: (v: string) => void; numeric?: boolean }) {
+function Num({ label, value, onChange, numeric = false, wide = false }: { label: string; value: string; onChange: (v: string) => void; numeric?: boolean; wide?: boolean }) {
   return (
-    <label className="block w-36 text-xs text-slate-600">{label}
+    <label className={`block text-xs text-slate-600 ${wide ? 'w-52' : 'w-36'}`}>{label}
       <input className={`${INPUT} mt-1`} inputMode={numeric ? 'numeric' : 'decimal'} value={value} onChange={(e) => onChange(e.target.value)} placeholder={numeric ? '0' : ''} />
     </label>
   )

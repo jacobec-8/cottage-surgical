@@ -1,41 +1,29 @@
 'use client'
 
 import { useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
 import { Checked, FieldError, SaveForm, SubmitButton } from '../../components/SaveForm'
-import { supabase } from '../../lib/supabase'
 import { CATEGORIES } from '../../lib/categories'
-import { emptyProduct, quickProductPayload, quickProductProblems, type QuickProduct } from '../../lib/ownerSetup'
-import { refreshWebsite } from '../../lib/websiteRefresh'
-import { addStartingStock } from '../inventory/startingStock'
-import { OWNER_BUSINESS_KEY } from './useOwnerBusiness'
+import { emptyProduct, quickProductItem, quickProductProblems, type QuickProduct } from '../../lib/ownerSetup'
+import { locationLabels } from '../../lib/productImport'
+import { useAddProducts, type AddTarget } from '../products/useAddProducts'
 
 const INPUT = 'w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 
-type Props = { businessId: string; location: { id: string; name: string; delivers: boolean } }
-
 /**
- * Adds one product with its prices and its starting stock at the owner's
- * first location (147). Photos, descriptions and the other product fields are
+ * Adds one product with its prices and its stock at each of the owner's
+ * locations (147, 150). Photos, descriptions and the other product fields are
  * on Inventory.
  */
-export default function QuickProductForm({ businessId, location }: Props) {
-  const qc = useQueryClient()
+export default function QuickProductForm({ target }: { target: AddTarget }) {
   const [p, setP] = useState<QuickProduct>(emptyProduct)
   const set = <K extends keyof QuickProduct>(key: K, value: QuickProduct[K]) => setP((current) => ({ ...current, [key]: value }))
-
-  const save = async () => {
-    const payload = quickProductPayload(p, businessId, location.delivers)
-    const { data, error } = await supabase.from('equipment_items').insert(payload).select('id').single()
-    if (error || !data) throw new Error('Couldn’t add the product. Please try again.')
-    await addStartingStock(data.id, location.id, false, true, p.stock)
-    void qc.invalidateQueries({ queryKey: [OWNER_BUSINESS_KEY] })
-    void qc.invalidateQueries({ queryKey: ['equipment_items'] })
-    void refreshWebsite()
-  }
+  const send = useAddProducts(target, 'list')
+  const labels = locationLabels(target.locations)
+  const delivers = target.locations.some((l) => l.delivers)
+  const save = () => send([quickProductItem(p, target.locations)])
 
   return (
-    <SaveForm aria-label="Add a product" validate={() => quickProductProblems(p, location.delivers)} onSave={save}
+    <SaveForm aria-label="Add a product" validate={() => quickProductProblems(p, target.locations)} onSave={save}
       onSaved={() => setP(emptyProduct)} savedMessage="Product added." errorClassName="mt-3"
       className="rounded-2xl border border-slate-200 bg-white p-5">
       <div className="grid gap-4 sm:grid-cols-2">
@@ -63,7 +51,7 @@ export default function QuickProductForm({ businessId, location }: Props) {
             <Checked name="pickupPrice"><input className={INPUT} inputMode="decimal" value={p.pickupPrice} onChange={(e) => set('pickupPrice', e.target.value)} /></Checked>
           </label>
         )}
-        {p.rent && location.delivers && (
+        {p.rent && delivers && (
           <label className="block text-sm"><span className="mb-1 block font-medium text-slate-700">Monthly price, delivered ($)</span>
             <Checked name="deliveryPrice"><input className={INPUT} inputMode="decimal" value={p.deliveryPrice} onChange={(e) => set('deliveryPrice', e.target.value)} /></Checked>
           </label>
@@ -73,9 +61,14 @@ export default function QuickProductForm({ businessId, location }: Props) {
             <Checked name="salePrice"><input className={INPUT} inputMode="decimal" value={p.salePrice} onChange={(e) => set('salePrice', e.target.value)} /></Checked>
           </label>
         )}
-        <label className="block text-sm"><span className="mb-1 block font-medium text-slate-700">In stock at {location.name}</span>
-          <Checked name="stock"><input className={INPUT} inputMode="numeric" value={p.stock} onChange={(e) => set('stock', e.target.value)} placeholder="0" /></Checked>
-        </label>
+      </div>
+      <div className="mt-4 grid gap-4 sm:grid-cols-3">
+        {target.locations.map((l, i) => (
+          <label key={l.id} className="block text-sm"><span className="mb-1 block font-medium text-slate-700">In stock at {labels[i]}</span>
+            <Checked name={`stock-${l.id}`}><input className={INPUT} inputMode="numeric" value={p.stocks[l.id] ?? ''} placeholder="0"
+              onChange={(e) => set('stocks', { ...p.stocks, [l.id]: e.target.value })} /></Checked>
+          </label>
+        ))}
       </div>
       <div className="mt-5 flex justify-end">
         <SubmitButton className="min-h-11 rounded-lg bg-blue-600 px-5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">

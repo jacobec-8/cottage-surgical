@@ -1,14 +1,15 @@
 // A new owner's setup wizard (owner, 2026-11-10; migration 147): business
 // details, first pharmacy, products, staff, then where to change it all later.
-// The quick product form asks only what a first product needs; the full
-// product fields stay on Inventory.
+// The hand form asks only what a first product needs; the full product fields
+// stay on Inventory.
 import { problems, rules, type FieldProblem } from './fieldRules.ts'
+import type { ImportItem } from './productImport.ts'
 
 export type SetupStep = 'details' | 'pharmacy' | 'products' | 'staff' | 'done'
 
 export const SETUP_STEPS: readonly { key: SetupStep; label: string }[] = [
   { key: 'details', label: 'Your business' },
-  { key: 'pharmacy', label: 'First location' },
+  { key: 'pharmacy', label: 'Locations' },
   { key: 'products', label: 'Products' },
   { key: 'staff', label: 'Staff' },
   { key: 'done', label: 'All set' },
@@ -56,13 +57,18 @@ export type QuickProduct = {
   pickupPrice: string
   deliveryPrice: string
   salePrice: string
-  stock: string
+  /** Stock typed for each location, by location id; a blank is 0. */
+  stocks: Record<string, string>
 }
 
-export const emptyProduct: QuickProduct = { name: '', category: '', rent: false, sell: false, pickupPrice: '', deliveryPrice: '', salePrice: '', stock: '' }
+export const emptyProduct: QuickProduct = { name: '', category: '', rent: false, sell: false, pickupPrice: '', deliveryPrice: '', salePrice: '', stocks: {} }
 
-export function quickProductProblems(p: QuickProduct, delivers: boolean): FieldProblem[] {
+type Place = { id: string; delivers: boolean }
+
+/** The hand form's checks; a delivered price only when one of the locations delivers, a stock field per location. */
+export function quickProductProblems(p: QuickProduct, locations: readonly Place[]): FieldProblem[] {
   const priceAsked = 'Enter a price, like 45 or 45.50.'
+  const delivers = locations.some((l) => l.delivers)
   return problems(
     rules.required(p.name, 'productName', 'Enter the product name.'),
     rules.required(p.category, 'category', 'Choose a category.'),
@@ -70,29 +76,15 @@ export function quickProductProblems(p: QuickProduct, delivers: boolean): FieldP
     p.rent && rules.price(p.pickupPrice, 'pickupPrice', priceAsked),
     p.rent && delivers && rules.price(p.deliveryPrice, 'deliveryPrice', priceAsked),
     p.sell && rules.price(p.salePrice, 'salePrice', priceAsked),
-    rules.wholeNumber(p.stock, 'stock'),
+    ...locations.map((l) => rules.wholeNumber(p.stocks[l.id] ?? '', `stock-${l.id}`)),
   )
 }
 
-/** The product row: the quick form's answers plus the defaults a first product takes. */
-export function quickProductPayload(p: QuickProduct, businessId: string, delivers: boolean) {
-  const deliveryOn = p.rent && delivers
+/** The row add_products takes (150): carried at every location, with the typed stock. */
+export function quickProductItem(p: QuickProduct, locations: readonly Place[]): ImportItem {
   return {
-    business_id: businessId,
-    name: p.name.trim(),
-    category: p.category,
-    description: null,
-    sku: null,
-    is_rentable: p.rent,
-    is_purchasable: p.sell,
-    pickup_enabled: true,
-    delivery_enabled: deliveryOn,
-    pickup_rental_price: p.rent ? Number(p.pickupPrice) : null,
-    delivery_rental_price: deliveryOn ? Number(p.deliveryPrice) : null,
-    sale_price: p.sell ? Number(p.salePrice) : null,
-    is_serialized: false,
-    is_active: true,
-    same_day_pickup: false,
-    installation_required: false,
+    name: p.name.trim(), category: p.category, rent: p.rent, sell: p.sell,
+    pickup_price: p.rent ? p.pickupPrice.trim() : '', delivery_price: p.rent ? p.deliveryPrice.trim() : '', sale_price: p.sell ? p.salePrice.trim() : '',
+    stocks: locations.map((l) => ({ location_id: l.id, stock: (p.stocks[l.id] ?? '').trim() })),
   }
 }
