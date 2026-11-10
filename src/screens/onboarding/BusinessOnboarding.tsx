@@ -258,7 +258,7 @@ function OwnerSection({ draft, set, chooseOwner, owners, ownerName, ownerNames, 
     {draft.ownerId && ownerNames.length > 0 && <Note>{ownerNames.join(', ')} already sees every business {ownerName} owns, and will see these too.</Note>}
     {needsLogin && <div className="rounded-xl border border-amber-200 bg-white p-4">
       <label className="flex items-start gap-3"><input type="checkbox" className="mt-1 h-4 w-4" checked={draft.ownerLogin} onChange={(e) => set('ownerLogin', e.target.checked)} />
-        <span><span className="block font-medium text-slate-900">{draft.newOwner ? 'Owner login (needed)' : 'Add an owner login'}</span><span className="mt-1 block text-sm text-amber-700">{ownerName} has no owner login yet. The owner login sees every business they own; it is not an admin account.</span></span>
+        <span><span className="block font-medium text-slate-900">{draft.newOwner ? 'Owner login (needed)' : 'Add an owner login'}</span><span className="mt-1 block text-sm text-amber-700">{draft.newOwner ? 'The new owner signs in with this login. It sees every business they own; it is not an admin account.' : `${ownerName} has no owner login yet. The owner login sees every business they own; it is not an admin account.`}</span></span>
       </label>
       {draft.ownerLogin && <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <TextField label="First name" required value={draft.ownerFirstName} onChange={(v) => set('ownerFirstName', v)} />
