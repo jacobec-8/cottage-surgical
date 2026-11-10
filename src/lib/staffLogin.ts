@@ -1,10 +1,11 @@
+import { USERNAME_PATTERN as LOCATION_USERNAME } from './storeLogins.ts'
+
 const AUTH_DOMAIN = 'staff-login.cottagesurgical.invalid'
 
 const STAFF_EMAILS = new Set([
   'jacob.chandran@gmail.com',
 ])
 
-const LOCATION_USERNAME = /^[a-z0-9][a-z0-9-]{2,62}$/
 // An owner may sign up with their email as the login (145); it signs in as itself.
 const LOGIN_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const RESERVED_USERNAMES = new Set(['admin', 'administrator', 'root'])

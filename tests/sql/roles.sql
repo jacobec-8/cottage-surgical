@@ -1405,5 +1405,22 @@ SELECT test_assert((SELECT r->'errors'->0->>'message' = 'This location already c
 SELECT test_assert((SELECT r->>'reason' = 'location_not_found' FROM carry_noprice), 'another owner''s location is refused');
 SELECT test_assert((SELECT r->'errors'->0->>'message' = 'That product isn''t one of yours.' FROM carry_foreign_item), 'another owner''s product is refused');
 
+-- ── Usernames may use dots and underscores (153) ────────────────────────────
+SELECT test_as('a2000000-0000-0000-0000-000000000002'); SET ROLE authenticated;
+CREATE TEMP TABLE uname AS
+SELECT u, (add_branch_login('a1000000-0000-0000-0000-0000000000a1', 'staff', 'Name Test', '', u, 'password-91'))->>'reason' AS reason
+  FROM unnest(ARRAY['clt_staff', 'jane.doe', 'a-b_c.d', 'a..b', 'trailing.', '_lead', 'has space', 'ab']) u;
+RESET ROLE;
+SELECT test_as('');
+SELECT test_assert((SELECT bool_and(reason IS NULL) FROM uname WHERE u IN ('clt_staff', 'jane.doe', 'a-b_c.d')),
+  'underscores and dots are accepted: ' || (SELECT string_agg(u || '=' || COALESCE(reason, 'ok'), ', ') FROM uname));
+SELECT test_assert((SELECT bool_and(reason = 'invalid_username') FROM uname WHERE u IN ('a..b', 'trailing.', '_lead', 'has space', 'ab')),
+  'two dots, a trailing dot, a leading underscore, a space or two letters are refused: ' || (SELECT string_agg(u || '=' || COALESCE(reason, 'ok'), ', ') FROM uname));
+SELECT test_assert(EXISTS (SELECT 1 FROM auth.users WHERE email = 'clt_staff@staff-login.cottagesurgical.invalid'), 'clt_staff signs in through its alias');
+SET ROLE anon;
+SELECT test_assert((submit_owner_signup('{"business_name":"Under Score","full_name":"Un Der","phone":"5165550107","email":"under@example.invalid","username":"under_score","password":"password-91"}'))->>'ok' = 'true',
+  'owner sign-up takes underscores too');
+RESET ROLE;
+
 SELECT test_as('');
 SELECT 'roles assertions passed' AS result;

@@ -23,7 +23,7 @@ const REASONS: Record<string, string> = {
   invalid_name: 'Enter your name.',
   invalid_phone: 'Enter a phone number with at least 10 digits.',
   invalid_email: 'Enter an email like name@example.com.',
-  invalid_username: 'Use your email, or a username of 3–63 lowercase letters, numbers or hyphens.',
+  invalid_username: 'Use your email, or a username of 3–63 letters, numbers, dots, dashes or underscores.',
   username_taken: 'That login is already in use. Choose another.',
   weak_password: `Use a password of at least ${MIN_PASSWORD_LENGTH} characters.`,
   already_waiting: 'A sign-up with this email is already waiting for approval.',
