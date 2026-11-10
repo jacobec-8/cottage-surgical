@@ -1337,5 +1337,27 @@ SELECT test_assert((SELECT r->>'reason' = 'forbidden' FROM import_foreign), 'an 
 SELECT test_assert((SELECT r->>'reason' = 'forbidden' FROM import_staff), 'staff cannot add products in bulk');
 SELECT test_assert((SELECT description = 'Folding walker' FROM starter_products WHERE id = 'a9000000-0000-0000-0000-000000000001'), 'the starter list is unchanged');
 
+-- ── A product's stock at each of the owner's locations (150) ────────────────
+SELECT test_as('a2000000-0000-0000-0000-000000000002'); SET ROLE authenticated;
+CREATE TEMP TABLE multi_good AS SELECT add_products('a0000000-0000-0000-0000-00000000000a', 'a1000000-0000-0000-0000-0000000000a1',
+  '[{"name":"Multi Walker","category":"mobility aids","sell":true,"sale_price":"60",
+     "stocks":[{"location_id":"a1000000-0000-0000-0000-0000000000a1","stock":"4"},{"location_id":"a1000000-0000-0000-0000-0000000000a2","stock":""}]}]'::jsonb) AS r;
+CREATE TEMP TABLE multi_foreign AS SELECT add_products('a0000000-0000-0000-0000-00000000000a', 'a1000000-0000-0000-0000-0000000000a1',
+  '[{"name":"Multi Foreign","category":"mobility aids","sell":true,"sale_price":"60",
+     "stocks":[{"location_id":"a1000000-0000-0000-0000-0000000000b1","stock":"1"}]}]'::jsonb) AS r;
+CREATE TEMP TABLE multi_badstock AS SELECT add_products('a0000000-0000-0000-0000-00000000000a', 'a1000000-0000-0000-0000-0000000000a1',
+  '[{"name":"Multi Bad","category":"mobility aids","sell":true,"sale_price":"60",
+     "stocks":[{"location_id":"a1000000-0000-0000-0000-0000000000a2","stock":"two"}]}]'::jsonb) AS r;
+RESET ROLE;
+SELECT test_as('');
+SELECT test_assert((SELECT (r->>'ok')::boolean FROM multi_good), 'a product stocked at two locations: ' || (SELECT r::text FROM multi_good));
+SELECT test_assert((SELECT count(*) = 2 AND sum(li.quantity_on_hand) = 4 AND bool_and(li.sale_price = 60)
+                      FROM equipment_items e JOIN equipment_location_inventory li ON li.equipment_item_id = e.id
+                     WHERE e.business_id = 'a0000000-0000-0000-0000-00000000000a' AND e.name = 'Multi Walker'),
+  'each chosen location carries it at the owner''s price; a blank stock is 0');
+SELECT test_assert((SELECT r->'errors'->0->>'field' = 'stocks' FROM multi_foreign), 'another owner''s location is refused: ' || (SELECT r::text FROM multi_foreign));
+SELECT test_assert((SELECT r->'errors'->0->>'field' = 'stock' FROM multi_badstock), 'a stock that isn''t a number is refused');
+SELECT test_assert(NOT EXISTS (SELECT 1 FROM equipment_items WHERE name IN ('Multi Foreign', 'Multi Bad')), 'refused batches add nothing');
+
 SELECT test_as('');
 SELECT 'roles assertions passed' AS result;
