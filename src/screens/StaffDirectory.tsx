@@ -16,7 +16,7 @@ import { countByType, matchesStaff, parseStaffTab, staffTabs, type StaffTab } fr
 const TYPE_PARAM = 'type'
 
 export default function StaffDirectory() {
-  const { selectedLocationId, locations } = useLocationScope()
+  const { selectedLocationId, locations, viewingBusinessId } = useLocationScope()
   const { profile: viewer } = useAuth()
   const router = useRouter()
   const isOwner = viewer?.role === 'owner'
@@ -28,7 +28,7 @@ export default function StaffDirectory() {
     window.history.replaceState(null, '', withSelectedParam(window.location.href, TYPE_PARAM, next === 'all' ? null : next))
   }
   const profiles = useQuery({
-    queryKey: ['profiles', 'staff-directory', selectedLocationId],
+    queryKey: ['profiles', 'staff-directory', selectedLocationId, viewingBusinessId],
     queryFn: async () => {
       let request = supabase
         .from('profiles')
@@ -39,7 +39,9 @@ export default function StaffDirectory() {
       // Location-scoped admins belong to their assigned store just like staff and
       // drivers. Only global admins (without a location) remain visible in every
       // store view.
-      if (selectedLocationId) request = request.or(`location_id.eq.${selectedLocationId},location_id.is.null`)
+      // Inside an owner's workspace admin sees that owner's people, not every owner's.
+      if (viewingBusinessId && selectedLocationId) request = request.or(`location_id.eq.${selectedLocationId},and(location_id.is.null,business_id.eq.${viewingBusinessId})`)
+      else if (selectedLocationId) request = request.or(`location_id.eq.${selectedLocationId},location_id.is.null`)
       const { data, error } = await request
       if (error) throw error
       return data as unknown as StaffPerson[]

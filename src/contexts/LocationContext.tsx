@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from './AuthContext'
 import { supabase } from '../lib/supabase'
 import { canSwitchStores } from '../lib/roles'
+import { workspacePharmacy } from '../lib/adminView'
 
 export type StaffLocation = {
   id: string
@@ -31,10 +32,16 @@ type LocationContextValue = {
   setSelectedLocationId: (id: string | null) => void
   isAllLocations: boolean
   loading: boolean
+  /** Admin only: the owner whose workspace admin has open, or null on admin's own pages. */
+  viewingBusinessId: string | null
+  setViewingBusinessId: (id: string | null) => void
+  /** The owner the screens show: the owner's own, or the one admin is viewing. */
+  scopeBusinessId: string | null
 }
 
 const Context = createContext<LocationContextValue | null>(null)
 const STORAGE_KEY = 'cs_admin_location_scope_v1'
+const VIEWING_KEY = 'cs_admin_viewing_business_v1'
 
 export function LocationProvider({ children }: { children: ReactNode }) {
   const { profile } = useAuth()
@@ -43,8 +50,11 @@ export function LocationProvider({ children }: { children: ReactNode }) {
   const canSwitch = canSwitchStores(profile)
   // Staff with several pharmacies pick one of theirs; they never see all stores at once.
   const staffChoice = profile?.role === 'staff' ? profile.location_ids ?? [] : null
-  const ownerBusinessId = profile?.role === 'owner' ? profile.business_id : null
+  const isAdmin = profile?.role === 'admin'
   const [adminSelection, setAdminSelection] = useState<string | null>(null)
+  const [viewing, setViewing] = useState<string | null>(null)
+  const viewingBusinessId = isAdmin ? viewing : null
+  const ownerBusinessId = profile?.role === 'owner' ? profile.business_id : viewingBusinessId
 
   const query = useQuery({
     queryKey: ['staff_locations', profile?.id, ownerBusinessId],
@@ -67,17 +77,24 @@ export function LocationProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!canSwitch) return
     let saved: string | null = null
-    try { saved = window.localStorage.getItem(STORAGE_KEY) } catch { /* storage unavailable */ }
+    let savedViewing: string | null = null
+    try {
+      saved = window.localStorage.getItem(STORAGE_KEY)
+      savedViewing = window.localStorage.getItem(VIEWING_KEY)
+    } catch { /* storage unavailable */ }
     setAdminSelection(saved && saved !== 'all' ? saved : null)
-  }, [canSwitch])
+    setViewing(isAdmin ? savedViewing : null)
+  }, [canSwitch, isAdmin])
 
   // A selection saved by another account on this browser may not be ours.
   const ownSelection = adminSelection && (!query.data || query.data.some((location) => location.id === adminSelection))
     ? adminSelection
     : null
-  const selectedLocationId = canSwitch
-    ? (ownSelection && (!staffChoice || staffChoice.includes(ownSelection)) ? ownSelection : staffChoice?.[0] ?? null)
-    : profile?.location_id ?? null
+  const selectedLocationId = viewingBusinessId
+    ? workspacePharmacy(query.data ?? [], adminSelection)
+    : canSwitch
+      ? (ownSelection && (!staffChoice || staffChoice.includes(ownSelection)) ? ownSelection : staffChoice?.[0] ?? null)
+      : profile?.location_id ?? null
   const selectedLocation = useMemo(
     () => query.data?.find((location) => location.id === selectedLocationId) ?? null,
     [query.data, selectedLocationId],
@@ -85,16 +102,29 @@ export function LocationProvider({ children }: { children: ReactNode }) {
   const setSelectedLocationId = (id: string | null) => {
     if (!canSwitch) return
     if (staffChoice && (id == null || !staffChoice.includes(id))) return
+    if (viewingBusinessId && id == null) return
     setAdminSelection(id)
     try { window.localStorage.setItem(STORAGE_KEY, id ?? 'all') } catch { /* storage unavailable */ }
+    void queryClient.invalidateQueries()
+  }
+  const setViewingBusinessId = (id: string | null) => {
+    if (!isAdmin) return
+    setViewing(id)
+    setAdminSelection(null)
+    try {
+      if (id) window.localStorage.setItem(VIEWING_KEY, id)
+      else window.localStorage.removeItem(VIEWING_KEY)
+      window.localStorage.setItem(STORAGE_KEY, 'all')
+    } catch { /* storage unavailable */ }
     void queryClient.invalidateQueries()
   }
 
   return (
     <Context.Provider value={{
       locations: query.data ?? [], selectedLocationId, selectedLocation,
-      setSelectedLocationId, isAllLocations: canSwitch && selectedLocationId == null,
+      setSelectedLocationId, isAllLocations: canSwitch && !viewingBusinessId && selectedLocationId == null,
       loading: query.isLoading,
+      viewingBusinessId, setViewingBusinessId, scopeBusinessId: ownerBusinessId,
     }}>
       {children}
     </Context.Provider>

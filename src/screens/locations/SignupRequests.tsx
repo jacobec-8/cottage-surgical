@@ -26,7 +26,7 @@ const REFUSALS: Record<string, string> = {
  * Admins approve or decline owners who signed themselves up (143). Approving
  * creates the owner and their login; they then add their own pharmacies.
  */
-export default function SignupRequests() {
+export default function SignupRequests({ alwaysShow = false }: { alwaysShow?: boolean }) {
   const qc = useQueryClient()
   const [busyId, setBusyId] = useState<string | null>(null)
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null)
@@ -56,18 +56,21 @@ export default function SignupRequests() {
         ? `${request.business_name} is approved. ${request.full_name} can sign in as ${request.username} and add their pharmacies.`
         : `Declined the sign-up from ${request.business_name}.` })
       void qc.invalidateQueries({ queryKey: ['businesses_active'] })
+      void qc.invalidateQueries({ queryKey: ['admin_owner_overview'] })
+      void qc.invalidateQueries({ queryKey: ['owner_signups', 'pending_count'] })
     }
     void requests.refetch()
   }
 
   if (requests.error) return <div role="alert" className="mb-6 text-sm text-red-600">Couldn’t load sign-up requests. Please refresh.</div>
   const rows = requests.data ?? []
-  if (!rows.length && !notice) return null
+  if (!rows.length && !notice && !alwaysShow) return null
   return (
     <section aria-labelledby="signup-requests" className="mb-6 rounded-2xl border border-amber-200 bg-amber-50/50 p-5">
       <h2 id="signup-requests" className="flex items-center gap-2 text-lg font-semibold"><UserPlus size={18} className="text-amber-600" /> Sign-up requests <span className="text-slate-400">({rows.length})</span></h2>
       <p className="mt-0.5 text-sm text-slate-600">Business owners who signed themselves up. Approving creates their business and login; they add their own pharmacies.</p>
       {notice && <p role={notice.ok ? 'status' : 'alert'} className={`mt-3 text-sm ${notice.ok ? 'text-green-700' : 'text-red-600'}`}>{notice.text}</p>}
+      {!rows.length && !requests.isLoading && <p className="mt-3 rounded-lg border border-dashed border-amber-200 bg-white p-4 text-center text-sm text-slate-500">No sign-up requests waiting.</p>}
       <ul className="mt-3 divide-y divide-amber-100">
         {rows.map((r) => (
           <li key={r.id} className="flex flex-col gap-3 py-3 sm:flex-row sm:items-center">

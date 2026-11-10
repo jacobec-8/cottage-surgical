@@ -1227,5 +1227,30 @@ SELECT test_assert((SELECT encrypted_password = extensions.crypt('password-78', 
   'the owner signs in with their email and chosen password');
 SELECT test_assert((SELECT p.role = 'owner' FROM profiles p WHERE p.email = 'owner@email-care.example'), 'the email login is the owner');
 
+-- ── Admin sees owners, not orders (146) ─────────────────────────────────────
+SELECT test_as('a2000000-0000-0000-0000-000000000001'); SET ROLE authenticated;
+CREATE TEMP TABLE owner_rows AS SELECT * FROM admin_owner_overview();
+RESET ROLE;
+SELECT test_as('');
+SELECT test_assert((SELECT pharmacies >= 2 AND owner_logins = 1 AND staff_logins >= 3 AND products >= 1 FROM owner_rows WHERE business_id = 'a0000000-0000-0000-0000-00000000000a'),
+  'admin sees owner A with its pharmacies, logins and products: ' || (SELECT row_to_json(o)::text FROM owner_rows o WHERE business_id = 'a0000000-0000-0000-0000-00000000000a'));
+SELECT test_assert((SELECT owner_logins = 1 AND pharmacies >= 1 FROM owner_rows WHERE business_id = 'a0000000-0000-0000-0000-00000000000b'), 'admin sees owner B');
+SELECT test_assert((SELECT pharmacies = 0 AND owner_logins = 1 FROM owner_rows o JOIN owner_signups s ON s.business_id = o.business_id WHERE s.username = 'qa-signup-owner'),
+  'a newly approved owner shows with no pharmacies yet');
+SELECT test_assert((SELECT count(*) = 0 FROM notifications WHERE reference_id LIKE 'owner_signup_%' AND action_url <> '/admin'),
+  'sign-up notices open the admin home');
+SELECT test_as('a2000000-0000-0000-0000-000000000002'); SET ROLE authenticated;
+DO $$ BEGIN
+  PERFORM * FROM admin_owner_overview();
+  RAISE EXCEPTION 'FAILED: an owner read the owner overview';
+EXCEPTION WHEN insufficient_privilege THEN NULL; END $$;
+RESET ROLE;
+SELECT test_as(''); SET ROLE anon;
+DO $$ BEGIN
+  PERFORM * FROM admin_owner_overview();
+  RAISE EXCEPTION 'FAILED: the public key read the owner overview';
+EXCEPTION WHEN insufficient_privilege THEN NULL; END $$;
+RESET ROLE;
+
 SELECT test_as('');
 SELECT 'roles assertions passed' AS result;

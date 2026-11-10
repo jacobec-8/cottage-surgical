@@ -32,7 +32,7 @@ type DriverUpdate = Pick<Driver, 'first_name' | 'last_name' | 'email' | 'phone' 
 
 export default function Drivers() {
   const { profile } = useAuth()
-  const { selectedLocationId, locations } = useLocationScope()
+  const { selectedLocationId, locations, viewingBusinessId } = useLocationScope()
   const qc = useQueryClient()
   const [adding, setAdding] = useState(false)
   const [f, setF] = useState({ first_name: '', last_name: '', phone: '' })
@@ -58,13 +58,15 @@ export default function Drivers() {
   // Active driver-role logins (staff may read all profiles per 002 RLS).
   // Logins already linked to a drivers row are filtered out below.
   const logins = useQuery({
-    queryKey: ['driver_logins'],
+    queryKey: ['driver_logins', viewingBusinessId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('profiles')
         .select('id,email,full_name')
         .eq('role', 'driver')
         .eq('is_active', true)
+        // Inside an owner's workspace admin links only that owner's driver logins.
+        .match(viewingBusinessId ? { business_id: viewingBusinessId } : {})
         .order('email')
       if (error) throw error
       return data as DriverLogin[]

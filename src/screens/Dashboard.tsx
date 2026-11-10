@@ -17,7 +17,7 @@ import { useSelectedOrder } from './orders/useSelectedOrder'
 
 export default function Dashboard() {
   const { profile } = useAuth()
-  const { selectedLocationId, selectedLocation } = useLocationScope()
+  const { selectedLocationId, selectedLocation, viewingBusinessId } = useLocationScope()
   const router = useRouter()
   const [tab, setTab] = useState<'overview' | 'rentals'>('overview')
   const [selected, setSelected] = useSelectedOrder()
@@ -71,7 +71,7 @@ export default function Dashboard() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold mb-4">{profile?.role === 'staff' ? 'Staff' : profile?.role === 'owner' ? 'Owner' : 'Admin'} Dashboard{selectedLocation ? ` · ${selectedLocation.name}` : ''}</h1>
+      <h1 className="text-2xl font-semibold mb-4">{profile?.role === 'staff' ? 'Staff' : profile?.role === 'owner' || viewingBusinessId ? 'Owner' : 'Admin'} Dashboard{selectedLocation ? ` · ${selectedLocation.name}` : ''}</h1>
 
       <div className="flex gap-6 border-b border-slate-200 mb-6">
         <button
