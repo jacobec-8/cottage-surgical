@@ -1125,5 +1125,83 @@ SELECT test_assert((SELECT (r->>'ok')::boolean FROM flow_ready), 'step 2: the pa
 SELECT test_assert((SELECT status = 'scheduled' AND driver_id = 'a3000000-0000-0000-0000-000000000001' FROM deliveries WHERE order_id = 'a5000000-0000-0000-0000-0000000000f9' AND leg_type = 'delivery'),
   'step 2: the stop is scheduled with its driver');
 
+-- ── Owners sign themselves up; an admin approves (143) ─────────────────────
+SELECT test_as(''); SET ROLE anon;
+SELECT test_assert((submit_owner_signup('{"business_name":"Signup Care","full_name":"Sam Signup","phone":"516-555-0101","email":"Sam@Example.invalid","username":"qa-signup-owner","password":"password-56"}'))->>'ok' = 'true',
+  'anyone can send a sign-up request');
+SELECT test_assert((submit_owner_signup('{"business_name":"Other Care","full_name":"Ann Other","phone":"5165550102","email":"ann@example.invalid","username":"qa-signup-owner","password":"password-56"}'))->>'reason' = 'username_taken',
+  'a username already waiting is refused');
+SELECT test_assert((submit_owner_signup('{"business_name":"Other Care","full_name":"Ann Other","phone":"5165550102","email":"sam@example.invalid","username":"qa-signup-other","password":"password-56"}'))->>'reason' = 'already_waiting',
+  'one waiting request per email');
+SELECT test_assert((submit_owner_signup('{"business_name":"Other Care","full_name":"Ann Other","phone":"5165550102","email":"ann@example.invalid","username":"admin","password":"password-56"}'))->>'reason' = 'username_taken',
+  'reserved usernames are refused');
+SELECT test_assert((submit_owner_signup('{"business_name":"Other Care","full_name":"Ann Other","phone":"5165550102","email":"ann@example.invalid","username":"qa-signup-other","password":"short"}'))->>'reason' = 'weak_password',
+  'short passwords are refused');
+SELECT test_assert((submit_owner_signup('{"business_name":"Other Care","full_name":"Ann Other","phone":"555","email":"ann@example.invalid","username":"qa-signup-other","password":"password-56"}'))->>'reason' = 'invalid_phone',
+  'a phone needs 10 digits');
+SELECT test_assert(owner_signup_status('QA-Signup-Owner') = 'pending', 'the sign-in page can say the request is waiting');
+DO $$ BEGIN
+  PERFORM 1 FROM owner_signups;
+  RAISE EXCEPTION 'FAILED: the public key read sign-up requests';
+EXCEPTION WHEN insufficient_privilege THEN NULL; END $$;
+RESET ROLE;
+SELECT test_assert((SELECT count(*) = 1 FROM owner_signups WHERE username = 'qa-signup-owner' AND email = 'sam@example.invalid'
+                     AND password_hash = extensions.crypt('password-56', password_hash)),
+  'only the hash of the password is kept');
+SELECT test_assert((SELECT count(*) >= 1 FROM notifications n JOIN owner_signups s ON n.reference_id = 'owner_signup_' || s.id
+                     WHERE s.username = 'qa-signup-owner' AND n.user_id = 'a2000000-0000-0000-0000-000000000001'),
+  'admins are told about the request');
+
+SELECT test_as('a2000000-0000-0000-0000-000000000002'); SET ROLE authenticated;
+SELECT test_assert((SELECT count(*) = 0 FROM owner_signups), 'an owner sees no sign-up requests');
+RESET ROLE;
+CREATE TEMP TABLE signup_ids AS SELECT id FROM owner_signups;
+GRANT SELECT ON signup_ids TO authenticated;
+SELECT test_as('a2000000-0000-0000-0000-000000000002'); SET ROLE authenticated;
+CREATE TEMP TABLE signup_owner_try AS SELECT approve_owner_signup(id) AS r FROM signup_ids;
+RESET ROLE;
+SELECT test_assert((SELECT bool_and(r->>'reason' = 'forbidden') FROM signup_owner_try), 'an owner cannot approve, even knowing the id');
+
+SELECT test_as('a2000000-0000-0000-0000-000000000001'); SET ROLE authenticated;
+DO $$ BEGIN
+  PERFORM password_hash FROM owner_signups;
+  RAISE EXCEPTION 'FAILED: an admin read a password hash';
+EXCEPTION WHEN insufficient_privilege THEN NULL; END $$;
+SELECT test_assert((SELECT count(*) = 1 FROM owner_signups WHERE status = 'pending'), 'the admin sees the waiting request');
+CREATE TEMP TABLE signup_approve AS SELECT approve_owner_signup((SELECT id FROM owner_signups WHERE username = 'qa-signup-owner')) AS r;
+SELECT test_assert((SELECT (r->>'ok')::boolean FROM signup_approve), 'the admin approves: ' || (SELECT r::text FROM signup_approve));
+SELECT test_assert((approve_owner_signup((SELECT id FROM owner_signups WHERE username = 'qa-signup-owner')))->>'reason' = 'already_decided',
+  'a request is approved once');
+RESET ROLE;
+SELECT test_as('');
+SELECT test_assert((SELECT encrypted_password = extensions.crypt('password-56', encrypted_password) FROM auth.users
+                     WHERE email = 'qa-signup-owner@staff-login.cottagesurgical.invalid'),
+  'the owner signs in with the password they chose');
+SELECT test_assert((SELECT count(*) = 1 FROM memberships m JOIN profiles p ON p.id = m.user_id
+                     JOIN businesses b ON b.id = m.scope_id
+                     WHERE p.email = 'qa-signup-owner@staff-login.cottagesurgical.invalid' AND p.role = 'owner' AND p.is_active
+                       AND p.full_name = 'Sam Signup' AND m.scope_type = 'business' AND m.role = 'owner' AND b.name = 'Signup Care'),
+  'approval makes them the owner of their new business');
+SELECT test_assert((SELECT status = 'approved' AND password_hash IS NULL AND business_id IS NOT NULL FROM owner_signups WHERE username = 'qa-signup-owner'),
+  'the decided request keeps no hash');
+SELECT test_assert((SELECT count(*) = 0 FROM pickup_locations l JOIN owner_signups s ON s.business_id = l.business_id WHERE s.username = 'qa-signup-owner'),
+  'the new owner starts with no pharmacies; they add their own');
+SET ROLE anon;
+SELECT test_assert(owner_signup_status('qa-signup-owner') IS NULL, 'once approved, the sign-in page says nothing more');
+SELECT test_assert((submit_owner_signup('{"business_name":"Again Care","full_name":"Sam Signup","phone":"5165550101","email":"sam2@example.invalid","username":"qa-signup-owner","password":"password-56"}'))->>'reason' = 'username_taken',
+  'a username in use is refused');
+SELECT test_assert((submit_owner_signup('{"business_name":"Decline Care","full_name":"Dee Cline","phone":"5165550103","email":"dee@example.invalid","username":"qa-signup-decline","password":"password-56"}'))->>'ok' = 'true',
+  'a second request');
+RESET ROLE;
+SELECT test_as('a2000000-0000-0000-0000-000000000001'); SET ROLE authenticated;
+SELECT test_assert((decline_owner_signup((SELECT id FROM owner_signups WHERE username = 'qa-signup-decline')))->>'ok' = 'true', 'the admin declines');
+RESET ROLE;
+SELECT test_as('');
+SELECT test_assert((SELECT status = 'declined' AND password_hash IS NULL FROM owner_signups WHERE username = 'qa-signup-decline'), 'declined, with no hash kept');
+SELECT test_assert(NOT EXISTS (SELECT 1 FROM auth.users WHERE email = 'qa-signup-decline@staff-login.cottagesurgical.invalid'), 'a declined request makes no login');
+SET ROLE anon;
+SELECT test_assert(owner_signup_status('qa-signup-decline') = 'declined', 'the sign-in page can say it was declined');
+RESET ROLE;
+
 SELECT test_as('');
 SELECT 'roles assertions passed' AS result;
