@@ -15,7 +15,7 @@ const MODES: { key: Mode; label: string; icon: typeof List }[] = [
 ]
 
 /** The three ways to add products (149): the starter list, a CSV, or one by hand. Setup guide and Inventory. */
-export default function AddProductsPanel({ target, onAdded }: { target: AddTarget; onAdded?: () => void }) {
+export default function AddProductsPanel({ target, onAdded, hideNames }: { target: AddTarget; onAdded?: () => void; hideNames?: ReadonlySet<string> }) {
   const [mode, setMode] = useState<Mode>('list')
   return (
     <div>
@@ -27,7 +27,7 @@ export default function AddProductsPanel({ target, onAdded }: { target: AddTarge
           </button>
         ))}
       </div>
-      {mode === 'list' && <StarterPicker target={target} onAdded={onAdded} />}
+      {mode === 'list' && <StarterPicker target={target} onAdded={onAdded} hideNames={hideNames} />}
       {mode === 'csv' && <CsvImport target={target} onAdded={onAdded} />}
       {mode === 'hand' && <QuickProductForm target={target} />}
     </div>

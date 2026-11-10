@@ -15,7 +15,8 @@ const INPUT = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus
 type Props = {
   locations: StaffLocation[]
   defaultLocationId: string | null
-  onClose: () => void
+  /** Absent where the form stays open (the setup guide): no Close or Cancel. */
+  onClose?: () => void
   onCreated: (profileId: string) => void
 }
 
@@ -50,7 +51,7 @@ export default function AddLoginForm({ locations, defaultLocationId, onClose, on
       <div className="flex items-center gap-2 mb-4">
         <UserPlus size={18} className="text-blue-600" />
         <h2 className="font-semibold text-lg flex-1">Add a login</h2>
-        <button type="button" onClick={onClose} aria-label="Close" className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100"><X size={16} /></button>
+        {onClose && <button type="button" onClick={onClose} aria-label="Close" className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100"><X size={16} /></button>}
       </div>
       <div className="grid sm:grid-cols-2 gap-4">
         <Field label={draft.role === 'driver' ? 'Home location' : 'Location'}>
@@ -86,7 +87,7 @@ export default function AddLoginForm({ locations, defaultLocationId, onClose, on
       </div>
       <p className="text-xs text-slate-500 mt-3">Share the username and password with the person directly. They sign in at the staff login page.</p>
       <div className="flex justify-end gap-2 mt-4">
-        <button type="button" onClick={onClose} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">Cancel</button>
+        {onClose && <button type="button" onClick={onClose} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">Cancel</button>}
         <SubmitButton className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 text-sm disabled:opacity-50">{(pending) => pending ? 'Adding…' : 'Add login'}</SubmitButton>
       </div>
     </SaveForm>

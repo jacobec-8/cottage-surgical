@@ -25,8 +25,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { CATEGORIES } from '../lib/categories'
 import CatalogPicker from './inventory/CatalogPicker'
 import { addStartingStock } from './inventory/startingStock'
-import AddProductsPanel from './products/AddProductsPanel'
-import { importLocations } from './products/useAddProducts'
+import ProductsByLocation from './products/ProductsByLocation'
 import InventoryTable from './inventory/InventoryTable'
 
 export type InventoryItem = {
@@ -194,8 +193,8 @@ export default function Inventory() {
       {bulkOpen && scopeBusinessId && locations.length > 0 && (
         <section aria-label="Add products" className="my-4 rounded-2xl border border-blue-200 bg-blue-50/40 p-5">
           <h2 className="mb-1 text-lg font-semibold">Add products</h2>
-          <p className="mb-4 text-sm text-slate-600">Pick from the starter list, upload a CSV, or add one by hand. Each becomes your own product with your prices; set how many you have at each location.</p>
-          <AddProductsPanel target={{ businessId: scopeBusinessId, locations: importLocations(locations, selectedLocationId) }} />
+          <p className="mb-4 text-sm text-slate-600">One location at a time: choose it, then add from your products, the starter list, a CSV, or by hand.</p>
+          <ProductsByLocation businessId={scopeBusinessId} locations={locations} initialId={selectedLocationId} />
         </section>
       )}
       <h2 className="text-lg font-semibold mt-2">Equipment &amp; Supplies</h2>

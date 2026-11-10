@@ -17,7 +17,7 @@ const INPUT = 'w-full rounded-lg border border-slate-300 px-2.5 py-2 text-sm foc
 const SHOWN = 40
 
 /** Choose products from the shared starter list (149), then set your prices and stock for each. */
-export default function StarterPicker({ target, onAdded }: { target: AddTarget; onAdded?: () => void }) {
+export default function StarterPicker({ target, onAdded, hideNames }: { target: AddTarget; onAdded?: () => void; hideNames?: ReadonlySet<string> }) {
   const [q, setQ] = useState('')
   const [category, setCategory] = useState('')
   const [picked, setPicked] = useState<Picked[]>([])
@@ -37,7 +37,8 @@ export default function StarterPicker({ target, onAdded }: { target: AddTarget; 
   })
 
   const needle = q.trim().toLowerCase()
-  const matches = (starters.data ?? []).filter((s) => (!category || s.category === category) && (!needle || s.name.toLowerCase().includes(needle)))
+  // Products the owner already has are offered under Your products, not here.
+  const matches = (starters.data ?? []).filter((s) => !hideNames?.has(s.name.trim().toLowerCase()) && (!category || s.category === category) && (!needle || s.name.toLowerCase().includes(needle)))
   const isPicked = (id: string) => picked.some((p) => p.starter_id === id)
   const toggle = (s: Starter) => setPicked((current) => isPicked(s.id)
     ? current.filter((p) => p.starter_id !== s.id)
@@ -117,7 +118,7 @@ export default function StarterPicker({ target, onAdded }: { target: AddTarget; 
                 </div>
                 <div className="mt-2 flex flex-wrap items-end gap-3">
                   {p.stocks.map((st, i) => (
-                    <Num key={st.location_id} label={`In stock at ${labels[i]}`} value={st.stock} onChange={(v) => setStock(p, st.location_id, v)} numeric wide={target.locations.length > 1} />
+                    <Num key={st.location_id} label={target.locations.length === 1 ? 'In stock' : `In stock at ${labels[i]}`} value={st.stock} onChange={(v) => setStock(p, st.location_id, v)} numeric wide={target.locations.length > 1} />
                   ))}
                 </div>
                 {rowErrors[p.starter_id] && <p className="mt-1 text-xs text-red-700">{rowErrors[p.starter_id]}</p>}
