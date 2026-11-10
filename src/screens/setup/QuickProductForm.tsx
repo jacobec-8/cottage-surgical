@@ -12,30 +12,30 @@ import { OWNER_BUSINESS_KEY } from './useOwnerBusiness'
 
 const INPUT = 'w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 
-type Props = { businessId: string; pharmacy: { id: string; name: string; delivers: boolean } }
+type Props = { businessId: string; location: { id: string; name: string; delivers: boolean } }
 
 /**
  * Adds one product with its prices and its starting stock at the owner's
- * first pharmacy (147). Photos, descriptions and the other product fields are
+ * first location (147). Photos, descriptions and the other product fields are
  * on Inventory.
  */
-export default function QuickProductForm({ businessId, pharmacy }: Props) {
+export default function QuickProductForm({ businessId, location }: Props) {
   const qc = useQueryClient()
   const [p, setP] = useState<QuickProduct>(emptyProduct)
   const set = <K extends keyof QuickProduct>(key: K, value: QuickProduct[K]) => setP((current) => ({ ...current, [key]: value }))
 
   const save = async () => {
-    const payload = quickProductPayload(p, businessId, pharmacy.delivers)
+    const payload = quickProductPayload(p, businessId, location.delivers)
     const { data, error } = await supabase.from('equipment_items').insert(payload).select('id').single()
     if (error || !data) throw new Error('Couldn’t add the product. Please try again.')
-    await addStartingStock(data.id, pharmacy.id, false, true, p.stock)
+    await addStartingStock(data.id, location.id, false, true, p.stock)
     void qc.invalidateQueries({ queryKey: [OWNER_BUSINESS_KEY] })
     void qc.invalidateQueries({ queryKey: ['equipment_items'] })
     void refreshWebsite()
   }
 
   return (
-    <SaveForm aria-label="Add a product" validate={() => quickProductProblems(p, pharmacy.delivers)} onSave={save}
+    <SaveForm aria-label="Add a product" validate={() => quickProductProblems(p, location.delivers)} onSave={save}
       onSaved={() => setP(emptyProduct)} savedMessage="Product added." errorClassName="mt-3"
       className="rounded-2xl border border-slate-200 bg-white p-5">
       <div className="grid gap-4 sm:grid-cols-2">
@@ -63,7 +63,7 @@ export default function QuickProductForm({ businessId, pharmacy }: Props) {
             <Checked name="pickupPrice"><input className={INPUT} inputMode="decimal" value={p.pickupPrice} onChange={(e) => set('pickupPrice', e.target.value)} /></Checked>
           </label>
         )}
-        {p.rent && pharmacy.delivers && (
+        {p.rent && location.delivers && (
           <label className="block text-sm"><span className="mb-1 block font-medium text-slate-700">Monthly price, delivered ($)</span>
             <Checked name="deliveryPrice"><input className={INPUT} inputMode="decimal" value={p.deliveryPrice} onChange={(e) => set('deliveryPrice', e.target.value)} /></Checked>
           </label>
@@ -73,7 +73,7 @@ export default function QuickProductForm({ businessId, pharmacy }: Props) {
             <Checked name="salePrice"><input className={INPUT} inputMode="decimal" value={p.salePrice} onChange={(e) => set('salePrice', e.target.value)} /></Checked>
           </label>
         )}
-        <label className="block text-sm"><span className="mb-1 block font-medium text-slate-700">In stock at {pharmacy.name}</span>
+        <label className="block text-sm"><span className="mb-1 block font-medium text-slate-700">In stock at {location.name}</span>
           <Checked name="stock"><input className={INPUT} inputMode="numeric" value={p.stock} onChange={(e) => set('stock', e.target.value)} placeholder="0" /></Checked>
         </label>
       </div>

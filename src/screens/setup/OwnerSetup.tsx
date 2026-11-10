@@ -10,7 +10,7 @@ import { SETUP_STEPS, setupStepFor, type SetupStep } from '../../lib/ownerSetup'
 import NewPharmacyForm from '../locations/NewPharmacyForm'
 import AddLoginForm from '../staff/AddLoginForm'
 import BusinessDetailsForm from './BusinessDetailsForm'
-import QuickProductForm from './QuickProductForm'
+import AddProductsPanel from '../products/AddProductsPanel'
 import SetupDone from './SetupDone'
 import { OWNER_BUSINESS_KEY, useOwnerBusiness } from './useOwnerBusiness'
 
@@ -88,10 +88,10 @@ export default function OwnerSetup() {
         )}
 
         {step === 'products' && (
-          <Step intro="Add what you rent or sell, with your prices and how many you have. Photos, descriptions and more options are on Inventory after setup.">
+          <Step intro="Add what you rent or sell: pick from our starter list, upload a spreadsheet (CSV), or add one by hand. You set your own prices and how many you have. Photos, descriptions and more options are on Inventory after setup.">
             {first && businessId ? (
               <div className="space-y-4">
-                <QuickProductForm businessId={businessId} pharmacy={{ id: first.id, name: first.name, delivers: first.fulfillment_mode === 'pickup_and_delivery' }} />
+                <AddProductsPanel target={{ businessId, location: { id: first.id, name: first.name, delivers: first.fulfillment_mode === 'pickup_and_delivery' } }} />
                 <AddedList icon={<Package size={16} />} empty="No products yet." items={(products.data ?? []).map((p) => ({ id: p.id, label: p.name, detail: [p.is_rentable && 'rent', p.is_purchasable && 'sell'].filter(Boolean).join(' & ') }))} />
               </div>
             ) : <p className="text-sm text-slate-600">Add a location first.</p>}

@@ -1285,5 +1285,57 @@ SELECT test_assert(NOT EXISTS (
   'customer emails and staff messages no longer say pharmacy: ' || COALESCE((SELECT string_agg(p.proname, ', ') FROM pg_proc p
      WHERE p.pronamespace = 'public'::regnamespace AND p.proname NOT LIKE 'rx\_%' AND regexp_replace(p.prosrc, '--[^\n]*', '', 'g') ~ '(the|a|this|by) pharmacy[ .'']|Pharmacy not found|which pharmacies'), ''));
 
+-- ── Products from the starter list or a CSV (149) ───────────────────────────
+SELECT test_as('');
+INSERT INTO starter_products (id, name, category, description, image_url, is_rentable, is_purchasable) VALUES
+ ('a9000000-0000-0000-0000-000000000001', 'Starter Walker', 'mobility aids', 'Folding walker', 'https://example.invalid/catalog/walker.jpg', false, true),
+ ('a9000000-0000-0000-0000-000000000002', 'Starter Bed', 'bedroom', 'Full electric bed', NULL, true, false);
+SELECT test_as('a2000000-0000-0000-0000-000000000006'); SET ROLE authenticated;
+SELECT test_assert((SELECT count(*) >= 2 FROM starter_products), 'any owner can read the starter list');
+RESET ROLE;
+SELECT test_as('a2000000-0000-0000-0000-000000000002'); SET ROLE authenticated;
+DO $$ BEGIN
+  INSERT INTO starter_products (name, category) VALUES ('Owner Edit', 'mobility');
+  RAISE EXCEPTION 'FAILED: an owner changed the starter list';
+EXCEPTION WHEN insufficient_privilege THEN NULL; END $$;
+-- One bad row: nothing is added, and the answer names the row.
+CREATE TEMP TABLE import_bad AS SELECT add_products('a0000000-0000-0000-0000-00000000000a', 'a1000000-0000-0000-0000-0000000000a1',
+  '[{"starter_id":"a9000000-0000-0000-0000-000000000001","sell":true,"sale_price":"89","stock":"5"},
+    {"name":"CSV Cane","category":"mobility aids","sell":true,"sale_price":"abc","stock":"2"}]'::jsonb) AS r;
+CREATE TEMP TABLE import_good AS SELECT add_products('a0000000-0000-0000-0000-00000000000a', 'a1000000-0000-0000-0000-0000000000a1',
+  '[{"starter_id":"a9000000-0000-0000-0000-000000000001","sell":true,"sale_price":"89","stock":"5"},
+    {"starter_id":"a9000000-0000-0000-0000-000000000002","rent":true,"pickup_price":"150","delivery_price":"175","stock":"2"},
+    {"name":"CSV Cane","category":"mobility aids","description":"Offset cane","sell":true,"sale_price":"24.50","stock":"12"}]'::jsonb) AS r;
+CREATE TEMP TABLE import_again AS SELECT add_products('a0000000-0000-0000-0000-00000000000a', 'a1000000-0000-0000-0000-0000000000a1',
+  '[{"name":"csv cane","category":"mobility aids","sell":true,"sale_price":"20","stock":"1"}]'::jsonb) AS r;
+CREATE TEMP TABLE import_other AS SELECT add_products('a0000000-0000-0000-0000-00000000000a', 'a1000000-0000-0000-0000-0000000000b1',
+  '[{"name":"Elsewhere","category":"mobility","sell":true,"sale_price":"20"}]'::jsonb) AS r;
+CREATE TEMP TABLE import_foreign AS SELECT add_products('a0000000-0000-0000-0000-00000000000b', 'a1000000-0000-0000-0000-0000000000b1',
+  '[{"name":"Hijack","category":"mobility","sell":true,"sale_price":"20"}]'::jsonb) AS r;
+RESET ROLE;
+SELECT test_as('a2000000-0000-0000-0000-000000000003'); SET ROLE authenticated;
+CREATE TEMP TABLE import_staff AS SELECT add_products('a0000000-0000-0000-0000-00000000000a', 'a1000000-0000-0000-0000-0000000000a1',
+  '[{"name":"Staff Add","category":"mobility","sell":true,"sale_price":"20"}]'::jsonb) AS r;
+RESET ROLE;
+SELECT test_as('');
+SELECT test_assert((SELECT r->>'reason' = 'rows' AND r->'errors'->0->>'row' = '2' AND r->'errors'->0->>'field' = 'sale_price' FROM import_bad),
+  'a bad row is named: ' || (SELECT r::text FROM import_bad));
+SELECT test_assert((SELECT (r->>'ok')::boolean AND (r->>'added')::int = 3 FROM import_good), 'three products added: ' || (SELECT r::text FROM import_good));
+SELECT test_assert((SELECT count(*) = 1 FROM equipment_items WHERE business_id = 'a0000000-0000-0000-0000-00000000000a' AND name = 'Starter Walker'
+                      AND description = 'Folding walker' AND image_url = 'https://example.invalid/catalog/walker.jpg' AND sale_price = 89 AND is_purchasable AND NOT is_rentable),
+  'a starter product becomes the owner''s own, with its photo and the owner''s price (the bad try added nothing)');
+SELECT test_assert((SELECT li.quantity_on_hand = 2 AND li.pickup_rental_price = 150 AND li.delivery_rental_price = 175
+                      FROM equipment_items e JOIN equipment_location_inventory li ON li.equipment_item_id = e.id AND li.location_id = 'a1000000-0000-0000-0000-0000000000a1'
+                     WHERE e.business_id = 'a0000000-0000-0000-0000-00000000000a' AND e.name = 'Starter Bed'),
+  'the location gets the stock and starts at the owner''s prices');
+SELECT test_assert((SELECT li.quantity_on_hand = 12 AND li.sale_price = 24.50 FROM equipment_items e JOIN equipment_location_inventory li ON li.equipment_item_id = e.id
+                     WHERE e.business_id = 'a0000000-0000-0000-0000-00000000000a' AND e.name = 'CSV Cane' AND e.description = 'Offset cane'),
+  'a CSV row is added the same way');
+SELECT test_assert((SELECT r->'errors'->0->>'message' = 'You already have a product with this name.' FROM import_again), 'importing a product twice is refused');
+SELECT test_assert((SELECT r->>'reason' = 'location_not_found' FROM import_other), 'an owner can only stock their own locations');
+SELECT test_assert((SELECT r->>'reason' = 'forbidden' FROM import_foreign), 'an owner cannot add to another owner');
+SELECT test_assert((SELECT r->>'reason' = 'forbidden' FROM import_staff), 'staff cannot add products in bulk');
+SELECT test_assert((SELECT description = 'Folding walker' FROM starter_products WHERE id = 'a9000000-0000-0000-0000-000000000001'), 'the starter list is unchanged');
+
 SELECT test_as('');
 SELECT 'roles assertions passed' AS result;
