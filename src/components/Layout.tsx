@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import {
   LayoutDashboard, PlusCircle, Users, Package, CreditCard, Truck,
-  LogOut, Shield, ChevronRight, MapPin, Phone, Mail, UserCog, ClipboardList, LockKeyhole, UsersRound, Menu, X, Building2, BarChart3,
+  LogOut, Shield, ChevronRight, MapPin, Phone, Mail, UserCog, ClipboardList, LockKeyhole, UsersRound, Menu, X, Building2, BarChart3, Store,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useLocationScope } from '../contexts/LocationContext'
@@ -40,6 +40,7 @@ const NAV = [
   { to: '/reports', label: 'Reports', icon: BarChart3, roles: STAFF },
   { to: '/staff', label: 'Staff', icon: UsersRound, roles: ['admin', 'owner'], workspace: 'staff' },
   { to: '/locations', label: 'Locations', icon: Building2, roles: ['admin', 'owner'], adminOnly: false },
+  { to: '/business', label: 'Business', icon: Store, roles: ['admin', 'owner'] },
 ]
 
 export default function Layout({ children }: { children: ReactNode }) {
@@ -178,6 +179,16 @@ export default function Layout({ children }: { children: ReactNode }) {
       </Link>
     )
   })
+
+  // The setup guide is full screen: no sidebar, so a new owner has one thing to do (147).
+  if (pathname === '/setup') {
+    return (
+      <div className="min-h-screen min-h-dvh bg-slate-50">
+        {viewingBusinessId && <div className="mx-auto max-w-3xl px-4 pt-4"><WorkspaceBanner ownerName={viewedOwnerName} onLeave={leaveWorkspace} /></div>}
+        {children}
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen min-h-dvh flex bg-slate-50">

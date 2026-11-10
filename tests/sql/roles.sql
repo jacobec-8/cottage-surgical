@@ -1252,5 +1252,30 @@ DO $$ BEGIN
 EXCEPTION WHEN insufficient_privilege THEN NULL; END $$;
 RESET ROLE;
 
+-- ── First sign-in setup (147) ─────────────────────────────────────────────
+SELECT test_as('');
+SELECT test_assert((SELECT b.setup_finished_at IS NULL FROM businesses b JOIN owner_signups s ON s.business_id = b.id WHERE s.username = 'qa-signup-owner'),
+  'a newly approved owner starts with setup to do');
+CREATE TEMP TABLE setup_biz AS SELECT business_id AS id FROM owner_signups WHERE username = 'qa-signup-owner';
+GRANT SELECT ON setup_biz TO authenticated;
+SELECT test_as((SELECT p.id::text FROM profiles p WHERE p.email = 'qa-signup-owner@staff-login.cottagesurgical.invalid')); SET ROLE authenticated;
+SELECT test_assert((update_business_details((SELECT id FROM setup_biz), 'Signup Care & Mobility', '(516) 555-0199', 'Hello@SignupCare.example'))->>'ok' = 'true',
+  'the owner saves their business details');
+SELECT test_assert((update_business_details((SELECT id FROM setup_biz), 'X', '', ''))->>'reason' = 'invalid_name', 'a one-letter name is refused');
+SELECT test_assert((update_business_details((SELECT id FROM setup_biz), 'Signup Care', '555', ''))->>'reason' = 'invalid_phone', 'a short phone is refused');
+SELECT test_assert((update_business_details((SELECT id FROM setup_biz), 'Signup Care', '', 'nope'))->>'reason' = 'invalid_email', 'a bad email is refused');
+SELECT test_assert((update_business_details('a0000000-0000-0000-0000-00000000000a', 'Hijack', '', ''))->>'reason' = 'forbidden', 'an owner cannot change another owner''s details');
+SELECT test_assert((finish_owner_setup((SELECT id FROM setup_biz)))->>'ok' = 'true', 'the owner finishes setup');
+SELECT test_assert((finish_owner_setup('a0000000-0000-0000-0000-00000000000b'))->>'reason' = 'forbidden', 'an owner cannot finish another owner''s setup');
+RESET ROLE;
+SELECT test_as('');
+SELECT test_assert((SELECT b.name = 'Signup Care & Mobility' AND ps.display_name = 'Signup Care & Mobility' AND ps.phone = '(516) 555-0199' AND ps.email = 'hello@signupcare.example'
+                         AND b.setup_finished_at IS NOT NULL
+                      FROM businesses b JOIN pharmacy_settings ps ON ps.business_id = b.id JOIN owner_signups s ON s.business_id = b.id WHERE s.username = 'qa-signup-owner'),
+  'details land where receipts and emails read them, and setup is marked done');
+SELECT test_as('a2000000-0000-0000-0000-000000000003'); SET ROLE authenticated;
+SELECT test_assert((update_business_details('a0000000-0000-0000-0000-00000000000a', 'Staff Rename', '', ''))->>'reason' = 'forbidden', 'staff cannot change business details');
+RESET ROLE;
+
 SELECT test_as('');
 SELECT 'roles assertions passed' AS result;
