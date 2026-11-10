@@ -1,4 +1,5 @@
-// Onboarding adds one or more businesses under an existing owner. Each business
+// Onboarding adds one or more businesses under an owner, an existing one or a new
+// one created in the same step (business name and main contact). Each business
 // is its own fully separate location: address, delivery ZIP codes, starting
 // stock and staff logins. Drivers are added afterwards on the Drivers page.
 // Sent to onboard_business (migrations 076, 100).
@@ -16,9 +17,12 @@ export type LocationDraft = {
   deliveryZips: string; deliversAnywhere: boolean
   stock: StockDraft[]; staff: StaffDraft[]
 }
+export type NewOwnerDraft = { name: string; contactName: string; contactEmail: string; contactPhone: string }
 export type OnboardingDraft = {
-  /** The owner (businesses row) every new business belongs to. */
+  /** The owner (businesses row) every new business belongs to; empty while a new owner is being created. */
   ownerId: string
+  /** A new owner, created with the businesses (null: an existing owner). */
+  newOwner: NewOwnerDraft | null
   ownerLogin: boolean; ownerFirstName: string; ownerLastName: string; ownerPhone: string; ownerUsername: string; ownerPassword: string
   locations: LocationDraft[]
 }
@@ -35,6 +39,7 @@ export function emptyStaff(): StaffDraft {
 export function emptyDraft(ownerId = ''): OnboardingDraft {
   return {
     ownerId,
+    newOwner: null,
     ownerLogin: false, ownerFirstName: '', ownerLastName: '', ownerPhone: '', ownerUsername: '', ownerPassword: '',
     locations: [emptyLocation()],
   }
@@ -73,8 +78,17 @@ function loginProblem(draft: OnboardingDraft, username: string, password: string
   return null
 }
 
+const emailValid = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
+
 function ownerProblem(draft: OnboardingDraft): string | null {
-  if (!draft.ownerId) return 'Choose the owner these businesses belong to.'
+  if (draft.newOwner) {
+    const o = draft.newOwner
+    if (o.name.trim().length < 2) return 'New owner: enter the business name.'
+    if (!o.contactName.trim()) return 'New owner: enter the main contact’s name.'
+    if (!o.contactEmail.trim() && !o.contactPhone.trim()) return 'New owner: enter the main contact’s email or phone.'
+    if (o.contactEmail.trim() && !emailValid(o.contactEmail.trim())) return 'New owner: enter a valid contact email.'
+    if (!draft.ownerLogin) return 'New owner: add their owner login, so they can sign in.'
+  } else if (!draft.ownerId) return 'Choose the owner these businesses belong to.'
   if (draft.ownerLogin) {
     if (!draft.ownerFirstName.trim() || !draft.ownerLastName.trim()) return 'Owner login: enter a first and last name.'
     const login = loginProblem(draft, draft.ownerUsername, draft.ownerPassword)
@@ -131,7 +145,9 @@ const money = (value: string) => (value === '' ? null : Number(value))
 /** The onboard_business payload. Its `branches` field is the RPC's name for the list of locations. */
 export function onboardingPayload(draft: OnboardingDraft) {
   return {
-    business: { id: draft.ownerId },
+    business: draft.newOwner
+      ? { name: draft.newOwner.name.trim(), contact_name: draft.newOwner.contactName.trim(), contact_email: draft.newOwner.contactEmail.trim(), contact_phone: draft.newOwner.contactPhone.trim() }
+      : { id: draft.ownerId },
     owner: draft.ownerLogin
       ? { first_name: draft.ownerFirstName.trim(), last_name: draft.ownerLastName.trim(), phone: draft.ownerPhone.trim(), username: norm(draft.ownerUsername), password: draft.ownerPassword }
       : null,

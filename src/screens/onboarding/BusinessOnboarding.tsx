@@ -10,13 +10,15 @@ import { useLocationScope } from '../../contexts/LocationContext'
 import { newOnboardingId, type CatalogItem } from '../../lib/locationOnboarding'
 import {
   MAX_LOCATIONS, STEP_NAMES, emptyDraft, emptyLocation, locationLabel, locationProblem, onboardingPayload,
-  readOnboardingResult, validateDraft, withoutLocation, type LocationDraft, type OnboardingDraft, type OnboardingResult,
+  readOnboardingResult, validateDraft, withoutLocation, type LocationDraft, type NewOwnerDraft, type OnboardingDraft, type OnboardingResult,
 } from '../../lib/businessOnboarding'
 import LocationEditor from './LocationEditor'
 import ReviewStep from './ReviewStep'
 import { Field, INPUT, Note, PRIMARY, SECONDARY, TextField } from './ui'
 
 const ICONS = [Store, CheckSquare]
+/** The owner picker's value for "create a new owner". */
+const NEW_OWNER = '__new__'
 const TITLES = ['Businesses', 'Review your setup']
 const HINTS = [
   'Each business is completely separate: its own stock, prices, staff and orders. Only the owner sees across them.',
@@ -45,9 +47,15 @@ export default function BusinessOnboarding() {
   // Products belong to an owner, so a new owner starts every business with an empty product list.
   const chooseOwner = (ownerId: string) => {
     setError(null); save.reset()
-    setDraft((current) => ({ ...current, ownerId, ownerLogin: false, locations: current.locations.map((l) => ({ ...l, stock: [] })) }))
+    // A new owner has no login yet, so theirs is added in the same step.
+    const isNew = ownerId === NEW_OWNER
+    setDraft((current) => ({
+      ...current, ownerId: isNew ? '' : ownerId, ownerLogin: isNew,
+      newOwner: isNew ? (current.newOwner ?? { name: '', contactName: '', contactEmail: '', contactPhone: '' }) : null,
+      locations: current.locations.map((l) => ({ ...l, stock: [] })),
+    }))
   }
-  const dirty = Boolean(draft.locations.some((l) => l.name || l.stock.length || l.staff.length) || draft.ownerLogin)
+  const dirty = Boolean(draft.locations.some((l) => l.name || l.stock.length || l.staff.length) || draft.ownerLogin || draft.newOwner?.name)
   useEffect(() => {
     if (!dirty || result) return
     const warn = (event: BeforeUnloadEvent) => { event.preventDefault() }
@@ -62,12 +70,12 @@ export default function BusinessOnboarding() {
   } })
   // Start with the owner of the store in the header (or the only owner there is).
   useEffect(() => {
-    if (draft.ownerId || !owners.data) return
+    if (draft.ownerId || draft.newOwner || !owners.data) return
     const fromHeader = owners.data.find((owner) => owner.id === selectedLocation?.business?.id)
     const only = owners.data.length === 1 ? owners.data[0] : undefined
     const start = fromHeader ?? only
     if (start) setDraft((current) => ({ ...current, ownerId: start.id }))
-  }, [owners.data, selectedLocation, draft.ownerId])
+  }, [owners.data, selectedLocation, draft.ownerId, draft.newOwner])
   const ownerLogins = useQuery({
     queryKey: ['onboarding_owner_logins', draft.ownerId],
     enabled: Boolean(draft.ownerId),
@@ -151,7 +159,7 @@ export default function BusinessOnboarding() {
     setDraft((current) => withoutLocation(current, key)); setLocationIndex(Math.max(0, index - 1))
   }
 
-  const ownerName = owners.data?.find((owner) => owner.id === draft.ownerId)?.name ?? ''
+  const ownerName = draft.newOwner ? draft.newOwner.name.trim() : owners.data?.find((owner) => owner.id === draft.ownerId)?.name ?? ''
   const totalItems = draft.locations.reduce((sum, l) => sum + l.stock.reduce((s, row) => s + (Number(row.quantity) || 0), 0), 0)
   const current = draft.locations[Math.min(locationIndex, draft.locations.length - 1)]
   const locked = save.isPending || uncertain
@@ -190,7 +198,7 @@ export default function BusinessOnboarding() {
                   <h3 className="font-semibold text-slate-900">{locationLabel(current, draft.locations.indexOf(current))}</h3>
                   {draft.locations.length > 1 && <button type="button" onClick={() => removeLocation(current.key)} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm text-slate-500 hover:bg-red-50 hover:text-red-600"><Trash2 size={15} /> Remove</button>}
                 </div>
-                <LocationEditor key={`${draft.ownerId}:${current.key}`} location={current} hasOwner={Boolean(draft.ownerId)} index={draft.locations.indexOf(current)}
+                <LocationEditor key={`${draft.ownerId}:${current.key}`} location={current} hasOwner={Boolean(draft.ownerId)} newOwner={Boolean(draft.newOwner)} index={draft.locations.indexOf(current)}
                   others={draft.locations.map((location, index) => ({ location, index })).filter(({ location }) => location.key !== current.key)}
                   catalog={catalog} onChange={(patch) => updateLocation(current.key, patch)} />
               </div>
@@ -229,18 +237,28 @@ type OwnerSectionProps = {
   ownerLoginsKnown: boolean
 }
 function OwnerSection({ draft, set, chooseOwner, owners, ownerName, ownerNames, ownerLoginsKnown }: OwnerSectionProps) {
-  const needsLogin = Boolean(draft.ownerId) && ownerLoginsKnown && ownerNames.length === 0
+  const needsLogin = Boolean(draft.newOwner) || (Boolean(draft.ownerId) && ownerLoginsKnown && ownerNames.length === 0)
+  const setNew = (key: keyof NewOwnerDraft, value: string) => set('newOwner', { ...(draft.newOwner as NewOwnerDraft), [key]: value })
   return <div className="space-y-4 rounded-xl bg-slate-50 p-4">
-    <Field label="Owner *"><select className={INPUT} value={draft.ownerId} onChange={(e) => chooseOwner(e.target.value)}>
+    <Field label="Owner *"><select className={INPUT} value={draft.newOwner ? NEW_OWNER : draft.ownerId} onChange={(e) => chooseOwner(e.target.value)}>
       <option value="" disabled>Choose the owner</option>
       {(owners.data ?? []).map((owner) => <option key={owner.id} value={owner.id}>{owner.name}</option>)}
+      <option value={NEW_OWNER}>+ New owner…</option>
     </select></Field>
+    {draft.newOwner && <div className="grid gap-4 rounded-xl border border-blue-200 bg-white p-4 sm:grid-cols-2">
+      <p className="text-sm text-slate-600 sm:col-span-2">A new owner is fully separate from every other owner: their own businesses, products, prices, staff and customers. Their website comes later.</p>
+      <TextField label="Business name" required value={draft.newOwner.name} onChange={(v) => setNew('name', v)} />
+      <TextField label="Main contact" required value={draft.newOwner.contactName} onChange={(v) => setNew('contactName', v)} />
+      <TextField label="Contact email" type="email" value={draft.newOwner.contactEmail} onChange={(v) => setNew('contactEmail', v)} />
+      <TextField label="Contact phone" type="tel" value={draft.newOwner.contactPhone} onChange={(v) => setNew('contactPhone', v)} />
+      <p className="text-xs text-slate-500 sm:col-span-2">An email or a phone is needed. Only admins see these contact details.</p>
+    </div>}
     {owners.isLoading && <p className="text-sm text-slate-500">Loading owners…</p>}
     {Boolean(owners.error) && <p role="alert" className="text-sm text-red-600">Couldn’t load owners. <button type="button" onClick={owners.refetch} className="underline">Try again</button></p>}
     {draft.ownerId && ownerNames.length > 0 && <Note>{ownerNames.join(', ')} already sees every business {ownerName} owns, and will see these too.</Note>}
     {needsLogin && <div className="rounded-xl border border-amber-200 bg-white p-4">
       <label className="flex items-start gap-3"><input type="checkbox" className="mt-1 h-4 w-4" checked={draft.ownerLogin} onChange={(e) => set('ownerLogin', e.target.checked)} />
-        <span><span className="block font-medium text-slate-900">Add an owner login</span><span className="mt-1 block text-sm text-amber-700">{ownerName} has no owner login yet. The owner login sees every business they own; it is not an admin account.</span></span>
+        <span><span className="block font-medium text-slate-900">{draft.newOwner ? 'Owner login (needed)' : 'Add an owner login'}</span><span className="mt-1 block text-sm text-amber-700">{ownerName} has no owner login yet. The owner login sees every business they own; it is not an admin account.</span></span>
       </label>
       {draft.ownerLogin && <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <TextField label="First name" required value={draft.ownerFirstName} onChange={(v) => set('ownerFirstName', v)} />
