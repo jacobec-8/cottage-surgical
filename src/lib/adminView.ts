@@ -24,8 +24,8 @@ export function ownerSetupGaps(o: OwnerRow): string[] {
   if (!o.is_active) return []
   const gaps: string[] = []
   if (o.owner_logins === 0) gaps.push('No owner login')
-  if (o.pharmacies === 0) gaps.push('No pharmacies yet')
-  else if (o.open_pharmacies === 0) gaps.push('No pharmacy open yet')
+  if (o.pharmacies === 0) gaps.push('No locations yet')
+  else if (o.open_pharmacies === 0) gaps.push('No location open yet')
   if (o.products === 0) gaps.push('No products yet')
   if (o.staff_logins === 0) gaps.push('No staff logins yet')
   return gaps

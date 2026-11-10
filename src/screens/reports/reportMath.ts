@@ -48,7 +48,7 @@ export function combine(rows: readonly StoreReport[]): StoreReport {
   const position = Object.fromEntries([...positionKeys].map((k) => [k, sumOf(rows, (r) => r.position[k])])) as StorePosition
   const counts = (k: keyof StoreReport) => sumOf(rows, (r) => r[k])
   return {
-    location_id: 'all', name: 'All pharmacies', money, position,
+    location_id: 'all', name: 'All locations', money, position,
     rentals_started: counts('rentals_started'), rentals_returned: counts('rentals_returned'),
     avg_rental_days: weighted(rows, (r) => r.avg_rental_days, (r) => r.rentals_returned),
     purchases: counts('purchases'), stops_done: counts('stops_done'), stops_on_time: counts('stops_on_time'),
@@ -108,7 +108,7 @@ const csvCell = (v: unknown) => {
 
 /** Spreadsheet-safe CSV of money records (text that looks like a formula is defused). */
 export function recordsCsv(records: readonly MoneyRecord[]): string {
-  const header = ['Date and time', 'Pharmacy', 'Order', 'Customer', 'Type', 'Amount', 'Counts as revenue', 'Method', 'Recorded by', 'Reference', 'Note']
+  const header = ['Date and time', 'Location', 'Order', 'Customer', 'Type', 'Amount', 'Counts as revenue', 'Method', 'Recorded by', 'Reference', 'Note']
   const rows = records.map((r) => [
     new Date(r.recorded_at).toLocaleString('en-US', { timeZone: 'America/New_York' }),
     r.store, r.order_no != null ? `#${r.order_no}` : '', r.customer, KIND_LABEL[r.kind] ?? r.kind,

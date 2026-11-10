@@ -24,7 +24,7 @@ export function OrderSummary({ r }: { r: Receipt }) {
         <Field label="Placed">{fmtDateTime(o.created_at)}</Field>
         <Field label="Placed through">{sourceLabel(o.source) ?? '—'}{o.placed_by && o.source !== 'storefront' ? ` · ${o.placed_by}` : ''}</Field>
         <Field label="Fulfillment">{fulfillment}</Field>
-        <Field label="Pharmacy">{r.store?.name ?? '—'}</Field>
+        <Field label="Location">{r.store?.name ?? '—'}</Field>
         {isRental && <Field label="Start">{fmtDate(o.start_date)}</Field>}
         {isRental && <Field label="Return">{o.end_date ? fmtDate(o.end_date) : 'Open'}</Field>}
         {o.fulfillment_method !== 'pickup' && <Field label="Deliver to">{addressOf(o) || '—'}</Field>}

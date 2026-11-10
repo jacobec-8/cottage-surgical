@@ -442,7 +442,7 @@ function ItemModal({ item, onClose }: { item: Partial<InventoryItem>; onClose: (
               <Checked name="deliveryPrice"><input aria-label="Delivery rental price" value={f.delivery_rental_price} onChange={set('delivery_rental_price')} inputMode="decimal" disabled={!f.is_rentable || !f.delivery_enabled} className={inp} /></Checked>
             </div>
             <div><label className="block text-xs text-slate-500 mb-1">Starting sale price ($) {f.is_purchasable ? '' : '— not required'}</label><Checked name="salePrice"><input aria-label="Sale price" value={f.sale_price} onChange={set('sale_price')} inputMode="decimal" disabled={!f.is_purchasable} className={inp} /></Checked></div>
-            <p className="text-xs text-slate-500 sm:col-span-2">New pharmacies start at these prices; each pharmacy then sets its own.</p>
+            <p className="text-xs text-slate-500 sm:col-span-2">New locations start at these prices; each location then sets its own.</p>
             {isNew && stockStore && (
             <div>
               <label className="block text-xs text-slate-500 mb-1">{f.is_serialized ? `Units at ${stockStoreInfo?.name ?? 'this store'}: asset tags, one per unit (optional)` : `Starting stock at ${stockStoreInfo?.name ?? 'this store'} (optional)`}</label>

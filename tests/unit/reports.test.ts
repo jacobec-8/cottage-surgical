@@ -40,7 +40,7 @@ const store = (over: Partial<StoreReport> = {}): StoreReport => ({
 
 test('combining pharmacies sums counts and money, and weights averages by cases', () => {
   const all = combine([store(), store({ location_id: 'b', avg_rental_days: 60, rentals_returned: 1, handover_hours: 40, handovers: 3 })])
-  assert.equal(all.name, 'All pharmacies')
+  assert.equal(all.name, 'All locations')
   assert.equal(all.money?.revenue, 180)
   assert.equal(all.position.overdue_amount, 70)
   assert.equal(all.stops_done, 8)
@@ -80,7 +80,7 @@ test('a kept deposit shows what was kept; other records show cash', () => {
 test('CSV: one header, quoted commas, formulas defused, numbers left as numbers', () => {
   const csv = recordsCsv([record({ customer: 'Doe, Jane', note: '=HYPERLINK("x")', cash_amount: -50, revenue_amount: -50, kind: 'refund' })])
   const [header, row] = csv.split('\r\n')
-  assert.match(header, /^Date and time,Pharmacy,Order,Customer,Type,Amount/)
+  assert.match(header, /^Date and time,Location,Order,Customer,Type,Amount/)
   assert.match(row, /"Doe, Jane"/)
   assert.match(row, /"'=HYPERLINK\(""x""\)"/)
   assert.match(row, /,-50\.00,-50\.00,/)

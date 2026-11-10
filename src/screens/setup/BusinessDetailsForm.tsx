@@ -58,7 +58,7 @@ export default function BusinessDetailsForm({ business, submitLabel, savedMessag
             <Checked name="email"><input className={INPUT} value={d.email} onChange={(e) => set('email', e.target.value)} type="email" autoComplete="email" /></Checked>
           </label>
         </div>
-        <p className="text-xs text-slate-500">Each pharmacy can have its own phone and email too; set those on Locations.</p>
+        <p className="text-xs text-slate-500">Each location can have its own phone and email too; set those on Locations.</p>
       </div>
       <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
         {footer}

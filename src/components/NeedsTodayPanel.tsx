@@ -18,7 +18,7 @@ const QUIET = 'px-2 py-1.5 text-xs text-slate-400'
 
 function PanelBody(props: NeedsTodayPanelProps) {
   switch (panelView(props)) {
-    case 'pick_location': return <p className={QUIET}>Pick a pharmacy to see what needs you.</p>
+    case 'pick_location': return <p className={QUIET}>Pick a location to see what needs you.</p>
     case 'error': return <p className={QUIET}>Couldn’t load</p>
     case 'loading': return <p className={QUIET}>Loading…</p>
     case 'caught_up': return <p className="px-2 py-1.5 text-xs font-medium text-emerald-700">All caught up ✓</p>

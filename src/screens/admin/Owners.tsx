@@ -26,8 +26,8 @@ export default function Owners() {
 
   const setActive = async (o: OwnerRow, active: boolean) => {
     const question = active
-      ? `Switch ${o.name} back on? Their pharmacies open in the app again for them and their staff.`
-      : `Switch ${o.name} off? Their pharmacies close in the app for them and their staff until you switch them back on. Nothing is deleted.`
+      ? `Switch ${o.name} back on? Their locations open in the app again for them and their staff.`
+      : `Switch ${o.name} off? Their locations close in the app for them and their staff until you switch them back on. Nothing is deleted.`
     if (!window.confirm(question)) return
     setBusyId(o.business_id)
     setNotice(null)
@@ -77,7 +77,7 @@ export default function Owners() {
                   </div>
                   <div className="mt-1 text-sm text-slate-600">{[o.contact_name, o.contact_phone, o.contact_email].filter(Boolean).join(' · ') || 'No contact on file'}</div>
                   <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-4">
-                    <Fact label="Pharmacies" value={o.open_pharmacies === o.pharmacies ? `${o.pharmacies}` : `${o.open_pharmacies} open of ${o.pharmacies}`} />
+                    <Fact label="Locations" value={o.open_pharmacies === o.pharmacies ? `${o.pharmacies}` : `${o.open_pharmacies} open of ${o.pharmacies}`} />
                     <Fact label="Products" value={o.products} />
                     <Fact label="Logins" value={`${o.owner_logins} owner · ${o.staff_logins} staff`} />
                     <Fact label="Orders, 30 days" value={o.orders_30d} />

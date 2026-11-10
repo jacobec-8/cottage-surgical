@@ -80,8 +80,8 @@ export function WorkspaceBanner({ ownerName, onLeave }: { ownerName: string; onL
 export function NoPharmaciesYet({ ownerName }: { ownerName: string }) {
   return (
     <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center">
-      <h2 className="text-lg font-semibold">{ownerName} has no pharmacies yet</h2>
-      <p className="mt-1 text-sm text-slate-600">Their orders, stock and staff screens start once they have a pharmacy.</p>
+      <h2 className="text-lg font-semibold">{ownerName} has no locations yet</h2>
+      <p className="mt-1 text-sm text-slate-600">Their orders, stock and staff screens start once they have a location.</p>
       <Link href="/locations" className="mt-4 inline-flex min-h-11 items-center rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700">Go to Locations</Link>
     </div>
   )

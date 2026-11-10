@@ -24,7 +24,7 @@ export const CHECKOUT_REASONS: Record<string, string> = {
   invalid_fulfillment: 'Choose pickup or delivery.',
   invalid_pickup_location: 'Choose an available pickup location.',
   pickup_unavailable: 'Pickup is no longer available for one of your items. Choose delivery or update your cart.',
-  delivery_unavailable: 'One pharmacy can’t deliver everything in your cart. Update your cart or choose pickup.',
+  delivery_unavailable: 'One location can’t deliver everything in your cart. Update your cart or choose pickup.',
   out_of_stock: 'Sorry — something in your cart just sold out. Update your cart or call us.',
   invalid_payment_method: 'Choose a payment method that matches pickup or delivery.',
   invalid_redirect: 'Checkout is misconfigured for this site. Please call us.',

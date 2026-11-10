@@ -59,7 +59,7 @@ function databaseMessage(error: DbError): string | null {
     case '22P02': return 'One of the numbers isn’t valid.'
     case '22003': return 'One of the numbers is too large.'
     // Our own locks say what is locked (121, 139); anything else is a plain refusal.
-    case '42501': return /turned off for staff at this pharmacy|are locked at this store/.test(message) ? staffText(message) : 'Your login can’t change this.'
+    case '42501': return /turned off for staff at this (?:pharmacy|location)|are locked at this store/.test(message) ? staffText(message) : 'Your login can’t change this.'
     case 'PGRST301': return 'Your sign-in has expired. Sign in again, then retry.'
     // An update that asked for its one row back got none: nothing changed.
     case 'PGRST116': return NOTHING_CHANGED

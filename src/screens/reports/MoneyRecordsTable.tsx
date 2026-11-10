@@ -59,7 +59,7 @@ export default function MoneyRecordsTable({ records, filename, compact = false }
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-medium text-slate-500">
               <th className="px-3 py-2">When</th>
-              {!compact && <th className="px-3 py-2">Pharmacy</th>}
+              {!compact && <th className="px-3 py-2">Location</th>}
               <th className="px-3 py-2">Order</th>
               {!compact && <th className="px-3 py-2">Customer</th>}
               <th className="px-3 py-2">What</th>

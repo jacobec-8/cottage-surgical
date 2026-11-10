@@ -40,7 +40,7 @@ export default function NewPharmacyForm({ onDone }: NewPharmacyFormProps) {
   const save = useMutation({
     mutationFn: async () => {
       const businessId = isAdmin ? form.businessId : viewingBusinessId ?? profile?.business_id
-      if (!businessId) throw new Error(isAdmin ? 'Choose the business this pharmacy belongs to.' : 'Your login has no business.')
+      if (!businessId) throw new Error(isAdmin ? 'Choose the business this location belongs to.' : 'Your login has no business.')
       const zips = form.deliveryZips.split(/[,\s]+/).map((zip) => zip.trim()).filter(Boolean)
       const { data, error } = await supabase.from('pickup_locations').insert({
         name: form.name.trim(), business_id: businessId,
@@ -51,8 +51,8 @@ export default function NewPharmacyForm({ onDone }: NewPharmacyFormProps) {
         delivery_zips: form.fulfillmentMode === 'pickup_and_delivery' ? zips : [],
         delivers_anywhere: form.fulfillmentMode === 'pickup_and_delivery' && form.deliversAnywhere,
       }).select('id').single()
-      if (error) throw new Error('Couldn’t add the pharmacy. Please try again.')
-      if (!data?.id) throw new Error('Couldn’t add the pharmacy. Please try again.')
+      if (error) throw new Error('Couldn’t add the location. Please try again.')
+      if (!data?.id) throw new Error('Couldn’t add the location. Please try again.')
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['locations_manager'] })
@@ -62,8 +62,8 @@ export default function NewPharmacyForm({ onDone }: NewPharmacyFormProps) {
   })
 
   return (
-    <SaveForm aria-label="New pharmacy" onSave={() => save.mutateAsync()} validate={() => locationProblems({ name: form.name, line1: form.line1, city: form.city, state: form.state, zip: form.zip, phone: form.phone, fulfillmentMode: form.fulfillmentMode, deliveryZips: form.deliveryZips, deliversAnywhere: form.deliversAnywhere, replyTo: '' })} savedMessage="Pharmacy added." errorClassName="mt-3" className="mb-6 rounded-2xl border border-slate-200 bg-white p-5">
-      <div className="mb-4 flex items-center gap-2"><Building2 size={18} className="text-blue-600" /><h2 className="text-lg font-semibold">New pharmacy</h2></div>
+    <SaveForm aria-label="New location" onSave={() => save.mutateAsync()} validate={() => locationProblems({ name: form.name, line1: form.line1, city: form.city, state: form.state, zip: form.zip, phone: form.phone, fulfillmentMode: form.fulfillmentMode, deliveryZips: form.deliveryZips, deliversAnywhere: form.deliversAnywhere, replyTo: '' })} savedMessage="Location added." errorClassName="mt-3" className="mb-6 rounded-2xl border border-slate-200 bg-white p-5">
+      <div className="mb-4 flex items-center gap-2"><Building2 size={18} className="text-blue-600" /><h2 className="text-lg font-semibold">New location</h2></div>
       <div className="grid gap-4 sm:grid-cols-2">
         {isAdmin && <label className="block text-sm sm:col-span-2"><span className="mb-1 block text-slate-600">Business</span>
           <select className={INPUT} value={form.businessId} onChange={(e) => set('businessId', e.target.value)}>
@@ -86,11 +86,11 @@ export default function NewPharmacyForm({ onDone }: NewPharmacyFormProps) {
           </select></label>
         {form.fulfillmentMode === 'pickup_and_delivery' && <>
           <label className="block text-sm"><span className="mb-1 block text-slate-600">Delivery ZIPs (comma separated)</span><Checked name="deliveryZips"><input className={INPUT} value={form.deliveryZips} onChange={(e) => set('deliveryZips', e.target.value)} /></Checked></label>
-          <label className="flex items-center gap-2 text-sm pt-6"><input type="checkbox" checked={form.deliversAnywhere} onChange={(e) => set('deliversAnywhere', e.target.checked)} /> Delivers anywhere no other pharmacy covers</label>
+          <label className="flex items-center gap-2 text-sm pt-6"><input type="checkbox" checked={form.deliversAnywhere} onChange={(e) => set('deliversAnywhere', e.target.checked)} /> <span>Default delivery location<span className="block text-xs text-slate-500">Takes delivery orders from ZIP codes no other location lists.</span></span></label>
         </>}
         <label className="block text-sm sm:col-span-2"><span className="mb-1 block text-slate-600">Pickup instructions</span><textarea className={INPUT} rows={2} value={form.notes} onChange={(e) => set('notes', e.target.value)} /></label>
       </div>
-      <div className="mt-4 flex justify-end"><SubmitButton className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50">{(pending) => pending ? 'Adding…' : 'Add pharmacy'}</SubmitButton></div>
+      <div className="mt-4 flex justify-end"><SubmitButton className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50">{(pending) => pending ? 'Adding…' : 'Add location'}</SubmitButton></div>
     </SaveForm>
   )
 }

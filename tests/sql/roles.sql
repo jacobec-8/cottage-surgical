@@ -1277,5 +1277,13 @@ SELECT test_as('a2000000-0000-0000-0000-000000000003'); SET ROLE authenticated;
 SELECT test_assert((update_business_details('a0000000-0000-0000-0000-00000000000a', 'Staff Rename', '', ''))->>'reason' = 'forbidden', 'staff cannot change business details');
 RESET ROLE;
 
+-- ── No "pharmacy" in what customers and staff read (148) ───────────────────
+SELECT test_as('');
+SELECT test_assert(NOT EXISTS (
+  SELECT 1 FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace AND p.proname NOT LIKE 'rx\_%'
+     AND regexp_replace(p.prosrc, '--[^\n]*', '', 'g') ~ '(the|a|this|by) pharmacy[ .'']|Pharmacy not found|which pharmacies'),
+  'customer emails and staff messages no longer say pharmacy: ' || COALESCE((SELECT string_agg(p.proname, ', ') FROM pg_proc p
+     WHERE p.pronamespace = 'public'::regnamespace AND p.proname NOT LIKE 'rx\_%' AND regexp_replace(p.prosrc, '--[^\n]*', '', 'g') ~ '(the|a|this|by) pharmacy[ .'']|Pharmacy not found|which pharmacies'), ''));
+
 SELECT test_as('');
 SELECT 'roles assertions passed' AS result;

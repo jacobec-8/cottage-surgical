@@ -63,7 +63,7 @@ export default function Login() {
             <div className="w-10 h-10 rounded-xl bg-white/10 grid place-items-center">
               <Shield size={22} />
             </div>
-            <span className="text-lg font-semibold">Pharmacy Portal</span>
+            <span className="text-lg font-semibold">Staff Portal</span>
           </div>
           <h1 className="text-4xl font-bold leading-tight mb-4">
             DME Rental

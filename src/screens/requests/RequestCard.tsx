@@ -62,7 +62,7 @@ export default function RequestCard({ r, s, selected, onOpen, onDecline }: {
             <div className="mt-1 flex items-start gap-1 text-sm text-purple-700">
               <MapPin size={14} className="mt-0.5 shrink-0" />
               <span>
-                <strong>Prepare at {place?.name ?? 'selected pharmacy'}</strong>
+                <strong>Prepare at {place?.name ?? 'the selected location'}</strong>
                 {r.pickup_location ? ` · ${[r.pickup_location.address_line1, r.pickup_location.address_city, r.pickup_location.address_state, r.pickup_location.address_zip].filter(Boolean).join(', ')}` : ''} · No driver needed
               </span>
             </div>
