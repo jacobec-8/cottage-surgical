@@ -25,11 +25,15 @@ export default function AddLoginForm({ locations, defaultLocationId, onClose, on
     locationId: defaultLocationId ?? (locations.length === 1 ? locations[0].id : ''),
     role: 'staff', fullName: '', phone: '', username: '', password: '',
   })
+  // Staff may also work at the owner's other locations (151); a driver has one home.
+  const [alsoAt, setAlsoAt] = useState<string[]>([])
   const set = <K extends keyof NewLoginDraft>(key: K, value: NewLoginDraft[K]) => setDraft((current) => ({ ...current, [key]: value }))
+  const others = locations.filter((l) => l.id !== draft.locationId)
+  const worksAt = draft.role === 'staff' ? [draft.locationId, ...alsoAt.filter((id) => id !== draft.locationId)] : [draft.locationId]
   const create = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.rpc('add_branch_login', {
-        p_location_id: draft.locationId, p_role: draft.role, p_full_name: draft.fullName.trim(),
+      const { data, error } = await supabase.rpc('add_login_at_locations', {
+        p_location_ids: worksAt, p_role: draft.role, p_full_name: draft.fullName.trim(),
         p_phone: draft.phone.trim(), p_username: draft.username.trim().toLowerCase(), p_password: draft.password,
       })
       if (error) throw new Error('Couldn’t add the login. Please try again.')
@@ -49,9 +53,9 @@ export default function AddLoginForm({ locations, defaultLocationId, onClose, on
         <button type="button" onClick={onClose} aria-label="Close" className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100"><X size={16} /></button>
       </div>
       <div className="grid sm:grid-cols-2 gap-4">
-        <Field label="Store">
+        <Field label={draft.role === 'driver' ? 'Home location' : 'Location'}>
           <Checked name="locationId"><select className={INPUT} value={draft.locationId} onChange={(e) => set('locationId', e.target.value)}>
-            <option value="">Choose a store…</option>
+            <option value="">Choose a location…</option>
             {locations.map((location) => <option key={location.id} value={location.id}>{location.name}{location.is_active ? '' : ' (not open)'}</option>)}
           </select></Checked>
         </Field>
@@ -61,6 +65,20 @@ export default function AddLoginForm({ locations, defaultLocationId, onClose, on
             <option value="driver">Driver</option>
           </select>
         </Field>
+        {draft.role === 'staff' && draft.locationId && others.length > 0 && (
+          <fieldset className="sm:col-span-2">
+            <legend className="mb-1 block text-xs font-medium text-slate-500">Also works at</legend>
+            <div className="flex flex-wrap gap-x-5 gap-y-1">
+              {others.map((l) => (
+                <label key={l.id} className="flex min-h-10 items-center gap-2 text-sm text-slate-700">
+                  <input type="checkbox" className="h-4 w-4" checked={alsoAt.includes(l.id)}
+                    onChange={(e) => setAlsoAt((current) => (e.target.checked ? [...current, l.id] : current.filter((id) => id !== l.id)))} />
+                  {l.name}{l.is_active ? '' : ' (not open)'}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        )}
         <Field label="Full name"><Checked name="fullName"><input className={INPUT} value={draft.fullName} onChange={(e) => set('fullName', e.target.value)} /></Checked></Field>
         <Field label="Phone (optional)"><Checked name="phone"><input className={INPUT} value={draft.phone} onChange={(e) => set('phone', e.target.value)} /></Checked></Field>
         <Field label="Username"><Checked name="username"><input className={INPUT} autoComplete="off" value={draft.username} onChange={(e) => set('username', e.target.value.toLowerCase())} /></Checked></Field>

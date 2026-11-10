@@ -1359,5 +1359,24 @@ SELECT test_assert((SELECT r->'errors'->0->>'field' = 'stocks' FROM multi_foreig
 SELECT test_assert((SELECT r->'errors'->0->>'field' = 'stock' FROM multi_badstock), 'a stock that isn''t a number is refused');
 SELECT test_assert(NOT EXISTS (SELECT 1 FROM equipment_items WHERE name IN ('Multi Foreign', 'Multi Bad')), 'refused batches add nothing');
 
+-- ── A new staff login at several locations (151) ────────────────────────────
+SELECT test_as('a2000000-0000-0000-0000-000000000002'); SET ROLE authenticated;
+CREATE TEMP TABLE login_two AS SELECT add_login_at_locations(ARRAY['a1000000-0000-0000-0000-0000000000a2', 'a1000000-0000-0000-0000-0000000000a1']::uuid[],
+  'staff', 'Two Places', '', 'qa-two-places', 'password-90') AS r;
+CREATE TEMP TABLE login_driver_two AS SELECT add_login_at_locations(ARRAY['a1000000-0000-0000-0000-0000000000a1', 'a1000000-0000-0000-0000-0000000000a2']::uuid[],
+  'driver', 'Two Homes', '', 'qa-two-homes', 'password-90') AS r;
+CREATE TEMP TABLE login_foreign AS SELECT add_login_at_locations(ARRAY['a1000000-0000-0000-0000-0000000000a1', 'a1000000-0000-0000-0000-0000000000b1']::uuid[],
+  'staff', 'Reach Over', '', 'qa-reach-over', 'password-90') AS r;
+RESET ROLE;
+SELECT test_as('');
+SELECT test_assert((SELECT (r->>'ok')::boolean FROM login_two), 'the owner adds staff at two locations: ' || (SELECT r::text FROM login_two));
+SELECT test_assert((SELECT count(*) = 2 FROM memberships m JOIN profiles p ON p.id = m.user_id
+                     WHERE p.email = 'qa-two-places@staff-login.cottagesurgical.invalid' AND m.scope_type = 'location' AND m.role = 'staff'),
+  'the login works at both locations');
+SELECT test_assert((SELECT r->>'reason' = 'driver_one_home' FROM login_driver_two), 'a driver has one home location');
+SELECT test_assert((SELECT r->>'reason' = 'other_business' FROM login_foreign), 'another owner''s location is refused: ' || (SELECT r::text FROM login_foreign));
+SELECT test_assert(NOT EXISTS (SELECT 1 FROM auth.users WHERE email IN ('qa-two-homes@staff-login.cottagesurgical.invalid', 'qa-reach-over@staff-login.cottagesurgical.invalid')),
+  'a refused login is not created at all');
+
 SELECT test_as('');
 SELECT 'roles assertions passed' AS result;
