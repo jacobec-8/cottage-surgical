@@ -7,6 +7,7 @@ import { Building2, ChevronRight, Globe, MapPin, Plus, Store, Users } from 'luci
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import NewPharmacyForm from './locations/NewPharmacyForm'
+import SignupRequests from './locations/SignupRequests'
 
 type LocationUser = {
   id: string
@@ -57,9 +58,16 @@ export default function Locations() {
           {profile?.role === 'admin' && <Link href="/locations/onboard" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-blue-200 px-4 text-sm font-medium text-blue-700 hover:bg-blue-50">Onboard a business</Link>}
         </div>
       </div>
+      {profile?.role === 'admin' && <SignupRequests />}
       {adding && <NewPharmacyForm onDone={() => { setAdding(false); void locations.refetch() }} />}
       {locations.isLoading && <div className="text-sm text-slate-500">Loading locations…</div>}
       {locations.error && <div className="text-sm text-red-600">Couldn’t load locations.</div>}
+      {locations.data?.length === 0 && !adding && (
+        <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center">
+          <h2 className="text-lg font-semibold">No pharmacies yet</h2>
+          <p className="mt-1 text-sm text-slate-600">Add your first pharmacy with <strong>New pharmacy</strong>. Then add its staff, and your products on Inventory.</p>
+        </div>
+      )}
       <div className="grid gap-4 lg:grid-cols-2">
         {(locations.data ?? []).map((location) => (
           <Link key={location.id} href={`/locations/${location.id}`} className={`group rounded-2xl border border-slate-200 bg-white p-5 transition hover:border-blue-300 hover:shadow-sm ${location.is_active ? '' : 'opacity-60'}`}>

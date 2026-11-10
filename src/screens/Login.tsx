@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useState } from 'react'
 import { Checked, FieldMarks, fieldErrorsOf, focusFirstProblem } from '../components/SaveForm'
 import { signInProblems } from '../lib/formChecks/peopleChecks'
@@ -7,6 +8,8 @@ import type { FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { Shield, ClipboardList, Truck, CreditCard, Package, Eye, EyeOff, LogIn } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { supabase } from '../lib/supabase'
+import { signupStatusMessage } from '../lib/ownerSignup'
 
 const FEATURES = [
   { icon: ClipboardList, title: 'Customer Management', desc: 'Full intake with payment method on file' },
@@ -29,9 +32,11 @@ export default function Login() {
     setBusy(true)
     setError('')
     const { error } = await signIn(loginUsername, pw)
-    setBusy(false)
-    if (error) setError(error)
-    else {
+    if (error) {
+      setError((await waitingSignupMessage(loginUsername)) ?? error)
+      setBusy(false)
+    } else {
+      setBusy(false)
       router.push('/admin')
       router.refresh()
     }
@@ -137,9 +142,19 @@ export default function Login() {
               </button>
             </FieldMarks></form>
           </div>
-          <p className="text-center text-xs text-slate-400 mt-4">Staff sign-in</p>
+          <p className="text-center text-sm text-slate-500 mt-4">New business? <Link href="/owner-signup" className="font-medium text-blue-700 hover:underline">Sign up</Link></p>
+          <p className="text-center text-xs text-slate-400 mt-2">Staff sign-in</p>
         </div>
       </div>
     </div>
   )
+}
+
+/** A sign-in that fails for someone whose sign-up is still waiting (or was declined) says so (143). */
+async function waitingSignupMessage(username: string): Promise<string | null> {
+  const name = username.trim().toLowerCase()
+  if (!name || name.includes('@')) return null
+  const { data, error } = await supabase.rpc('owner_signup_status', { p_username: name })
+  if (error) return null // the plain sign-in error still shows
+  return signupStatusMessage(typeof data === 'string' ? data : null)
 }
