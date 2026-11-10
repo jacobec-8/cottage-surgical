@@ -82,7 +82,7 @@ export default function OwnerSetup() {
         )}
 
         {step === 'pharmacy' && (
-          <Step intro="Where customers pick up, and where you deliver from. Add more pharmacies later on Locations.">
+          <Step intro="Where customers pick up, and where you deliver from. Add more locations later on Locations.">
             <PharmacyStep locations={locations} onBack={() => go('details')} onNext={() => go('products')} />
           </Step>
         )}
@@ -94,13 +94,13 @@ export default function OwnerSetup() {
                 <QuickProductForm businessId={businessId} pharmacy={{ id: first.id, name: first.name, delivers: first.fulfillment_mode === 'pickup_and_delivery' }} />
                 <AddedList icon={<Package size={16} />} empty="No products yet." items={(products.data ?? []).map((p) => ({ id: p.id, label: p.name, detail: [p.is_rentable && 'rent', p.is_purchasable && 'sell'].filter(Boolean).join(' & ') }))} />
               </div>
-            ) : <p className="text-sm text-slate-600">Add a pharmacy first.</p>}
+            ) : <p className="text-sm text-slate-600">Add a location first.</p>}
             <Nav onBack={() => go('pharmacy')} onNext={() => go('staff')} nextLabel={(products.data?.length ?? 0) ? 'Continue' : 'Add products later'} />
           </Step>
         )}
 
         {step === 'staff' && (
-          <Step intro="Give each person their own login. Staff work at one pharmacy; drivers see only their stops. Choose what staff can do on Staff → Staff Access later.">
+          <Step intro="Give each person their own login. Staff work at one location; drivers see only their stops. Choose what staff can do on Staff → Staff Access later.">
             <StaffStep locations={locations} />
             <Nav onBack={() => go('products')} onNext={() => go('done')} nextLabel="Continue" />
           </Step>
@@ -149,9 +149,9 @@ function PharmacyStep({ locations, onBack, onNext }: { locations: Locs; onBack: 
   return (
     <div className="space-y-4">
       {adding && <NewPharmacyForm onDone={() => setAdding(false)} />}
-      <AddedList icon={<MapPin size={16} />} empty="No pharmacies yet." items={locations.map((l) => ({ id: l.id, label: l.name, detail: `${l.address_line1}, ${l.address_city}` }))} />
+      <AddedList icon={<MapPin size={16} />} empty="No locations yet." items={locations.map((l) => ({ id: l.id, label: l.name, detail: `${l.address_line1}, ${l.address_city}` }))} />
       {!adding && (
-        <button type="button" onClick={() => setAdding(true)} className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-700 hover:underline"><Plus size={15} /> Add another pharmacy</button>
+        <button type="button" onClick={() => setAdding(true)} className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-700 hover:underline"><Plus size={15} /> Add another location</button>
       )}
       <Nav onBack={onBack} onNext={onNext} nextLabel="Continue" disabled={locations.length === 0} />
     </div>

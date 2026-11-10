@@ -71,13 +71,13 @@ export default function OwnerSignup() {
             <div role="status">
               <CheckCircle2 className="text-green-600 mb-3" size={32} />
               <h1 className="text-xl font-bold">Thanks, your sign-up is in</h1>
-              <p className="mt-2 text-sm text-slate-600">An admin will review it. You can sign in as <strong>{signupPayload(draft).username}</strong> once it is approved, then add your pharmacies, staff and products.</p>
+              <p className="mt-2 text-sm text-slate-600">An admin will review it. You can sign in as <strong>{signupPayload(draft).username}</strong> once it is approved, then add your locations, staff and products.</p>
               <Link href="/admin-login" className="mt-6 inline-flex w-full items-center justify-center rounded-lg bg-blue-600 py-2.5 text-sm font-medium text-white hover:bg-blue-700">Back to sign in</Link>
             </div>
           ) : (
             <>
               <h1 className="flex items-center gap-2 text-xl font-bold"><Building2 size={20} className="text-blue-600" /> Sign up your business</h1>
-              <p className="text-sm text-slate-500 mb-6">For pharmacy owners. An admin approves each sign-up before you can sign in.</p>
+              <p className="text-sm text-slate-500 mb-6">For business owners. An admin approves each sign-up before you can sign in.</p>
               <form method="post" noValidate onSubmit={submit}><FieldMarks errors={marks}>
                 {field('businessName', 'BUSINESS NAME', { autoComplete: 'organization' })}
                 {field('fullName', 'YOUR NAME', { autoComplete: 'name' })}

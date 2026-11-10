@@ -52,12 +52,12 @@ export function StoreComparison({ stores, onOpen }: { stores: StoreReport[]; onO
   const showMoney = stores.every((s) => s.money)
   return (
     <section>
-      <h2 className="mb-2 text-base font-semibold text-slate-900">By pharmacy</h2>
+      <h2 className="mb-2 text-base font-semibold text-slate-900">By location</h2>
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
         <table className="w-full min-w-[820px] text-sm">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-medium text-slate-500">
-              <th className="px-4 py-2.5">Pharmacy</th>
+              <th className="px-4 py-2.5">Location</th>
               {showMoney && <><th className="px-3 py-2.5 text-right">Revenue</th><th className="px-3 py-2.5 text-right">Overdue now</th></>}
               <th className="px-3 py-2.5 text-right">Rentals out</th>
               <th className="px-3 py-2.5 text-right">Started</th>

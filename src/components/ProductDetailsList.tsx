@@ -101,7 +101,7 @@ export default function ProductDetailsList({ item, edits, openField }: { item: P
       <Row label={`Online sales${where}`} value={!store ? noStore : edits?.retailOn == null ? '…' : edits.retailOn ? 'On' : 'Off: customers can’t buy online'}
         editor={retailEdit && edits?.retailOn != null ? (done) => <YesNoEditor question="Sell online?" initial={edits.retailOn!} done={done} save={(v) => edits!.setRetail(v)} /> : undefined} />
 
-      {!store && <div className="text-xs text-slate-500 sm:col-span-2">New pharmacies start at these prices; each pharmacy then sets its own.</div>}
+      {!store && <div className="text-xs text-slate-500 sm:col-span-2">New locations start at these prices; each location then sets its own.</div>}
       <Row locked={priceLocked} label={store ? 'Pickup rental' : 'Starting pickup price'} value={pickupOn && pickupPrice != null ? money(pickupPrice, '/mo')! : `Not offered${where}`}
         editor={priceEdit ? (done) => <PickupEditor where={where} initialOn={pickupOn} initialPrice={pickupPrice} done={done}
           save={(on, price) => (store ? edits!.saveStore({ pickup_enabled: on, pickup_rental_price: price }) : edits!.saveProduct({ pickup_enabled: on, pickup_rental_price: price }))} /> : undefined} />

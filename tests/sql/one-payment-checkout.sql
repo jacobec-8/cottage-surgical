@@ -378,9 +378,9 @@ SELECT test_assert((:'r'::jsonb->>'ok')::boolean AND (SELECT status = 'requested
   'an unpaid delivery request is paid to the store');
 SELECT (:'r'::jsonb->>'order_id') AS pay_later_delivery \gset
 SELECT test_assert(EXISTS (SELECT 1 FROM customer_email_outbox WHERE order_id = :'pay_later_delivery' AND event_key = 'request_received'
-    AND text_body LIKE '%pharmacy will call you to take payment%')
+    AND text_body LIKE '%We will call you to take payment%')
   AND NOT EXISTS (SELECT 1 FROM customer_email_outbox WHERE order_id = :'pay_later_delivery' AND text_body ILIKE '%delivery person%'),
-  'the request mail says the pharmacy will call to take payment, never the delivery person');
+  'the request mail says we will call to take payment, never the delivery person');
 SET ROLE anon;
 SELECT submit_rental_request_once(gen_random_uuid(), 'rental', :'one_each', :'customer', :'address', NULL,
   '{"method": "delivery", "delivery_zip": "11747", "payment_method": "on_delivery"}') AS r \gset

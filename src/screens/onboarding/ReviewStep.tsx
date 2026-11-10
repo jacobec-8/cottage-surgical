@@ -37,7 +37,7 @@ export default function ReviewStep({ draft, ownerName, catalog, go, ownerNames }
           <ReviewCard key={location.key} title={locationLabel(location, index)} edit={() => go(0)}>
             <p>{location.line1}{location.line2 ? `, ${location.line2}` : ''}, {location.city}, {location.state} {location.zip}</p>
             <p>{delivers ? 'Pickup and delivery' : 'Pickup only'} · {location.partnerType === 'owned' ? 'Owned' : 'Partner'} · {location.active ? 'Open to customers' : 'Not yet open to customers'}</p>
-            {delivers && <p>Delivers to: {location.deliveryZips.trim() || 'no ZIP codes listed'}{location.deliversAnywhere ? ', plus ZIP codes no other business lists' : ''}</p>}
+            {delivers && <p>Delivers to: {location.deliveryZips.trim() || 'no ZIP codes listed'}{location.deliversAnywhere ? ' (default delivery location)' : ''}</p>}
             {delivers && <p className="text-amber-700">Add its drivers on the Drivers page before booking deliveries.</p>}
             <p className="pt-2 font-medium text-slate-800">Stock · {location.stock.length} product{location.stock.length === 1 ? '' : 's'}, {quantity} item{quantity === 1 ? '' : 's'}</p>
             {location.stock.length ? (

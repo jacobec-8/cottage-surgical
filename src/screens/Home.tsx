@@ -41,7 +41,7 @@ function SetupPrompt({ isOwner }: { isOwner: boolean }) {
   return (
     <div className="mb-6 flex flex-col gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
       <span className="flex items-center gap-2 text-sm text-blue-900"><Sparkles size={16} className="shrink-0" />
-        <span><strong>{business.data?.name}</strong> isn’t fully set up yet. The setup guide takes you through your pharmacy, products and staff.</span>
+        <span><strong>{business.data?.name}</strong> isn’t fully set up yet. The setup guide takes you through your location, products and staff.</span>
       </span>
       <Link href="/setup" className="inline-flex min-h-10 shrink-0 items-center rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700">Continue setup</Link>
     </div>

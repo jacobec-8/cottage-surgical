@@ -17,7 +17,7 @@ export default function ItemsTable({ items }: { items: ItemReport[] }) {
         Most rented first. {idle > 0 ? `${idle} item${idle === 1 ? '' : 's'} didn’t go out at all this period.` : ''}
       </p>
       {items.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-slate-200 px-3 py-2.5 text-sm text-slate-400">No equipment at this pharmacy yet.</div>
+        <div className="rounded-lg border border-dashed border-slate-200 px-3 py-2.5 text-sm text-slate-400">No equipment at this location yet.</div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
           <table className="w-full min-w-[560px] text-sm">

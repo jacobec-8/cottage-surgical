@@ -70,7 +70,7 @@ test('a refused quote says why, before the customer tries to pay', () => {
   assert.equal(quoteProblem({ ok: true }, 'delivery'), null)
   assert.equal(quoteProblem({ ok: false, reason: 'no_items' }, 'delivery'), null)
   assert.equal(quoteProblem({ ok: false, reason: 'something_new' }, 'delivery'), null)
-  assert.match(quoteProblem({ ok: false, reason: 'delivery_unavailable' }, 'delivery')!, /One pharmacy can’t deliver everything/)
+  assert.match(quoteProblem({ ok: false, reason: 'delivery_unavailable' }, 'delivery')!, /One location can’t deliver everything/)
   assert.match(quoteProblem({ ok: false, reason: 'purchases_disabled' }, 'delivery')!, /doesn’t sell online/)
   assert.match(quoteProblem({ ok: false, reason: 'outside_delivery_area', zip: '11999' }, 'delivery')!, /deliver to 11999/)
   assert.match(quoteProblem({ ok: false, reason: 'out_of_stock', shortages: [] }, 'delivery')!, /./)

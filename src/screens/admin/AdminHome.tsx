@@ -25,7 +25,7 @@ export default function AdminHome() {
 
       <div className="mt-6 grid gap-3 sm:grid-cols-3">
         <Stat icon={<Building2 size={18} />} label="Active owners" value={owners.isLoading ? '…' : active.length} />
-        <Stat icon={<Store size={18} />} label="Pharmacies open" value={owners.isLoading ? '…' : active.reduce((n, o) => n + o.open_pharmacies, 0)} />
+        <Stat icon={<Store size={18} />} label="Locations open" value={owners.isLoading ? '…' : active.reduce((n, o) => n + o.open_pharmacies, 0)} />
         <Stat icon={<ClipboardList size={18} />} label="Orders, last 30 days" value={owners.isLoading ? '…' : active.reduce((n, o) => n + o.orders_30d, 0)} />
       </div>
 
@@ -36,7 +36,7 @@ export default function AdminHome() {
           <h2 id="setting-up" className="text-lg font-semibold">Owners still setting up <span className="text-slate-400">({settingUp.length})</span></h2>
           <Link href="/owners" className="inline-flex items-center gap-1 text-sm font-medium text-blue-700 hover:underline">All owners <ArrowRight size={14} /></Link>
         </div>
-        <p className="mt-0.5 text-sm text-slate-600">Active owners missing a pharmacy, products or staff. They add these themselves; open their workspace to help.</p>
+        <p className="mt-0.5 text-sm text-slate-600">Active owners missing a location, products or staff. They add these themselves; open their workspace to help.</p>
         {owners.error && <p role="alert" className="mt-3 text-sm text-red-600">Couldn’t load owners. Please refresh.</p>}
         {owners.isLoading && <p className="mt-3 text-sm text-slate-500">Loading…</p>}
         {!owners.isLoading && !owners.error && settingUp.length === 0 && (

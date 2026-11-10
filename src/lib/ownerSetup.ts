@@ -8,7 +8,7 @@ export type SetupStep = 'details' | 'pharmacy' | 'products' | 'staff' | 'done'
 
 export const SETUP_STEPS: readonly { key: SetupStep; label: string }[] = [
   { key: 'details', label: 'Your business' },
-  { key: 'pharmacy', label: 'First pharmacy' },
+  { key: 'pharmacy', label: 'First location' },
   { key: 'products', label: 'Products' },
   { key: 'staff', label: 'Staff' },
   { key: 'done', label: 'All set' },
@@ -17,7 +17,7 @@ export const SETUP_STEPS: readonly { key: SetupStep; label: string }[] = [
 /** Where each thing set up here is changed later; shown at the end and on the Business page. */
 export const CHANGE_LATER: readonly { what: string; where: string; href: string }[] = [
   { what: 'Business name, phone and email', where: 'Business', href: '/business' },
-  { what: 'Pharmacies, addresses and delivery areas', where: 'Locations', href: '/locations' },
+  { what: 'Locations, addresses and delivery areas', where: 'Locations', href: '/locations' },
   { what: 'Products, prices and stock', where: 'Inventory', href: '/inventory' },
   { what: 'Staff, drivers and what staff can do', where: 'Staff', href: '/staff' },
   { what: 'Orders and customers', where: 'Orders', href: '/orders' },

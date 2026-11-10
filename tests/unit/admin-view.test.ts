@@ -14,8 +14,8 @@ test('a set-up owner has no gaps', () => {
 })
 
 test('a new owner shows what is still missing, in the order they set it up', () => {
-  assert.deepEqual(ownerSetupGaps(owner({ pharmacies: 0, open_pharmacies: 0, products: 0, staff_logins: 0 })), ['No pharmacies yet', 'No products yet', 'No staff logins yet'])
-  assert.deepEqual(ownerSetupGaps(owner({ open_pharmacies: 0 })), ['No pharmacy open yet'])
+  assert.deepEqual(ownerSetupGaps(owner({ pharmacies: 0, open_pharmacies: 0, products: 0, staff_logins: 0 })), ['No locations yet', 'No products yet', 'No staff logins yet'])
+  assert.deepEqual(ownerSetupGaps(owner({ open_pharmacies: 0 })), ['No location open yet'])
   assert.deepEqual(ownerSetupGaps(owner({ owner_logins: 0 })), ['No owner login'])
 })
 

@@ -45,7 +45,7 @@ export default function LocationEditor({ location, index, hasOwner, newOwner = f
 function Details({ location, onChange }: Pick<Props, 'location' | 'onChange'>) {
   return (
     <div className="grid gap-4 sm:grid-cols-2">
-      <div className="sm:col-span-2"><TextField label="Business name" required value={location.name} onChange={(name) => onChange({ name })} placeholder="e.g. 110 Pharmacy & Surgical" /></div>
+      <div className="sm:col-span-2"><TextField label="Business name" required value={location.name} onChange={(name) => onChange({ name })} placeholder="e.g. Northside Medical Supply" /></div>
       <div className="sm:col-span-2"><TextField label="Street address" required value={location.line1} onChange={(line1) => onChange({ line1 })} /></div>
       <div className="sm:col-span-2"><TextField label="Suite / unit" value={location.line2} onChange={(line2) => onChange({ line2 })} /></div>
       <TextField label="City" required value={location.city} onChange={(city) => onChange({ city })} />
@@ -64,7 +64,7 @@ function Details({ location, onChange }: Pick<Props, 'location' | 'onChange'>) {
           <TextField label="Delivery ZIP codes" required={!location.deliversAnywhere} value={location.deliveryZips} onChange={(deliveryZips) => onChange({ deliveryZips })} placeholder="e.g. 11954, 11930" />
           <p className="mt-1 text-xs text-slate-500">Website deliveries for these ZIP codes go to this business only. No other business takes them.</p>
           <label className="mt-3 flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={location.deliversAnywhere} onChange={(e) => onChange({ deliversAnywhere: e.target.checked })} />
-            <span>Also deliver to ZIP codes no other business lists</span></label>
+            <span>Default delivery location<span className="block text-xs text-slate-500">Takes delivery orders from ZIP codes no other location lists.</span></span></label>
         </div>
       )}
       <Field label="Relationship">

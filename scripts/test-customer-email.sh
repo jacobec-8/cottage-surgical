@@ -66,6 +66,8 @@ if ! psql_checkout -f supabase/migrations/129_store_collects_payment.sql > "$qa_
 # 136 replaced their checkout functions (prices at each pharmacy); re-running it restores the latest, as the full sequence would.
 if ! psql_checkout -f supabase/migrations/136_prices_once.sql > "$qa_cluster/checkout-rerun.log" 2>&1; then cat "$qa_cluster/checkout-rerun.log"; exit 1; fi
 if ! psql_checkout -f supabase/migrations/139_section_switches.sql > "$qa_cluster/checkout-rerun.log" 2>&1; then cat "$qa_cluster/checkout-rerun.log"; exit 1; fi
+# 148 reworded the customer emails those functions write; re-running it keeps the latest wording.
+if ! psql_checkout -f supabase/migrations/148_location_wording.sql > "$qa_cluster/checkout-rerun.log" 2>&1; then cat "$qa_cluster/checkout-rerun.log"; exit 1; fi
 if ! psql_checkout -f tests/sql/one-payment-checkout.sql > "$qa_cluster/checkout.log" 2>&1; then cat "$qa_cluster/checkout.log"; exit 1; fi
 echo "PASS one-payment-checkout (a rental and a purchase on one Stripe session, fake HTTP)"
 

@@ -33,6 +33,6 @@ test('make-it-live list names exactly what is missing, from the store’s own va
   assert.deepEqual(liveChecklist({ ...retail, stock: 3, salePrice: 25 }), ['Turn on online sales'])
   assert.deepEqual(liveChecklist({ ...retail, stock: 3, salePrice: 25, retailOn: true }), [])
   assert.deepEqual(liveChecklist({ ...retail, rentable: true, purchasable: false, rentalPrice: null }), ['Set a rental price'])
-  assert.deepEqual(liveChecklist({ ...retail, rentable: true, purchasable: false, rentalPrice: 40, storeOpen: false }), ['Put this pharmacy on the website (owner: Locations)'])
+  assert.deepEqual(liveChecklist({ ...retail, rentable: true, purchasable: false, rentalPrice: 40, storeOpen: false }), ['Put this location on the website (owner: Locations)'])
   assert.deepEqual(liveChecklist({ ...retail, active: false }), ['Restore it to the catalog'])
 })

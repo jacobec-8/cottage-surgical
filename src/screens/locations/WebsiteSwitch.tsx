@@ -37,10 +37,10 @@ export default function WebsiteSwitch({ locationId, businessId, onWebsite, activ
   })
 
   const note = noWebsite
-    ? 'This owner has no website yet, so their pharmacies take counter and phone orders. Once their website is set up, switch pharmacies onto it here.'
+    ? 'This owner has no website yet, so their locations take counter and phone orders. Once their website is set up, switch locations onto it here.'
     : onWebsite
-    ? `This pharmacy’s stock counts on the website and website orders can come here. Its prices stay its own.${active ? '' : ' It is inactive, so the website skips it until it is active again.'}`
-    : 'Counter only: the website doesn’t show this pharmacy’s stock or send it orders.'
+    ? `This location’s stock counts on the website and website orders can come here. Its prices stay its own.${active ? '' : ' It is inactive, so the website skips it until it is active again.'}`
+    : 'Counter only: the website doesn’t show this location’s stock or send it orders.'
 
   return (
     <section className="mb-5 rounded-2xl border border-slate-200 bg-white p-5">

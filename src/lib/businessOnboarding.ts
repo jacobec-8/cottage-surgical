@@ -100,7 +100,7 @@ function ownerProblem(draft: OnboardingDraft): string | null {
 export function locationProblem(draft: OnboardingDraft, index: number): string | null {
   const location = draft.locations[index]
   const prefix = `${locationLabel(location, index)}: `
-  if (location.name.trim().length < 2) return prefix + 'enter the business name, such as the pharmacy name and town.'
+  if (location.name.trim().length < 2) return prefix + 'enter the business name, such as the store name and town.'
   if (draft.locations.some((other, i) => i !== index && norm(other.name) === norm(location.name))) return prefix + 'each business needs its own name.'
   if (location.line1.trim().length < 2 || location.city.trim().length < 2) return prefix + 'enter the street address and city.'
   if (!/^[A-Za-z]{2}$/.test(location.state.trim())) return prefix + 'use the two-letter state abbreviation.'

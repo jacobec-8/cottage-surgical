@@ -43,7 +43,7 @@ export default function Reports() {
   const current = stores.length === 1 ? stores[0] : stores.length ? combine(stores) : null
   const prevStores = previous.data?.stores ?? []
   const before = prevStores.length === 1 ? prevStores[0] : prevStores.length ? combine(prevStores) : null
-  const scopeName = selectedLocation?.name ?? (stores.length === 1 ? stores[0].name : 'All pharmacies')
+  const scopeName = selectedLocation?.name ?? (stores.length === 1 ? stores[0].name : 'All locations')
 
   return (
     <div className="space-y-6">

@@ -66,7 +66,7 @@ function PayStep({ o, method, payment }: { o: OrderDetail; method: FlowMethod; p
         </a>
       )}
       {!access.canAccess('billing')
-        ? <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900">Billing is turned off for you at this pharmacy. Ask the owner to take the payment.</p>
+        ? <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900">Billing is turned off for you at this location. Ask the owner to take the payment.</p>
         : payment.confirming
           ? <MarkPaidForm method="Paid in store" due={amountDue(o)} deposit={depositHeld(o.deposits)} pending={payment.pending}
               onConfirm={payment.confirm} onCancel={payment.cancel} />
@@ -86,7 +86,7 @@ function useGetReady({ o, onMessage }: StepProps) {
 
 function ReadyStep(props: StepProps) {
   const ready = useGetReady(props)
-  const place = props.o.pickup_location?.name ?? 'the pharmacy'
+  const place = props.o.pickup_location?.name ?? 'the store'
   return (
     <div className="space-y-3 text-sm text-slate-700">
       <p>Set the equipment aside at {place} and get it ready. The customer pays and finishes the rental paperwork when they come in.</p>
