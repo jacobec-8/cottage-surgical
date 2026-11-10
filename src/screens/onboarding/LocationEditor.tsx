@@ -11,6 +11,8 @@ type Props = {
   index: number
   /** False until an owner is chosen; the catalog is that owner's products. */
   hasOwner: boolean
+  /** A new owner, created in this setup: no products yet. */
+  newOwner?: boolean
   others: { location: LocationDraft; index: number }[]
   catalog: { data?: CatalogItem[]; isLoading: boolean; error: unknown; refetch: () => void }
   onChange: (patch: Partial<LocationDraft>) => void
@@ -19,7 +21,7 @@ type Props = {
 const TABS = ['Details', 'Stock', 'Staff'] as const
 
 /** One business: address and services, the stock it starts with, and its staff logins. */
-export default function LocationEditor({ location, index, hasOwner, others, catalog, onChange }: Props) {
+export default function LocationEditor({ location, index, hasOwner, newOwner = false, others, catalog, onChange }: Props) {
   const [tab, setTab] = useState<(typeof TABS)[number]>('Details')
   const label = locationLabel(location, index)
   const quantity = location.stock.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0)
@@ -34,7 +36,7 @@ export default function LocationEditor({ location, index, hasOwner, others, cata
         ))}
       </div>
       {tab === 'Details' && <Details location={location} onChange={onChange} />}
-      {tab === 'Stock' && <Stock location={location} hasOwner={hasOwner} others={others} catalog={catalog} onChange={onChange} />}
+      {tab === 'Stock' && <Stock location={location} hasOwner={hasOwner} newOwner={newOwner} others={others} catalog={catalog} onChange={onChange} />}
       {tab === 'Staff' && <Staff location={location} onChange={onChange} />}
     </div>
   )
@@ -79,7 +81,7 @@ function Details({ location, onChange }: Pick<Props, 'location' | 'onChange'>) {
   )
 }
 
-function Stock({ location, hasOwner, others, catalog, onChange }: Omit<Props, 'index'>) {
+function Stock({ location, hasOwner, newOwner, others, catalog, onChange }: Omit<Props, 'index'>) {
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('all')
   const [selectedOnly, setSelectedOnly] = useState(false)
@@ -150,7 +152,9 @@ function Stock({ location, hasOwner, others, catalog, onChange }: Omit<Props, 'i
           )
         })}
       </div>
-      {!hasOwner && <p className="rounded-xl bg-slate-50 p-6 text-center text-sm text-slate-500">Choose the owner first. Each business stocks that owner’s products.</p>}
+      {!hasOwner && <p className="rounded-xl bg-slate-50 p-6 text-center text-sm text-slate-500">{newOwner
+        ? 'A new owner has no products yet. After setup, the owner adds products on Inventory, then sets each business’s stock and prices.'
+        : 'Choose the owner first. Each business stocks that owner’s products.'}</p>}
       {hasOwner && !catalog.isLoading && !catalog.error && !visible.length && <p className="rounded-xl bg-slate-50 p-6 text-center text-sm text-slate-500">No products match these filters.</p>}
       <p className="mt-4 text-xs text-slate-500">You can continue with no stock and add equipment later in Inventory.</p>
     </div>
