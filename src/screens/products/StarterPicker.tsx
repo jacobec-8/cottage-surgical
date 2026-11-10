@@ -17,7 +17,18 @@ const INPUT = 'w-full rounded-lg border border-slate-300 px-2.5 py-2 text-sm foc
 const SHOWN = 40
 
 /** Choose products from the shared starter list (149), then set your prices and stock for each. */
-export default function StarterPicker({ target, onAdded, hideNames }: { target: AddTarget; onAdded?: () => void; hideNames?: ReadonlySet<string> }) {
+type PickerProps = {
+  target: AddTarget
+  onAdded?: () => void
+  /** Left out of the list (the setup guide offers these under Your products). */
+  hideNames?: ReadonlySet<string>
+  /** Shown greyed as "Already here" (Inventory: products this location carries). */
+  hereNames?: ReadonlySet<string>
+  /** The whole list greyed out, nothing pickable (adding is switched off for staff here). */
+  disabled?: boolean
+}
+
+export default function StarterPicker({ target, onAdded, hideNames, hereNames, disabled = false }: PickerProps) {
   const [q, setQ] = useState('')
   const [category, setCategory] = useState('')
   const [picked, setPicked] = useState<Picked[]>([])
@@ -80,13 +91,18 @@ export default function StarterPicker({ target, onAdded, hideNames }: { target: 
       <ul className="max-h-80 divide-y divide-slate-100 overflow-y-auto rounded-xl border border-slate-200 bg-white">
         {matches.slice(0, SHOWN).map((s) => {
           const on = isPicked(s.id)
+          const here = Boolean(hereNames?.has(s.name.trim().toLowerCase()))
+          const off = disabled || here
           return (
             <li key={s.id}>
-              <button type="button" onClick={() => toggle(s)} aria-pressed={on} className={`flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-slate-50 ${on ? 'bg-blue-50' : ''}`}>
+              <button type="button" onClick={() => toggle(s)} aria-pressed={on} disabled={off}
+                className={`flex w-full items-center gap-3 px-3 py-2 text-left ${off ? 'cursor-not-allowed opacity-50' : 'hover:bg-slate-50'} ${on ? 'bg-blue-50' : ''}`}>
                 {s.image_url ? <img src={s.image_url} alt="" className="h-10 w-10 shrink-0 rounded-md bg-slate-100 object-cover" /> : <span className="h-10 w-10 shrink-0 rounded-md bg-slate-100" />}
                 <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-slate-900">{s.name}</span>
                   <span className="block text-xs capitalize text-slate-500">{s.category}{s.is_rentable ? ' · rent' : ''}{s.is_purchasable ? ' · sell' : ''}</span></span>
-                <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${on ? 'bg-blue-600 text-white' : 'border border-slate-300 text-slate-500'}`}>{on ? <Check size={16} /> : <Plus size={16} />}</span>
+                {here
+                  ? <span className="shrink-0 text-xs font-medium text-slate-500">Already here</span>
+                  : !disabled && <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${on ? 'bg-blue-600 text-white' : 'border border-slate-300 text-slate-500'}`}>{on ? <Check size={16} /> : <Plus size={16} />}</span>}
               </button>
             </li>
           )
@@ -130,7 +146,7 @@ export default function StarterPicker({ target, onAdded, hideNames }: { target: 
       )}
 
       <div className="flex justify-end">
-        <SubmitButton disabled={picked.length === 0} className="min-h-11 rounded-lg bg-blue-600 px-5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+        <SubmitButton disabled={disabled || picked.length === 0} className="min-h-11 rounded-lg bg-blue-600 px-5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
           {(pending) => (pending ? 'Adding…' : `Add ${picked.length || ''} product${picked.length === 1 ? '' : 's'}${toWhere(target)}`)}
         </SubmitButton>
       </div>

@@ -23,7 +23,6 @@ import { refreshWebsite } from '../lib/websiteRefresh'
 import { canManageStore, removeProductMessage } from '../lib/storeProducts'
 import { useAuth } from '../contexts/AuthContext'
 import { CATEGORIES } from '../lib/categories'
-import CatalogPicker from './inventory/CatalogPicker'
 import { addStartingStock } from './inventory/startingStock'
 import ProductsByLocation from './products/ProductsByLocation'
 import StarterPicker from './products/StarterPicker'
@@ -71,8 +70,6 @@ export default function Inventory() {
   const [editTarget, setEditTarget] = useState<{ id: string; n: number } | null>(null)
   const [view, setView] = useState<'store' | 'catalog'>('store')
   const [category, setCategory] = useState('all')
-  // Products added this visit stay in the catalog list with "Added · set stock".
-  const [justAdded, setJustAdded] = useState<readonly string[]>([])
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['equipment_items', selectedLocationId, viewingBusinessId],
@@ -135,10 +132,9 @@ export default function Inventory() {
       || Boolean(scanned.data?.has(it.id)))
   const filtered = (data ?? []).filter((it) => matches(it) && (!selectedLocationId || inStore(it)))
   // A store adds products itself (the Add products tab): its owner’s list, then the starter list.
-  const addable = selectedLocationId ? (data ?? []).filter((it) => it.is_active && (!inStore(it) || justAdded.includes(`${selectedLocationId}:${it.id}`)) && matches(it)) : []
   const showCatalog = Boolean(selectedLocation) && view === 'catalog'
-  // Starter products already among the products here are offered from the business's list instead.
-  const knownNames = new Set((data ?? []).map((it) => it.name.trim().toLowerCase()))
+  // Starter products this location already carries show as "Already here".
+  const hereNames = new Set((data ?? []).filter((it) => inStore(it)).map((it) => it.name.trim().toLowerCase()))
   const usedCategories = CATEGORIES.filter((c) => (data ?? []).some((it) => it.category === c))
   const rowActions = (it: InventoryItem) => (
     <>
@@ -208,17 +204,18 @@ export default function Inventory() {
       </p>
 
       <div className={`mb-4 grid gap-3 ${canSwitchStores(profile) ? 'sm:grid-cols-[minmax(0,1fr)_auto_minmax(15rem,20rem)]' : 'sm:grid-cols-[minmax(0,1fr)_auto]'}`}>
-        <div className="relative">
+        {/* The starter list has its own search and categories. */}
+        <div className={`relative ${showCatalog ? 'hidden' : ''}`}>
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder={showCatalog ? 'Search the catalog…' : 'Search inventory or scan an SN...'}
+            placeholder="Search inventory or scan an SN..."
             className="w-full border border-slate-300 rounded-lg pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
         <select aria-label="Filter by category" value={category} onChange={(event) => setCategory(event.target.value)}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm capitalize text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          className={`${showCatalog ? 'hidden' : ''} rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm capitalize text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500`}>
           <option value="all">All categories</option>
           {usedCategories.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
@@ -253,24 +250,15 @@ export default function Inventory() {
       {isLoading && <div className="text-slate-500">Loading…</div>}
       {error && <div className="text-red-600 text-sm">{(error as Error).message}</div>}
 
-      {showCatalog && selectedLocation && (
-        <section aria-labelledby="catalog-own" className="space-y-3">
-          <h2 id="catalog-own" className="text-lg font-semibold">From {selectedLocation.business?.name ?? 'your business'}’s products</h2>
-          <CatalogPicker items={addable} locationId={selectedLocation.id} locationName={selectedLocation.name} locked={productsLocked} added={justAdded.filter((key) => key.startsWith(`${selectedLocation.id}:`)).map((key) => key.split(':')[1])} onAdded={(id) => setJustAdded((prev) => [...prev, `${selectedLocation.id}:${id}`])} />
-        </section>
-      )}
-      {/* The shared starter list (149); staff with products switched on add to their own store (154). */}
+      {/* One list to add from: the shared starter list (149). Staff need Change products on (154); otherwise it shows greyed out. */}
       {showCatalog && selectedLocation?.business && (
-        <section aria-labelledby="catalog-starter" className="mt-8 space-y-3">
-          <div>
-            <h2 id="catalog-starter" className="text-lg font-semibold">From the starter list</h2>
-            <p className="text-sm text-slate-600">{profile?.role === 'staff'
-              ? `Products you add here are kept at ${selectedLocation.name} only, with your prices and stock.`
-              : `Products you add become yours, carried at ${selectedLocation.name}, with your prices and stock.`}</p>
-          </div>
-          {productsLocked
-            ? <p className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500"><Lock size={14} className="mr-1 inline" />{LOCKED_PRODUCTS}</p>
-            : <StarterPicker target={{ businessId: selectedLocation.business.id, locations: importLocations([selectedLocation]) }} hideNames={knownNames} />}
+        <section aria-label="Add products" className="space-y-2">
+          <p className="text-sm text-slate-600">{productsLocked
+            ? 'Adding products is switched off for staff at this location; the owner can switch it on in Staff Access.'
+            : profile?.role === 'staff'
+              ? `Pick products, then set your prices and stock. They’re kept at ${selectedLocation.name}.`
+              : `Pick products, then set your prices and stock at ${selectedLocation.name}.`}</p>
+          <StarterPicker target={{ businessId: selectedLocation.business.id, locations: importLocations([selectedLocation]) }} hereNames={hereNames} disabled={productsLocked} />
         </section>
       )}
 
