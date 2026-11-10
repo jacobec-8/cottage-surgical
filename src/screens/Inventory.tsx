@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Search, Pencil, Trash2, X, ImagePlus, Building2, Lock } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, X, ImagePlus, Building2, Lock, ListPlus } from 'lucide-react'
 
 const LOCKED_PRODUCTS = 'Locked by the owner (Staff Access → Change products)'
 
@@ -25,6 +25,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { CATEGORIES } from '../lib/categories'
 import CatalogPicker from './inventory/CatalogPicker'
 import { addStartingStock } from './inventory/startingStock'
+import AddProductsPanel from './products/AddProductsPanel'
 import InventoryTable from './inventory/InventoryTable'
 
 export type InventoryItem = {
@@ -57,7 +58,8 @@ const SELECT = 'id,name,description,category,sku,pickup_rental_price,delivery_re
 export default function Inventory() {
   const qc = useQueryClient()
   const { profile } = useAuth()
-  const { locations, selectedLocationId, selectedLocation, setSelectedLocationId, viewingBusinessId } = useLocationScope()
+  const { locations, selectedLocationId, selectedLocation, setSelectedLocationId, viewingBusinessId, scopeBusinessId } = useLocationScope()
+  const [bulkOpen, setBulkOpen] = useState(false)
   const [q, setQ] = useState('')
   const [editing, setEditing] = useState<Partial<InventoryItem> | null>(null) // null=closed, {} = new
   const catalogManager = useCatalogManager()
@@ -169,6 +171,13 @@ export default function Inventory() {
     <div>
       <div className="mb-1 flex flex-col items-start gap-3 sm:flex-row sm:justify-between">
         <h1 className="text-2xl font-semibold">Inventory Management</h1>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+        {catalogManager && scopeBusinessId && selectedLocation && (
+          <button type="button" onClick={() => setBulkOpen((open) => !open)} aria-expanded={bulkOpen}
+            className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 sm:w-auto">
+            <ListPlus size={16} /> Add products
+          </button>
+        )}
         {(catalogManager || profile?.role === 'staff') && (
           <button
             onClick={() => setEditing({})}
@@ -179,7 +188,15 @@ export default function Inventory() {
             <Plus size={16} /> Add Item
           </button>
         )}
+        </div>
       </div>
+      {bulkOpen && scopeBusinessId && selectedLocation && (
+        <section aria-label="Add products" className="my-4 rounded-2xl border border-blue-200 bg-blue-50/40 p-5">
+          <h2 className="mb-1 text-lg font-semibold">Add products to {selectedLocation.name}</h2>
+          <p className="mb-4 text-sm text-slate-600">Pick from the starter list, upload a CSV, or add one by hand. Each becomes your own product with your prices.</p>
+          <AddProductsPanel target={{ businessId: scopeBusinessId, location: { id: selectedLocation.id, name: selectedLocation.name, delivers: selectedLocation.fulfillment_mode === 'pickup_and_delivery' } }} />
+        </section>
+      )}
       <h2 className="text-lg font-semibold mt-2">Equipment &amp; Supplies</h2>
       <p className="text-slate-500 text-sm mb-5">
         Manage rental inventory, pricing, and stock. Returned units become available when the rental closes.
