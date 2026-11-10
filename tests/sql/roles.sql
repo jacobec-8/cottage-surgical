@@ -1208,5 +1208,24 @@ SET ROLE anon;
 SELECT test_assert(owner_signup_status('qa-signup-decline') = 'declined', 'the sign-in page can say it was declined');
 RESET ROLE;
 
+-- ── An email works as the login (145) ──────────────────────────────────────
+SELECT test_as(''); SET ROLE anon;
+SELECT test_assert((submit_owner_signup('{"business_name":"Email Care","full_name":"Em Ail","phone":"5165550104","email":"em@example.invalid","username":" Owner@Email-Care.example ","password":"password-78"}'))->>'ok' = 'true',
+  'an owner signs up with their email as the login');
+SELECT test_assert((submit_owner_signup('{"business_name":"Taken Care","full_name":"Ta Ken","phone":"5165550105","email":"taken@example.invalid","username":"roles-admin@example.invalid","password":"password-78"}'))->>'reason' = 'username_taken',
+  'an email that already signs in is refused');
+SELECT test_assert((submit_owner_signup('{"business_name":"Alias Care","full_name":"Al Ias","phone":"5165550106","email":"alias@example.invalid","username":"x@staff-login.cottagesurgical.invalid","password":"password-78"}'))->>'reason' = 'invalid_username',
+  'our internal login addresses are refused');
+SELECT test_assert(owner_signup_status('OWNER@email-care.example') = 'pending', 'the sign-in page finds a waiting email login');
+RESET ROLE;
+SELECT test_as('a2000000-0000-0000-0000-000000000001'); SET ROLE authenticated;
+CREATE TEMP TABLE email_approve AS SELECT approve_owner_signup((SELECT id FROM owner_signups WHERE username = 'owner@email-care.example')) AS r;
+RESET ROLE;
+SELECT test_as('');
+SELECT test_assert((SELECT (r->>'ok')::boolean FROM email_approve), 'the admin approves the email login: ' || (SELECT r::text FROM email_approve));
+SELECT test_assert((SELECT encrypted_password = extensions.crypt('password-78', encrypted_password) FROM auth.users WHERE email = 'owner@email-care.example'),
+  'the owner signs in with their email and chosen password');
+SELECT test_assert((SELECT p.role = 'owner' FROM profiles p WHERE p.email = 'owner@email-care.example'), 'the email login is the owner');
+
 SELECT test_as('');
 SELECT 'roles assertions passed' AS result;

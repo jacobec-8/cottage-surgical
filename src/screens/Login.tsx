@@ -153,7 +153,7 @@ export default function Login() {
 /** A sign-in that fails for someone whose sign-up is still waiting (or was declined) says so (143). */
 async function waitingSignupMessage(username: string): Promise<string | null> {
   const name = username.trim().toLowerCase()
-  if (!name || name.includes('@')) return null
+  if (!name) return null
   const { data, error } = await supabase.rpc('owner_signup_status', { p_username: name })
   if (error) return null // the plain sign-in error still shows
   return signupStatusMessage(typeof data === 'string' ? data : null)

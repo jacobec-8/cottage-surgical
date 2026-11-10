@@ -18,7 +18,7 @@ type SignupRequest = {
 const REFUSALS: Record<string, string> = {
   forbidden: 'Only an admin can decide sign-ups.',
   already_decided: 'Someone already decided this sign-up.',
-  username_taken: 'That username was taken since they signed up. Decline it and ask them to sign up again with another.',
+  username_taken: 'That login was taken since they signed up. Decline it and ask them to sign up again with another.',
   not_found: 'This sign-up is gone. Refresh the page.',
 }
 

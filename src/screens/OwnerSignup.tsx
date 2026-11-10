@@ -71,7 +71,7 @@ export default function OwnerSignup() {
             <div role="status">
               <CheckCircle2 className="text-green-600 mb-3" size={32} />
               <h1 className="text-xl font-bold">Thanks, your sign-up is in</h1>
-              <p className="mt-2 text-sm text-slate-600">An admin will review it. You can sign in with <strong>{signupPayload(draft).username}</strong> once it is approved, then add your pharmacies, staff and products.</p>
+              <p className="mt-2 text-sm text-slate-600">An admin will review it. You can sign in as <strong>{signupPayload(draft).username}</strong> once it is approved, then add your pharmacies, staff and products.</p>
               <Link href="/admin-login" className="mt-6 inline-flex w-full items-center justify-center rounded-lg bg-blue-600 py-2.5 text-sm font-medium text-white hover:bg-blue-700">Back to sign in</Link>
             </div>
           ) : (
@@ -83,7 +83,7 @@ export default function OwnerSignup() {
                 {field('fullName', 'YOUR NAME', { autoComplete: 'name' })}
                 {field('phone', 'PHONE', { type: 'tel', autoComplete: 'tel' })}
                 {field('email', 'EMAIL', { type: 'email', autoComplete: 'email', autoCapitalize: 'none' })}
-                {field('username', 'LOGIN USERNAME', { autoComplete: 'username', autoCapitalize: 'none', spellCheck: 'false' })}
+                {field('username', 'LOGIN (EMAIL OR USERNAME)', { autoComplete: 'username', autoCapitalize: 'none', spellCheck: 'false', placeholder: 'you@example.com or a username' })}
                 <label htmlFor="signup-password" className={LABEL}>PASSWORD</label>
                 <div className="relative">
                   <Checked name="password"><input id="signup-password" className={`${INPUT} pr-10`} value={draft.password}
