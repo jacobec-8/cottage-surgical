@@ -201,7 +201,7 @@ export default function LocationDetail({ locationId }: { locationId: string }) {
       </header>
 
       {location.data.business && <BusinessContact businessId={location.data.business.id} businessName={location.data.business.name} />}
-      <WebsiteSwitch locationId={location.data.id} onWebsite={location.data.on_website} active={location.data.is_active} />
+      {location.data.business && <WebsiteSwitch locationId={location.data.id} businessId={location.data.business.id} onWebsite={location.data.on_website} active={location.data.is_active} />}
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(340px,0.85fr)]">
         <SaveForm aria-label="Pharmacy details" onSave={() => save.mutateAsync()}
