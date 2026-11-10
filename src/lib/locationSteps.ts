@@ -23,3 +23,14 @@ export function carryProblem(product: { is_rentable: boolean; is_purchasable: bo
   if (!/^\d{1,5}$/.test(row.stock.trim() || '0')) return { field: 'stock', message: 'Enter stock as a whole number, like 12.' }
   return null
 }
+
+/**
+ * The location a products section opens on: the one asked for, else the one
+ * chosen earlier this session, else the first. Never a location that isn't listed.
+ */
+export function startingLocationId(locations: readonly { id: string }[], asked: string | null | undefined, saved: string | null): string {
+  const known = (id: string | null | undefined): id is string => Boolean(id && locations.some((l) => l.id === id))
+  if (known(asked)) return asked
+  if (known(saved)) return saved
+  return locations[0]?.id ?? ''
+}

@@ -5,7 +5,7 @@ import { Checked, FieldError, SaveForm, SubmitButton } from '../../components/Sa
 import { CATEGORIES } from '../../lib/categories'
 import { emptyProduct, quickProductItem, quickProductProblems, type QuickProduct } from '../../lib/ownerSetup'
 import { locationLabels } from '../../lib/productImport'
-import { useAddProducts, type AddTarget } from '../products/useAddProducts'
+import { addedMessage, toWhere, useAddProducts, type AddTarget } from '../products/useAddProducts'
 
 const INPUT = 'w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 
@@ -24,7 +24,7 @@ export default function QuickProductForm({ target }: { target: AddTarget }) {
 
   return (
     <SaveForm aria-label="Add a product" validate={() => quickProductProblems(p, target.locations)} onSave={save}
-      onSaved={() => setP(emptyProduct)} savedMessage="Product added." errorClassName="mt-3"
+      onSaved={() => setP(emptyProduct)} savedMessage={addedMessage(target)} errorClassName="mt-3"
       className="rounded-2xl border border-slate-200 bg-white p-5">
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="block text-sm"><span className="mb-1 block font-medium text-slate-700">Product name</span>
@@ -72,7 +72,7 @@ export default function QuickProductForm({ target }: { target: AddTarget }) {
       </div>
       <div className="mt-5 flex justify-end">
         <SubmitButton className="min-h-11 rounded-lg bg-blue-600 px-5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
-          {(pending) => (pending ? 'Adding…' : 'Add product')}
+          {(pending) => (pending ? 'Adding…' : `Add product${toWhere(target)}`)}
         </SubmitButton>
       </div>
     </SaveForm>

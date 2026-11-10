@@ -35,4 +35,9 @@ export function useAddProducts(target: AddTarget, from: 'csv' | 'list') {
   }
 }
 
-export const addedMessage = (n: number) => `Added ${n} product${n === 1 ? '' : 's'}.`
+/** Where the products went, named: "Added 3 products to Tara Place Pharmacy." */
+export const addedMessage = (target: AddTarget) => (n: number) =>
+  `Added ${n} product${n === 1 ? '' : 's'}${target.locations.length === 1 ? ` to ${target.locations[0].name}` : ''}.`
+
+/** " to Tara Place Pharmacy" on an Add button when the products go to one location. */
+export const toWhere = (target: AddTarget) => (target.locations.length === 1 ? ` to ${target.locations[0].name}` : '')

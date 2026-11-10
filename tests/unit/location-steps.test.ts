@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { carryProblem, nextLocation } from '../../src/lib/locationSteps.ts'
+import { carryProblem, nextLocation, startingLocationId } from '../../src/lib/locationSteps.ts'
 
 const locs = [{ id: 'A' }, { id: 'B' }, { id: 'C' }]
 
@@ -21,4 +21,11 @@ test('carrying a product asks for the prices it needs here and a whole-number st
   assert.equal(carryProblem(sale, row, false)?.field, 'sale_price')
   assert.equal(carryProblem(sale, { ...row, sale_price: '18', stock: '1.5' }, false)?.field, 'stock')
   assert.equal(carryProblem(sale, { ...row, sale_price: '18', stock: '' }, false), null)
+})
+
+test('a rebuilt products section reopens on the location chosen earlier, not the first', () => {
+  assert.equal(startingLocationId(locs, null, 'B'), 'B')
+  assert.equal(startingLocationId(locs, 'C', 'B'), 'C', 'the location asked for (Inventory\'s header) wins')
+  assert.equal(startingLocationId(locs, null, 'gone'), 'A', 'a remembered location that no longer exists falls back to the first')
+  assert.equal(startingLocationId([], null, null), '')
 })

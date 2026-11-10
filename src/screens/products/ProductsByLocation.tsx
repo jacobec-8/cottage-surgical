@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import type { StaffLocation } from '../../contexts/LocationContext'
-import { nextLocation } from '../../lib/locationSteps'
+import { nextLocation, startingLocationId } from '../../lib/locationSteps'
 import AddProductsPanel from './AddProductsPanel'
 import LocationCards from './LocationCards'
 import YourProducts from './YourProducts'
@@ -22,8 +22,25 @@ type Props = {
  * all its products, then the next. Your products already carried elsewhere
  * come first; new ones from the starter list, a CSV or by hand.
  */
+const storageKey = (businessId: string) => `cs_stocking_location_${businessId}`
+
+function remember(businessId: string, id: string) {
+  try { window.sessionStorage.setItem(storageKey(businessId), id) } catch { /* storage unavailable */ }
+}
+
+function startingLocation(businessId: string, locations: readonly StaffLocation[], initialId?: string | null): string {
+  let saved: string | null = null
+  try { saved = window.sessionStorage.getItem(storageKey(businessId)) } catch { /* storage unavailable */ }
+  return startingLocationId(locations, initialId, saved)
+}
+
 export default function ProductsByLocation({ businessId, locations, initialId, renderNav }: Props) {
-  const [currentId, setCurrentId] = useState(initialId && locations.some((l) => l.id === initialId) ? initialId : locations[0]?.id ?? '')
+  const [currentId, setCurrent] = useState(() => startingLocation(businessId, locations, initialId))
+  // Kept for the session: if this section is rebuilt (a profile reload, a page
+  // refresh after a save), it stays on the location the owner chose rather than
+  // falling back to the first one, which once sent products to the wrong place.
+  const setCurrentId = (id: string) => { setCurrent(id); remember(businessId, id) }
+  useEffect(() => { if (initialId) remember(businessId, initialId) }, [businessId, initialId])
   const owner = useOwnerProducts(businessId)
   const current = locations.find((l) => l.id === currentId) ?? locations[0]
   if (!current) return <p className="text-sm text-slate-600">Add a location first.</p>
