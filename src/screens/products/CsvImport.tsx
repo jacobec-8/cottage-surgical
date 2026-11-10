@@ -5,7 +5,7 @@ import { Download, FileUp } from 'lucide-react'
 import { csvColumns, csvTemplate, csvToItems, locationLabels, type ImportItem } from '../../lib/productImport'
 import { CATEGORIES } from '../../lib/categories'
 import { SaveForm, SubmitButton } from '../../components/SaveForm'
-import { addedMessage, useAddProducts, type AddTarget } from './useAddProducts'
+import { addedMessage, toWhere, useAddProducts, type AddTarget } from './useAddProducts'
 
 const MAX_BYTES = 1024 * 1024
 
@@ -29,7 +29,7 @@ export default function CsvImport({ target, onAdded }: { target: AddTarget; onAd
     setProblems(read.items.length === 0 && read.problems.length === 0 ? [{ line: 0, message: 'That file has no products in it.' }] : read.problems)
   }
   return (
-    <SaveForm aria-label="Upload products" submitOnEnter={false} errorClassName="mt-3" savedMessage={addedMessage}
+    <SaveForm aria-label="Upload products" submitOnEnter={false} errorClassName="mt-3" savedMessage={addedMessage(target)}
       validate={() => (items.length === 0 ? [{ field: null, message: 'Choose a CSV file with your products.' }] : problems.length ? [{ field: null, message: 'Fix the lines listed above first.' }] : [])}
       onSave={() => send(items)} onSaved={() => { setItems([]); setFileName(''); onAdded?.() }}>
     <div className="space-y-4">
@@ -77,7 +77,7 @@ export default function CsvImport({ target, onAdded }: { target: AddTarget; onAd
 
       <div className="flex justify-end">
         <SubmitButton disabled={items.length === 0 || problems.length > 0} className="min-h-11 rounded-lg bg-blue-600 px-5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
-          {(pending) => (pending ? 'Adding…' : `Add ${items.length || ''} product${items.length === 1 ? '' : 's'}`)}
+          {(pending) => (pending ? 'Adding…' : `Add ${items.length || ''} product${items.length === 1 ? '' : 's'}${toWhere(target)}`)}
         </SubmitButton>
       </div>
     </div>

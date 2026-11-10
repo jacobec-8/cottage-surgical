@@ -8,7 +8,7 @@ import { CATEGORIES } from '../../lib/categories'
 import { SaveForm, SubmitButton } from '../../components/SaveForm'
 import type { FieldProblem } from '../../lib/fieldRules'
 import { itemProblem, locationLabels, type ImportItem } from '../../lib/productImport'
-import { addedMessage, useAddProducts, type AddTarget } from './useAddProducts'
+import { addedMessage, toWhere, useAddProducts, type AddTarget } from './useAddProducts'
 
 type Starter = { id: string; name: string; category: string; description: string | null; image_url: string | null; is_rentable: boolean; is_purchasable: boolean }
 type Picked = ImportItem & { starter_id: string; label: string; image: string | null }
@@ -62,7 +62,7 @@ export default function StarterPicker({ target, onAdded, hideNames }: { target: 
 
   return (
     <SaveForm aria-label="Add products from the starter list" validate={validate} onSave={save} submitOnEnter={false}
-      onSaved={() => { setPicked([]); onAdded?.() }} savedMessage={addedMessage} errorClassName="mt-3">
+      onSaved={() => { setPicked([]); onAdded?.() }} savedMessage={addedMessage(target)} errorClassName="mt-3">
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_14rem]">
         <label className="relative block"><span className="sr-only">Search the starter list</span>
@@ -131,7 +131,7 @@ export default function StarterPicker({ target, onAdded, hideNames }: { target: 
 
       <div className="flex justify-end">
         <SubmitButton disabled={picked.length === 0} className="min-h-11 rounded-lg bg-blue-600 px-5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
-          {(pending) => (pending ? 'Adding…' : `Add ${picked.length || ''} product${picked.length === 1 ? '' : 's'}`)}
+          {(pending) => (pending ? 'Adding…' : `Add ${picked.length || ''} product${picked.length === 1 ? '' : 's'}${toWhere(target)}`)}
         </SubmitButton>
       </div>
     </div>
