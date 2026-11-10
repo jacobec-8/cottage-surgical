@@ -17,8 +17,13 @@ test('maps the three staff usernames to internal auth aliases', () => {
   )
 })
 
-test('rejects email addresses and unknown usernames', () => {
-  assert.equal(usernameToAuthEmail('admin@example.com'), null)
+test('an email signs in as itself (owners may sign up with their email as the login)', () => {
+  assert.equal(usernameToAuthEmail(' Admin@Rank1SEO.com '), 'admin@rank1seo.com')
+  assert.equal(usernameToAuthEmail('not-an-email@'), null)
+  assert.equal(usernameToAuthEmail('two words@example.com'), null)
+})
+
+test('rejects unknown usernames', () => {
   assert.equal(usernameToAuthEmail('admin'), null)
   assert.equal(usernameToAuthEmail(''), null)
 })

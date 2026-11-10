@@ -3,6 +3,7 @@
 // submit_owner_signup refuses, so a mistake is caught on the field first.
 import { problems, rules, type FieldProblem } from './fieldRules.ts'
 import { MIN_PASSWORD_LENGTH, validUsername } from './storeLogins.ts'
+import { isLoginEmail } from './staffLogin.ts'
 
 export type OwnerSignupDraft = {
   businessName: string
@@ -22,8 +23,8 @@ const REASONS: Record<string, string> = {
   invalid_name: 'Enter your name.',
   invalid_phone: 'Enter a phone number with at least 10 digits.',
   invalid_email: 'Enter an email like name@example.com.',
-  invalid_username: 'Use 3–63 lowercase letters, numbers or hyphens, starting with a letter or number.',
-  username_taken: 'That username is taken. Choose another.',
+  invalid_username: 'Use your email, or a username of 3–63 lowercase letters, numbers or hyphens.',
+  username_taken: 'That login is already in use. Choose another.',
   weak_password: `Use a password of at least ${MIN_PASSWORD_LENGTH} characters.`,
   already_waiting: 'A sign-up with this email is already waiting for approval.',
   busy: 'We can’t take new sign-ups right now. Please try again later or call us.',
@@ -41,7 +42,7 @@ export function signupProblems(d: OwnerSignupDraft): FieldProblem[] {
     rules.required(d.fullName, 'fullName', REASONS.invalid_name),
     rules.phone(d.phone, 'phone', REASONS.invalid_phone),
     rules.email(d.email, 'email', 'Enter your email.'),
-    !validUsername(d.username) && { field: 'username', message: REASONS.invalid_username },
+    !validUsername(d.username) && !isLoginEmail(d.username) && { field: 'username', message: REASONS.invalid_username },
     d.password.length < MIN_PASSWORD_LENGTH && { field: 'password', message: REASONS.weak_password },
     bytes > MAX_PASSWORD_BYTES && { field: 'password', message: 'That password is too long. Use a shorter one.' },
   )
