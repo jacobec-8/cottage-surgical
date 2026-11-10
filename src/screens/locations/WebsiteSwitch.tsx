@@ -1,18 +1,29 @@
 'use client'
 
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Globe } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
 interface WebsiteSwitchProps {
   locationId: string
+  /** The pharmacy's owner: a website belongs to an owner, and some owners have none yet. */
+  businessId: string
   onWebsite: boolean
   active: boolean
 }
 
 /** The owner's choice of which pharmacies the website pools (132): their stock counts there and orders can be routed to them. */
-export default function WebsiteSwitch({ locationId, onWebsite, active }: WebsiteSwitchProps) {
+export default function WebsiteSwitch({ locationId, businessId, onWebsite, active }: WebsiteSwitchProps) {
   const qc = useQueryClient()
+  const website = useQuery({
+    queryKey: ['owner_website', businessId],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('storefronts').select('id').eq('business_id', businessId).limit(1)
+      if (error) throw error
+      return (data ?? []).length > 0
+    },
+  })
+  const noWebsite = website.data === false && !onWebsite
   const toggle = useMutation({
     mutationFn: async (on: boolean) => {
       const { error } = await supabase.rpc('set_pharmacy_on_website', { p_location: locationId, p_on: on })
@@ -25,7 +36,9 @@ export default function WebsiteSwitch({ locationId, onWebsite, active }: Website
     },
   })
 
-  const note = onWebsite
+  const note = noWebsite
+    ? 'This owner has no website yet, so their pharmacies take counter and phone orders. Once their website is set up, switch pharmacies onto it here.'
+    : onWebsite
     ? `This pharmacy’s stock counts on the website and website orders can come here. Its prices stay its own.${active ? '' : ' It is inactive, so the website skips it until it is active again.'}`
     : 'Counter only: the website doesn’t show this pharmacy’s stock or send it orders.'
 
@@ -36,10 +49,10 @@ export default function WebsiteSwitch({ locationId, onWebsite, active }: Website
           <div className="flex items-center gap-2"><Globe size={18} className="text-blue-600" /><h2 className="text-lg font-semibold">Website</h2></div>
           <p className="mt-1 text-sm text-slate-500">{note}</p>
         </div>
-        <label className="inline-flex min-h-11 shrink-0 items-center gap-2 text-sm font-medium text-slate-700">
+        {!noWebsite && <label className="inline-flex min-h-11 shrink-0 items-center gap-2 text-sm font-medium text-slate-700">
           <input type="checkbox" className="h-4 w-4" checked={onWebsite} disabled={toggle.isPending} onChange={(event) => toggle.mutate(event.target.checked)} />
           On the website
-        </label>
+        </label>}
       </div>
       {toggle.error && <p className="mt-2 text-sm text-red-600">Couldn’t change it: {(toggle.error as Error).message}</p>}
     </section>
