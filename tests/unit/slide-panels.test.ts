@@ -4,7 +4,8 @@ import test from 'node:test'
 import { SLIDE_MS } from '../../src/lib/useSlideClose.ts'
 
 const css = readFileSync('src/app/globals.css', 'utf8')
-const PANELS = ['src/screens/customers/CustomerPanel.tsx', 'src/screens/orders/OrderDetailPanel.tsx', 'src/components/Layout.tsx']
+const PANELS = ['src/screens/customers/CustomerPanel.tsx', 'src/components/Layout.tsx']
+const ORDER_CARD = 'src/screens/orders/OrderDetailPanel.tsx'
 
 test('the slide-out plays for as long as the panel waits before closing', () => {
   assert.match(css, new RegExp(`\\[data-leaving='true'\\][^}]*${SLIDE_MS}ms`))
@@ -20,8 +21,18 @@ test('every side panel slides in and out through the shared hook', () => {
   }
 })
 
+test('the order opens as a card that rises in and out through the same hook', () => {
+  const source = readFileSync(ORDER_CARD, 'utf8')
+  assert.match(source, /useSlideClose\(/)
+  assert.match(source, /data-leaving=/)
+  assert.match(source, /pop-card/)
+  assert.match(source, /slide-backdrop/)
+  assert.doesNotMatch(source, /slide-panel-right/)
+  assert.match(css, new RegExp(`\\.pop-card\\[data-leaving='true'\\][^}]*${SLIDE_MS}ms`))
+})
+
 test('panels do not close straight from the X, backdrop or Esc', () => {
-  for (const path of PANELS.slice(0, 2)) {
+  for (const path of [PANELS[0], ORDER_CARD]) {
     const source = readFileSync(path, 'utf8')
     assert.match(source, /useDialogFocus\(asideRef, close,/, path)
     assert.doesNotMatch(source, /bg-slate-900\/30[^>]*onClick=\{onClose\}/, path)
@@ -30,6 +41,7 @@ test('panels do not close straight from the X, backdrop or Esc', () => {
 
 test('people who ask for reduced motion get no sliding', () => {
   assert.match(css, /prefers-reduced-motion: reduce[\s\S]*slide-panel-right[\s\S]*animation: none/)
+  assert.match(css, /prefers-reduced-motion: reduce[\s\S]*pop-card[\s\S]*animation: none/)
 })
 
 test('the slide skips the wait for reduced motion and forgets itself if the phone menu closes another way', () => {
